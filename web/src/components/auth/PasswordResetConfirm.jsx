@@ -119,7 +119,7 @@ const PasswordResetConfirm = () => {
           <div className='w-full max-w-md'>
             <div className='flex items-center justify-center mb-6 gap-2'>
               <img src={logo} alt='Logo' className='h-10 rounded-full' />
-              <Title heading={3} className='ruoli-brand-title !text-gray-800'>
+              <Title heading={3} className='brand-title !text-gray-800'>
                 {systemName}
               </Title>
             </div>

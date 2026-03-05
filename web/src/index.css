@@ -18,7 +18,7 @@
   --sidebar-width: 180px;
   --sidebar-width-collapsed: 60px;
   --sidebar-current-width: var(--sidebar-width);
-  --ruoli-header-brand-scale: 1.3;
+  --header-brand-scale: 1.3;
 }
 
 body.sidebar-collapsed {
@@ -26,7 +26,7 @@ body.sidebar-collapsed {
 }
 
 @font-face {
-  font-family: 'RuoLiNumber';
+  font-family: 'BrandNumeric';
   src: url('/fonts/Number.otf') format('opentype');
   font-style: normal;
   font-weight: 400;
@@ -34,7 +34,7 @@ body.sidebar-collapsed {
 }
 
 @font-face {
-  font-family: 'RuoLiBrand';
+  font-family: 'BrandDisplay';
   src: url('/fonts/Icon.ttf') format('truetype');
   font-style: normal;
   font-weight: 400;
@@ -48,29 +48,29 @@ body {
   background-color: var(--semi-color-bg-0);
 }
 
-.ruoli-brand-title {
-  font-family: 'RuoLiBrand', 'PingFang SC', 'Microsoft YaHei', sans-serif !important;
+.brand-title {
+  font-family: 'BrandDisplay', 'PingFang SC', 'Microsoft YaHei', sans-serif !important;
 }
 
-.ruoli-header-logo-image {
-  transform: scale(var(--ruoli-header-brand-scale));
+.header-brand-logo-image {
+  transform: scale(var(--header-brand-scale));
   transform-origin: center;
   transition: transform 0.2s ease;
 }
 
-.ruoli-header-brand-text-scale {
+.header-brand-text-scale {
   display: inline-block;
-  transform: scale(var(--ruoli-header-brand-scale));
+  transform: scale(var(--header-brand-scale));
   transform-origin: left center;
   margin-right: 0.5rem;
 }
 
-.ruoli-header-brand:hover .ruoli-header-logo-image {
+.header-brand:hover .header-brand-logo-image {
   transform: scale(1.43);
 }
 
-.pricing-price-text {
-  font-family: 'RuoLiNumber', 'SFMono-Regular', 'JetBrains Mono', Consolas,
+.numeric-price-text {
+  font-family: 'BrandNumeric', 'SFMono-Regular', 'JetBrains Mono', Consolas,
     'Liberation Mono', Menlo, monospace;
   font-variant-numeric: tabular-nums;
 }

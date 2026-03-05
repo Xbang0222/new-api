@@ -30,7 +30,7 @@ import { useTranslation } from 'react-i18next';
 import { useActualTheme } from '../../context/Theme';
 import {
   API,
-  getLogo,
+  getFavicon,
   getSystemName,
   showError,
   setStatusData,
@@ -71,6 +71,15 @@ const PageLayout = () => {
 
   const isConsoleRoute = location.pathname.startsWith('/console');
   const showSider = isConsoleRoute && (!isMobile || drawerOpen);
+  const updateFavicon = (logoUrl) => {
+    if (!logoUrl) {
+      return;
+    }
+    const linkElement = document.querySelector("link[rel~='icon']");
+    if (linkElement) {
+      linkElement.href = logoUrl;
+    }
+  };
 
   useEffect(() => {
     if (isMobile && drawerOpen && collapsed) {
@@ -93,13 +102,7 @@ const PageLayout = () => {
       if (success) {
         statusDispatch({ type: 'set', payload: data });
         setStatusData(data);
-        let logo = getLogo(actualTheme);
-        if (logo) {
-          let linkElement = document.querySelector("link[rel~='icon']");
-          if (linkElement) {
-            linkElement.href = logo;
-          }
-        }
+        updateFavicon(getFavicon(actualTheme));
       } else {
         showError('Unable to connect to server');
       }
@@ -115,13 +118,7 @@ const PageLayout = () => {
     if (systemName) {
       document.title = systemName;
     }
-    let logo = getLogo(actualTheme);
-    if (logo) {
-      let linkElement = document.querySelector("link[rel~='icon']");
-      if (linkElement) {
-        linkElement.href = logo;
-      }
-    }
+    updateFavicon(getFavicon());
     const savedLang = localStorage.getItem('i18nextLng');
     if (savedLang) {
       i18n.changeLanguage(savedLang);
@@ -129,13 +126,7 @@ const PageLayout = () => {
   }, [i18n]);
 
   useEffect(() => {
-    let logo = getLogo(actualTheme);
-    if (logo) {
-      let linkElement = document.querySelector("link[rel~='icon']");
-      if (linkElement) {
-        linkElement.href = logo;
-      }
-    }
+    updateFavicon(getFavicon(actualTheme));
   }, [actualTheme]);
 
   return (

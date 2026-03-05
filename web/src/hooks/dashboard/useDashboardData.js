@@ -21,12 +21,11 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { API, isAdmin, showError } from '../../helpers';
-import { buildQuickRangePayload } from '../../helpers/dashboard';
 import {
-  TIME_OPTIONS,
-  QUICK_RANGE_PRESETS,
-  DEFAULT_QUICK_RANGE_PRESET,
-} from '../../constants/dashboard.constants';
+  buildQuickRangePayload,
+  getInitialDashboardPayload,
+} from '../../helpers/dashboard';
+import { TIME_OPTIONS, QUICK_RANGE_PRESETS } from '../../constants/dashboard.constants';
 import { useIsMobile } from '../common/useIsMobile';
 import { useMinimumLoadingTime } from '../common/useMinimumLoadingTime';
 
@@ -35,9 +34,7 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const initialized = useRef(false);
-  const initialQuickRangeRef = useRef(
-    buildQuickRangePayload(DEFAULT_QUICK_RANGE_PRESET),
-  );
+  const initialDashboardPayloadRef = useRef(getInitialDashboardPayload());
 
   // ========== 基础状态 ==========
   const [loading, setLoading] = useState(false);
@@ -50,16 +47,16 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
     username: '',
     token_name: '',
     model_name: '',
-    start_timestamp: initialQuickRangeRef.current.start_timestamp,
-    end_timestamp: initialQuickRangeRef.current.end_timestamp,
+    start_timestamp: initialDashboardPayloadRef.current.start_timestamp,
+    end_timestamp: initialDashboardPayloadRef.current.end_timestamp,
     channel: '',
     data_export_default_time: '',
   }));
 
   const [dataExportDefaultTime, setDataExportDefaultTime] =
-    useState(initialQuickRangeRef.current.dataExportDefaultTime);
+    useState(initialDashboardPayloadRef.current.dataExportDefaultTime);
   const [activeQuickRangePreset, setActiveQuickRangePreset] = useState(
-    DEFAULT_QUICK_RANGE_PRESET,
+    initialDashboardPayloadRef.current.activeQuickRangePreset,
   );
 
   // ========== 数据状态 ==========
@@ -252,13 +249,11 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
   const applyQuickRangePreset = useCallback(
     async (presetKey, updateChartDataCallback) => {
       const quickRangePayload = buildQuickRangePayload(presetKey);
-      const nextInputs = {
-        ...inputs,
+      setInputs((prev) => ({
+        ...prev,
         start_timestamp: quickRangePayload.start_timestamp,
         end_timestamp: quickRangePayload.end_timestamp,
-      };
-
-      setInputs(nextInputs);
+      }));
       setDataExportDefaultTime(quickRangePayload.dataExportDefaultTime);
       setActiveQuickRangePreset(quickRangePayload.presetKey);
       localStorage.setItem(
@@ -280,7 +275,7 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
 
       return data;
     },
-    [inputs, loadQuotaData],
+    [loadQuotaData],
   );
 
   const handleSearchConfirm = useCallback(
@@ -301,13 +296,6 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
       setGreetingVisible(true);
     }, 100);
     return () => clearTimeout(timer);
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem(
-      'data_export_default_time',
-      initialQuickRangeRef.current.dataExportDefaultTime,
-    );
   }, []);
 
   useEffect(() => {

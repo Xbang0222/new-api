@@ -50,20 +50,6 @@ export const getTimeInterval = (timeType, isSeconds = false) => {
   return isSeconds ? intervals.seconds : intervals.minutes;
 };
 
-export const getInitialTimestamp = () => {
-  const defaultTime = getDefaultTime();
-  const now = new Date().getTime() / 1000;
-
-  switch (defaultTime) {
-    case 'hour':
-      return timestamp2string(now - 86400);
-    case 'week':
-      return timestamp2string(now - 86400 * 30);
-    default:
-      return timestamp2string(now - 86400 * 7);
-  }
-};
-
 const getQuickRangePresetByKey = (presetKey) => {
   const fallbackPreset = QUICK_RANGE_PRESETS.find(
     (preset) => preset.key === DEFAULT_QUICK_RANGE_PRESET,
@@ -96,6 +82,34 @@ export const buildQuickRangePayload = (presetKey) => {
     start_timestamp: timestamp2string(Math.floor(startDate.getTime() / 1000)),
     end_timestamp: timestamp2string(Math.floor(now.getTime() / 1000)),
     dataExportDefaultTime: preset?.granularity || 'hour',
+  };
+};
+
+export const getInitialDashboardPayload = () => {
+  const preferredGranularity = getDefaultTime();
+
+  if (preferredGranularity === 'day') {
+    const payload = buildQuickRangePayload('last_7_days');
+    return {
+      ...payload,
+      activeQuickRangePreset: payload.presetKey,
+    };
+  }
+
+  if (preferredGranularity === 'week') {
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    return {
+      start_timestamp: timestamp2string(nowSeconds - 86400 * 30),
+      end_timestamp: timestamp2string(nowSeconds),
+      dataExportDefaultTime: 'week',
+      activeQuickRangePreset: null,
+    };
+  }
+
+  const defaultPayload = buildQuickRangePayload(DEFAULT_QUICK_RANGE_PRESET);
+  return {
+    ...defaultPayload,
+    activeQuickRangePreset: defaultPayload.presetKey,
   };
 };
 

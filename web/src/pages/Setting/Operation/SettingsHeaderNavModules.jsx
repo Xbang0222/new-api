@@ -30,59 +30,12 @@ import {
 import { API, showError, showSuccess } from '../../../helpers';
 import { useTranslation } from 'react-i18next';
 import { StatusContext } from '../../../context/Status';
+import {
+  getDefaultHeaderNavModules,
+  parseHeaderNavModules,
+} from '../../../helpers/headerNavModules';
 
 const { Text } = Typography;
-
-const getDefaultHeaderNavModules = () => ({
-  console: true,
-  pricing: {
-    enabled: true,
-    requireAuth: false,
-  },
-  docs: true,
-});
-
-const normalizeHeaderNavModules = (headerNavModules) => {
-  const defaults = getDefaultHeaderNavModules();
-  if (!headerNavModules || typeof headerNavModules !== 'object') {
-    return defaults;
-  }
-
-  const normalizedModules = {
-    ...defaults,
-    console:
-      typeof headerNavModules.console === 'boolean'
-        ? headerNavModules.console
-        : defaults.console,
-    docs:
-      typeof headerNavModules.docs === 'boolean'
-        ? headerNavModules.docs
-        : defaults.docs,
-  };
-
-  if (typeof headerNavModules.pricing === 'boolean') {
-    normalizedModules.pricing = {
-      enabled: headerNavModules.pricing,
-      requireAuth: false,
-    };
-  } else if (
-    headerNavModules.pricing &&
-    typeof headerNavModules.pricing === 'object'
-  ) {
-    normalizedModules.pricing = {
-      enabled:
-        typeof headerNavModules.pricing.enabled === 'boolean'
-          ? headerNavModules.pricing.enabled
-          : defaults.pricing.enabled,
-      requireAuth:
-        typeof headerNavModules.pricing.requireAuth === 'boolean'
-          ? headerNavModules.pricing.requireAuth
-          : defaults.pricing.requireAuth,
-    };
-  }
-
-  return normalizedModules;
-};
 
 export default function SettingsHeaderNavModules(props) {
   const { t } = useTranslation();
@@ -163,15 +116,8 @@ export default function SettingsHeaderNavModules(props) {
   }
 
   useEffect(() => {
-    // 从 props.options 中获取配置
-    if (props.options && props.options.HeaderNavModules) {
-      try {
-        const modules = JSON.parse(props.options.HeaderNavModules);
-        setHeaderNavModules(normalizeHeaderNavModules(modules));
-      } catch (error) {
-        setHeaderNavModules(getDefaultHeaderNavModules());
-      }
-    }
+    const parsedModules = parseHeaderNavModules(props.options?.HeaderNavModules);
+    setHeaderNavModules(parsedModules);
   }, [props.options]);
 
   // 模块配置数据

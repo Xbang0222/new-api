@@ -85,6 +85,27 @@ export function getLogo(themeMode) {
   return logo || '/logo.png';
 }
 
+export function getFavicon(themeMode) {
+  const logo = localStorage.getItem('logo');
+  const logoLight = localStorage.getItem('logo_light');
+  const logoDark = localStorage.getItem('logo_dark');
+
+  const normalizedThemeMode =
+    themeMode === 'dark' || themeMode === 'light'
+      ? themeMode
+      : inferThemeMode();
+
+  if (normalizedThemeMode === 'dark') {
+    return logoDark || logo || '/favicon.ico';
+  }
+
+  if (normalizedThemeMode === 'light') {
+    return logoLight || logo || '/favicon.ico';
+  }
+
+  return logo || '/favicon.ico';
+}
+
 export function getUserIdFromLocalStorage() {
   let user = localStorage.getItem('user');
   if (!user) return -1;
@@ -743,13 +764,13 @@ export const formatPriceInfo = (priceData, t) => {
     return (
       <>
         <span
-          className='pricing-price-text'
+          className='numeric-price-text'
           style={{ color: 'var(--semi-color-text-1)' }}
         >
           {t('输入')} {priceData.inputPrice}/{priceData.unitLabel}
         </span>
         <span
-          className='pricing-price-text'
+          className='numeric-price-text'
           style={{ color: 'var(--semi-color-text-1)' }}
         >
           {t('输出')} {priceData.completionPrice}/{priceData.unitLabel}
@@ -761,7 +782,7 @@ export const formatPriceInfo = (priceData, t) => {
   return (
     <>
       <span
-        className='pricing-price-text'
+        className='numeric-price-text'
         style={{ color: 'var(--semi-color-text-1)' }}
       >
         {t('模型价格')} {priceData.price}

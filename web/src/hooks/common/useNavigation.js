@@ -18,57 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import { useMemo } from 'react';
-
-const getDefaultModules = () => ({
-  console: true,
-  pricing: {
-    enabled: true,
-    requireAuth: false,
-  },
-  docs: true,
-});
-
-const normalizeHeaderNavModules = (headerNavModules) => {
-  const defaults = getDefaultModules();
-  if (!headerNavModules || typeof headerNavModules !== 'object') {
-    return defaults;
-  }
-
-  const normalizedModules = {
-    ...defaults,
-    console:
-      typeof headerNavModules.console === 'boolean'
-        ? headerNavModules.console
-        : defaults.console,
-    docs:
-      typeof headerNavModules.docs === 'boolean'
-        ? headerNavModules.docs
-        : defaults.docs,
-  };
-
-  if (typeof headerNavModules.pricing === 'boolean') {
-    normalizedModules.pricing = {
-      enabled: headerNavModules.pricing,
-      requireAuth: false,
-    };
-  } else if (
-    headerNavModules.pricing &&
-    typeof headerNavModules.pricing === 'object'
-  ) {
-    normalizedModules.pricing = {
-      enabled:
-        typeof headerNavModules.pricing.enabled === 'boolean'
-          ? headerNavModules.pricing.enabled
-          : defaults.pricing.enabled,
-      requireAuth:
-        typeof headerNavModules.pricing.requireAuth === 'boolean'
-          ? headerNavModules.pricing.requireAuth
-          : defaults.pricing.requireAuth,
-    };
-  }
-
-  return normalizedModules;
-};
+import { normalizeHeaderNavModules } from '../../helpers/headerNavModules';
 
 export const useNavigation = (t, docsLink, headerNavModules, pathname = '/') => {
   const mainNavLinks = useMemo(() => {
