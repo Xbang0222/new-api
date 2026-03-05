@@ -43,7 +43,10 @@ export const useHeaderBar = ({ onMobileMenuToggle, drawerOpen }) => {
   const isLoading = useMinimumLoadingTime(loading, 200);
 
   const systemName = getSystemName();
-  const logo = getLogo();
+  const theme = useTheme();
+  const actualTheme = useActualTheme();
+  const setTheme = useSetTheme();
+  const logo = getLogo(actualTheme);
   const currentDate = new Date();
   const isNewYear = currentDate.getMonth() === 0 && currentDate.getDate() === 1;
 
@@ -88,10 +91,6 @@ export const useHeaderBar = ({ onMobileMenuToggle, drawerOpen }) => {
   }, [headerNavModules]);
 
   const isConsoleRoute = location.pathname.startsWith('/console');
-
-  const theme = useTheme();
-  const actualTheme = useActualTheme();
-  const setTheme = useSetTheme();
 
   // Logo loading effect
   useEffect(() => {

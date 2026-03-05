@@ -45,6 +45,8 @@ const OtherSetting = () => {
     [LEGAL_PRIVACY_POLICY_KEY]: '',
     SystemName: '',
     Logo: '',
+    LogoLight: '',
+    LogoDark: '',
     Footer: '',
     About: '',
     HomePageContent: '',
@@ -78,6 +80,8 @@ const OtherSetting = () => {
     [LEGAL_PRIVACY_POLICY_KEY]: false,
     SystemName: false,
     Logo: false,
+    LogoLight: false,
+    LogoDark: false,
     HomePageContent: false,
     About: false,
     Footer: false,
@@ -180,6 +184,34 @@ const OtherSetting = () => {
       showError('Logo 更新失败');
     } finally {
       setLoadingInput((loadingInput) => ({ ...loadingInput, Logo: false }));
+    }
+  };
+
+  // 个性化设置 - 浅色 Logo
+  const submitLogoLight = async () => {
+    try {
+      setLoadingInput((loadingInput) => ({ ...loadingInput, LogoLight: true }));
+      await updateOption('LogoLight', inputs.LogoLight);
+      showSuccess(t('浅色 Logo 已更新'));
+    } catch (error) {
+      console.error(t('浅色 Logo 更新失败'), error);
+      showError(t('浅色 Logo 更新失败'));
+    } finally {
+      setLoadingInput((loadingInput) => ({ ...loadingInput, LogoLight: false }));
+    }
+  };
+
+  // 个性化设置 - 深色 Logo
+  const submitLogoDark = async () => {
+    try {
+      setLoadingInput((loadingInput) => ({ ...loadingInput, LogoDark: true }));
+      await updateOption('LogoDark', inputs.LogoDark);
+      showSuccess(t('深色 Logo 已更新'));
+    } catch (error) {
+      console.error(t('深色 Logo 更新失败'), error);
+      showError(t('深色 Logo 更新失败'));
+    } finally {
+      setLoadingInput((loadingInput) => ({ ...loadingInput, LogoDark: false }));
     }
   };
   // 个性化设置 - 首页内容
@@ -443,6 +475,30 @@ const OtherSetting = () => {
               />
               <Button onClick={submitLogo} loading={loadingInput['Logo']}>
                 {t('设置 Logo')}
+              </Button>
+              <Form.Input
+                label={t('浅色 Logo 图片地址')}
+                placeholder={t('在此输入浅色 Logo 图片地址')}
+                field={'LogoLight'}
+                onChange={handleInputChange}
+              />
+              <Button
+                onClick={submitLogoLight}
+                loading={loadingInput['LogoLight']}
+              >
+                {t('设置浅色 Logo')}
+              </Button>
+              <Form.Input
+                label={t('深色 Logo 图片地址')}
+                placeholder={t('在此输入深色 Logo 图片地址')}
+                field={'LogoDark'}
+                onChange={handleInputChange}
+              />
+              <Button
+                onClick={submitLogoDark}
+                loading={loadingInput['LogoDark']}
+              >
+                {t('设置深色 Logo')}
               </Button>
               <Form.TextArea
                 label={t('首页内容')}

@@ -52,10 +52,37 @@ export function getSystemName() {
   return system_name;
 }
 
-export function getLogo() {
-  let logo = localStorage.getItem('logo');
-  if (!logo) return '/logo.png';
-  return logo;
+function inferThemeMode() {
+  if (typeof document === 'undefined') return 'light';
+  const bodyThemeMode = document.body?.getAttribute('theme-mode');
+  if (bodyThemeMode === 'dark' || bodyThemeMode === 'light') {
+    return bodyThemeMode;
+  }
+  if (document.documentElement?.classList.contains('dark')) {
+    return 'dark';
+  }
+  return 'light';
+}
+
+export function getLogo(themeMode) {
+  const logo = localStorage.getItem('logo');
+  const logoLight = localStorage.getItem('logo_light');
+  const logoDark = localStorage.getItem('logo_dark');
+
+  const normalizedThemeMode =
+    themeMode === 'dark' || themeMode === 'light'
+      ? themeMode
+      : inferThemeMode();
+
+  if (normalizedThemeMode === 'dark') {
+    return logoDark || logo || '/logo.png';
+  }
+
+  if (normalizedThemeMode === 'light') {
+    return logoLight || logo || '/logo.png';
+  }
+
+  return logo || '/logo.png';
 }
 
 export function getUserIdFromLocalStorage() {
