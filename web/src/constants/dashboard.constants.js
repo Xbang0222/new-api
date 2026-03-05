@@ -56,6 +56,50 @@ export const DEFAULT_TIME_RANGE = {
   WEEK: 'week',
 };
 
+export const QUICK_RANGE_PRESETS = [
+  {
+    key: 'last_24_hours',
+    labelKey: '24小时',
+    granularity: 'hour',
+    mode: 'rolling',
+    unit: 'hour',
+    amount: 24,
+  },
+  {
+    key: 'today',
+    labelKey: '当天',
+    granularity: 'hour',
+    mode: 'today',
+    amount: 1,
+  },
+  {
+    key: 'last_7_days',
+    labelKey: '7天',
+    granularity: 'day',
+    mode: 'rolling',
+    unit: 'day',
+    amount: 7,
+  },
+  {
+    key: 'last_14_days',
+    labelKey: '14天',
+    granularity: 'day',
+    mode: 'rolling',
+    unit: 'day',
+    amount: 14,
+  },
+  {
+    key: 'last_30_days',
+    labelKey: '30天',
+    granularity: 'day',
+    mode: 'rolling',
+    unit: 'day',
+    amount: 30,
+  },
+];
+
+export const DEFAULT_QUICK_RANGE_PRESET = 'last_24_hours';
+
 // ========== 图表默认配置 ==========
 export const DEFAULT_CHART_SPECS = {
   PIE: {
