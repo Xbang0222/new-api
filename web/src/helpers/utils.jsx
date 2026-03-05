@@ -715,10 +715,16 @@ export const formatPriceInfo = (priceData, t) => {
   if (priceData.isPerToken) {
     return (
       <>
-        <span style={{ color: 'var(--semi-color-text-1)' }}>
+        <span
+          className='pricing-price-text'
+          style={{ color: 'var(--semi-color-text-1)' }}
+        >
           {t('输入')} {priceData.inputPrice}/{priceData.unitLabel}
         </span>
-        <span style={{ color: 'var(--semi-color-text-1)' }}>
+        <span
+          className='pricing-price-text'
+          style={{ color: 'var(--semi-color-text-1)' }}
+        >
           {t('输出')} {priceData.completionPrice}/{priceData.unitLabel}
         </span>
       </>
@@ -727,7 +733,10 @@ export const formatPriceInfo = (priceData, t) => {
 
   return (
     <>
-      <span style={{ color: 'var(--semi-color-text-1)' }}>
+      <span
+        className='pricing-price-text'
+        style={{ color: 'var(--semi-color-text-1)' }}
+      >
         {t('模型价格')} {priceData.price}
       </span>
     </>
