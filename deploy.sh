@@ -12,7 +12,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # 获取 Docker Hub 用户名
-DOCKERHUB_USERNAME="${1:-your-dockerhub-username}"
+DOCKERHUB_USERNAME="${1:-xbang0222}"
 IMAGE_NAME="${DOCKERHUB_USERNAME}/new-api:latest"
 CONTAINER_NAME="new-api"
 DATA_DIR="./data"

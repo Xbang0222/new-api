@@ -36,12 +36,6 @@
 ### 步骤 3：推送代码触发构建
 
 ```bash
-# 提交新创建的文件
-git add .github/workflows/docker-custom-build.yml
-git add deploy.sh
-git add DEPLOY.md
-git commit -m "ci: add custom Docker build workflow"
-
 # 推送到 GitHub（会自动触发构建）
 git push origin main
 ```
