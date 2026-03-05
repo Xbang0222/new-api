@@ -25,6 +25,7 @@ import LanguageSelector from './LanguageSelector';
 import UserArea from './UserArea';
 
 const ActionButtons = ({
+  navigationSlot,
   isNewYear,
   unreadCount,
   onNoticeOpen,
@@ -42,6 +43,8 @@ const ActionButtons = ({
 }) => {
   return (
     <div className='flex items-center gap-2 md:gap-3'>
+      {navigationSlot}
+
       <NewYearButton isNewYear={isNewYear} />
 
       <NotificationButton

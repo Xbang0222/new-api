@@ -18,6 +18,7 @@
   --sidebar-width: 180px;
   --sidebar-width-collapsed: 60px;
   --sidebar-current-width: var(--sidebar-width);
+  --ruoli-header-brand-scale: 1.3;
 }
 
 body.sidebar-collapsed {
@@ -49,6 +50,23 @@ body {
 
 .ruoli-brand-title {
   font-family: 'RuoLiBrand', 'PingFang SC', 'Microsoft YaHei', sans-serif !important;
+}
+
+.ruoli-header-logo-image {
+  transform: scale(var(--ruoli-header-brand-scale));
+  transform-origin: center;
+  transition: transform 0.2s ease;
+}
+
+.ruoli-header-brand-text-scale {
+  display: inline-block;
+  transform: scale(var(--ruoli-header-brand-scale));
+  transform-origin: left center;
+  margin-right: 0.5rem;
+}
+
+.ruoli-header-brand:hover .ruoli-header-logo-image {
+  transform: scale(1.43);
 }
 
 .pricing-price-text {
