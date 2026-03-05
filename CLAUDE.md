@@ -1,5 +1,77 @@
 # CLAUDE.md — Project Conventions for new-api
 
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Development Commands
+
+### Backend (Go)
+
+```bash
+# Install dependencies
+go mod download
+
+# Run the application (requires frontend to be built first)
+go run main.go
+
+# Build the backend binary
+go build -o new-api
+
+# Run tests
+go test ./...
+
+# Run specific test
+go test ./path/to/package -v
+
+# Run tests with coverage
+go test -cover ./...
+```
+
+### Frontend (React + Vite)
+
+```bash
+cd web
+
+# Install dependencies
+bun install
+
+# Development server (runs on port 5173, proxies API to :3000)
+bun run dev
+
+# Production build (outputs to web/dist, embedded in Go binary)
+bun run build
+
+# Linting and formatting
+bun run lint        # Check formatting with Prettier
+bun run lint:fix    # Auto-fix formatting
+bun run eslint      # Run ESLint
+bun run eslint:fix  # Auto-fix ESLint issues
+
+# i18n management
+bun run i18n:extract  # Extract translation keys from source
+bun run i18n:sync     # Sync translations across locales
+bun run i18n:lint     # Check for translation issues
+```
+
+### Full Stack Development
+
+1. **First time setup:**
+   ```bash
+   go mod download
+   cd web && bun install && cd ..
+   ```
+
+2. **Development workflow:**
+   - Terminal 1: `cd web && bun run dev` (frontend dev server with HMR)
+   - Terminal 2: `go run main.go` (backend server on :3000)
+   - Access: `http://localhost:5173` (Vite dev server proxies API calls to :3000)
+
+3. **Production build:**
+   ```bash
+   cd web && bun run build && cd ..
+   go build -ldflags "-s -w -X 'new-api/common.Version=dev'" -o new-api
+   ./new-api
+   ```
+
 ## Overview
 
 This is an AI API gateway/proxy built with Go. It aggregates 40+ upstream AI providers (OpenAI, Claude, Gemini, Azure, AWS Bedrock, etc.) behind a unified API, with user management, billing, rate limiting, and an admin dashboard.
