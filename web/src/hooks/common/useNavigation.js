@@ -19,35 +19,68 @@ For commercial licensing, please contact support@quantumnous.com
 
 import { useMemo } from 'react';
 
-export const useNavigation = (t, docsLink, headerNavModules) => {
-  const mainNavLinks = useMemo(() => {
-    // 默认配置，如果没有传入配置则显示所有模块
-    const defaultModules = {
-      home: true,
-      console: true,
-      pricing: true,
-      docs: true,
-      about: true,
-    };
+const getDefaultModules = () => ({
+  console: true,
+  pricing: {
+    enabled: true,
+    requireAuth: false,
+  },
+  docs: true,
+});
 
-    // 使用传入的配置或默认配置
-    const modules = headerNavModules || defaultModules;
+const normalizeHeaderNavModules = (headerNavModules) => {
+  const defaults = getDefaultModules();
+  if (!headerNavModules || typeof headerNavModules !== 'object') {
+    return defaults;
+  }
+
+  const normalizedModules = {
+    ...defaults,
+    console:
+      typeof headerNavModules.console === 'boolean'
+        ? headerNavModules.console
+        : defaults.console,
+    docs:
+      typeof headerNavModules.docs === 'boolean'
+        ? headerNavModules.docs
+        : defaults.docs,
+  };
+
+  if (typeof headerNavModules.pricing === 'boolean') {
+    normalizedModules.pricing = {
+      enabled: headerNavModules.pricing,
+      requireAuth: false,
+    };
+  } else if (
+    headerNavModules.pricing &&
+    typeof headerNavModules.pricing === 'object'
+  ) {
+    normalizedModules.pricing = {
+      enabled:
+        typeof headerNavModules.pricing.enabled === 'boolean'
+          ? headerNavModules.pricing.enabled
+          : defaults.pricing.enabled,
+      requireAuth:
+        typeof headerNavModules.pricing.requireAuth === 'boolean'
+          ? headerNavModules.pricing.requireAuth
+          : defaults.pricing.requireAuth,
+    };
+  }
+
+  return normalizedModules;
+};
+
+export const useNavigation = (t, docsLink, headerNavModules, pathname = '/') => {
+  const mainNavLinks = useMemo(() => {
+    const modules = normalizeHeaderNavModules(headerNavModules);
+    const inConsoleArea =
+      pathname.startsWith('/console') || pathname === '/pricing';
 
     const allLinks = [
-      {
-        text: t('首页'),
-        itemKey: 'home',
-        to: '/',
-      },
       {
         text: t('控制台'),
         itemKey: 'console',
         to: '/console',
-      },
-      {
-        text: t('模型广场'),
-        itemKey: 'pricing',
-        to: '/pricing',
       },
       ...(docsLink
         ? [
@@ -60,26 +93,32 @@ export const useNavigation = (t, docsLink, headerNavModules) => {
           ]
         : []),
       {
-        text: t('关于'),
-        itemKey: 'about',
-        to: '/about',
+        text: t('模型广场'),
+        itemKey: 'pricing',
+        to: '/pricing',
       },
     ];
 
-    // 根据配置过滤导航链接
-    return allLinks.filter((link) => {
+    const moduleFilteredLinks = allLinks.filter((link) => {
       if (link.itemKey === 'docs') {
         return docsLink && modules.docs;
       }
       if (link.itemKey === 'pricing') {
-        // 支持新的pricing配置格式
-        return typeof modules.pricing === 'object'
-          ? modules.pricing.enabled
-          : modules.pricing;
+        return modules.pricing.enabled;
       }
       return modules[link.itemKey] === true;
     });
-  }, [t, docsLink, headerNavModules]);
+
+    return moduleFilteredLinks.map((link) => {
+      const showOnDesktop = inConsoleArea
+        ? link.itemKey !== 'console'
+        : link.itemKey === 'console';
+      return {
+        ...link,
+        showOnDesktop,
+      };
+    });
+  }, [t, docsLink, headerNavModules, pathname]);
 
   return {
     mainNavLinks,

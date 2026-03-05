@@ -27,6 +27,7 @@ import React, { useContext, useEffect, useState } from 'react';
 import { useIsMobile } from '../../hooks/common/useIsMobile';
 import { useSidebarCollapsed } from '../../hooks/common/useSidebarCollapsed';
 import { useTranslation } from 'react-i18next';
+import { useActualTheme } from '../../context/Theme';
 import {
   API,
   getLogo,
@@ -47,6 +48,7 @@ const PageLayout = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { i18n } = useTranslation();
   const location = useLocation();
+  const actualTheme = useActualTheme();
 
   const cardProPages = [
     '/console/channel',
@@ -91,6 +93,13 @@ const PageLayout = () => {
       if (success) {
         statusDispatch({ type: 'set', payload: data });
         setStatusData(data);
+        let logo = getLogo(actualTheme);
+        if (logo) {
+          let linkElement = document.querySelector("link[rel~='icon']");
+          if (linkElement) {
+            linkElement.href = logo;
+          }
+        }
       } else {
         showError('Unable to connect to server');
       }
@@ -106,7 +115,7 @@ const PageLayout = () => {
     if (systemName) {
       document.title = systemName;
     }
-    let logo = getLogo();
+    let logo = getLogo(actualTheme);
     if (logo) {
       let linkElement = document.querySelector("link[rel~='icon']");
       if (linkElement) {
@@ -118,6 +127,16 @@ const PageLayout = () => {
       i18n.changeLanguage(savedLang);
     }
   }, [i18n]);
+
+  useEffect(() => {
+    let logo = getLogo(actualTheme);
+    if (logo) {
+      let linkElement = document.querySelector("link[rel~='icon']");
+      if (linkElement) {
+        linkElement.href = logo;
+      }
+    }
+  }, [actualTheme]);
 
   return (
     <Layout
