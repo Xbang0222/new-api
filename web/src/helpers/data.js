@@ -20,7 +20,21 @@ For commercial licensing, please contact support@quantumnous.com
 export function setStatusData(data) {
   localStorage.setItem('status', JSON.stringify(data));
   localStorage.setItem('system_name', data.system_name);
-  localStorage.setItem('logo', data.logo);
+  if (data.logo) {
+    localStorage.setItem('logo', data.logo);
+  } else {
+    localStorage.removeItem('logo');
+  }
+  if (data.logo_light) {
+    localStorage.setItem('logo_light', data.logo_light);
+  } else {
+    localStorage.removeItem('logo_light');
+  }
+  if (data.logo_dark) {
+    localStorage.setItem('logo_dark', data.logo_dark);
+  } else {
+    localStorage.removeItem('logo_dark');
+  }
   localStorage.setItem('footer_html', data.footer_html);
   localStorage.setItem('quota_per_unit', data.quota_per_unit);
   // 兼容：保留旧字段，同时写入新的额度展示类型

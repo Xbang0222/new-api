@@ -106,6 +106,13 @@ const Dashboard = () => {
     await dashboardData.handleSearchConfirm(dashboardCharts.updateChartData);
   };
 
+  const handleQuickRangeSelect = async (presetKey) => {
+    await dashboardData.applyQuickRangePreset(
+      presetKey,
+      dashboardCharts.updateChartData,
+    );
+  };
+
   // ========== 数据准备 ==========
   const apiInfoData = statusState?.status?.api_info || [];
   const announcementData = (statusState?.status?.announcements || []).map(
@@ -143,10 +150,12 @@ const Dashboard = () => {
       <DashboardHeader
         getGreeting={dashboardData.getGreeting}
         greetingVisible={dashboardData.greetingVisible}
+        quickRangePresets={dashboardData.quickRangePresets}
+        activeQuickRangePreset={dashboardData.activeQuickRangePreset}
+        onQuickRangeSelect={handleQuickRangeSelect}
         showSearchModal={dashboardData.showSearchModal}
         refresh={handleRefresh}
         loading={dashboardData.loading}
-        t={dashboardData.t}
       />
 
       <SearchModal

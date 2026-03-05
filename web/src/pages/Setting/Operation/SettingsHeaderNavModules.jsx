@@ -33,22 +33,66 @@ import { StatusContext } from '../../../context/Status';
 
 const { Text } = Typography;
 
+const getDefaultHeaderNavModules = () => ({
+  console: true,
+  pricing: {
+    enabled: true,
+    requireAuth: false,
+  },
+  docs: true,
+});
+
+const normalizeHeaderNavModules = (headerNavModules) => {
+  const defaults = getDefaultHeaderNavModules();
+  if (!headerNavModules || typeof headerNavModules !== 'object') {
+    return defaults;
+  }
+
+  const normalizedModules = {
+    ...defaults,
+    console:
+      typeof headerNavModules.console === 'boolean'
+        ? headerNavModules.console
+        : defaults.console,
+    docs:
+      typeof headerNavModules.docs === 'boolean'
+        ? headerNavModules.docs
+        : defaults.docs,
+  };
+
+  if (typeof headerNavModules.pricing === 'boolean') {
+    normalizedModules.pricing = {
+      enabled: headerNavModules.pricing,
+      requireAuth: false,
+    };
+  } else if (
+    headerNavModules.pricing &&
+    typeof headerNavModules.pricing === 'object'
+  ) {
+    normalizedModules.pricing = {
+      enabled:
+        typeof headerNavModules.pricing.enabled === 'boolean'
+          ? headerNavModules.pricing.enabled
+          : defaults.pricing.enabled,
+      requireAuth:
+        typeof headerNavModules.pricing.requireAuth === 'boolean'
+          ? headerNavModules.pricing.requireAuth
+          : defaults.pricing.requireAuth,
+    };
+  }
+
+  return normalizedModules;
+};
+
 export default function SettingsHeaderNavModules(props) {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [statusState, statusDispatch] = useContext(StatusContext);
 
   // 顶栏模块管理状态
-  const [headerNavModules, setHeaderNavModules] = useState({
-    home: true,
-    console: true,
-    pricing: {
-      enabled: true,
-      requireAuth: false, // 默认不需要登录鉴权
-    },
-    docs: true,
-    about: true,
-  });
+  const [headerNavModules, setHeaderNavModules] = useState(
+    getDefaultHeaderNavModules(),
+  );
 
   // 处理顶栏模块配置变更
   function handleHeaderNavModuleChange(moduleKey) {
@@ -79,17 +123,7 @@ export default function SettingsHeaderNavModules(props) {
 
   // 重置顶栏模块为默认配置
   function resetHeaderNavModules() {
-    const defaultModules = {
-      home: true,
-      console: true,
-      pricing: {
-        enabled: true,
-        requireAuth: false,
-      },
-      docs: true,
-      about: true,
-    };
-    setHeaderNavModules(defaultModules);
+    setHeaderNavModules(getDefaultHeaderNavModules());
     showSuccess(t('已重置为默认配置'));
   }
 
@@ -133,40 +167,15 @@ export default function SettingsHeaderNavModules(props) {
     if (props.options && props.options.HeaderNavModules) {
       try {
         const modules = JSON.parse(props.options.HeaderNavModules);
-
-        // 处理向后兼容性：如果pricing是boolean，转换为对象格式
-        if (typeof modules.pricing === 'boolean') {
-          modules.pricing = {
-            enabled: modules.pricing,
-            requireAuth: false, // 默认不需要登录鉴权
-          };
-        }
-
-        setHeaderNavModules(modules);
+        setHeaderNavModules(normalizeHeaderNavModules(modules));
       } catch (error) {
-        // 使用默认配置
-        const defaultModules = {
-          home: true,
-          console: true,
-          pricing: {
-            enabled: true,
-            requireAuth: false,
-          },
-          docs: true,
-          about: true,
-        };
-        setHeaderNavModules(defaultModules);
+        setHeaderNavModules(getDefaultHeaderNavModules());
       }
     }
   }, [props.options]);
 
   // 模块配置数据
   const moduleConfigs = [
-    {
-      key: 'home',
-      title: t('首页'),
-      description: t('用户主页，展示系统信息'),
-    },
     {
       key: 'console',
       title: t('控制台'),
@@ -183,11 +192,6 @@ export default function SettingsHeaderNavModules(props) {
       title: t('文档'),
       description: t('系统文档和帮助信息'),
     },
-    {
-      key: 'about',
-      title: t('关于'),
-      description: t('关于系统的详细信息'),
-    },
   ];
 
   return (
@@ -198,7 +202,7 @@ export default function SettingsHeaderNavModules(props) {
       >
         <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
           {moduleConfigs.map((module) => (
-            <Col key={module.key} xs={24} sm={12} md={6} lg={6} xl={6}>
+            <Col key={module.key} xs={24} sm={12} md={8} lg={8} xl={8}>
               <Card
                 style={{
                   borderRadius: '8px',

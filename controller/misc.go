@@ -62,6 +62,8 @@ func GetStatus(c *gin.Context) {
 		"telegram_bot_name":           common.TelegramBotName,
 		"system_name":                 common.SystemName,
 		"logo":                        common.Logo,
+		"logo_light":                  common.LogoLight,
+		"logo_dark":                   common.LogoDark,
 		"footer_html":                 common.Footer,
 		"wechat_qrcode":               common.WeChatAccountQRCodeImageURL,
 		"wechat_login":                common.WeChatAuthEnabled,
