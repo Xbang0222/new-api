@@ -18,14 +18,12 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React from 'react';
-import { Button } from '@douyinfe/semi-ui';
 import PricingGroups from '../filter/PricingGroups';
 import PricingQuotaTypes from '../filter/PricingQuotaTypes';
 import PricingEndpointTypes from '../filter/PricingEndpointTypes';
 import PricingVendors from '../filter/PricingVendors';
 import PricingTags from '../filter/PricingTags';
 
-import { resetPricingFilters } from '../../../../helpers/utils';
 import { usePricingFilterCounts } from '../../../../hooks/model-pricing/usePricingFilterCounts';
 
 const PricingSidebar = ({
@@ -74,35 +72,9 @@ const PricingSidebar = ({
     searchValue: categoryProps.searchValue,
   });
 
-  const handleResetFilters = () =>
-    resetPricingFilters({
-      handleChange,
-      setShowWithRecharge,
-      setCurrency,
-      setShowRatio,
-      setViewMode,
-      setFilterGroup,
-      setFilterQuotaType,
-      setFilterEndpointType,
-      setFilterVendor,
-      setFilterTag,
-      setCurrentPage,
-      setTokenUnit,
-    });
-
   return (
     <div className='p-2'>
-      <div className='flex items-center justify-between mb-6'>
-        <div className='text-lg font-semibold text-gray-800'>{t('筛选')}</div>
-        <Button
-          theme='outline'
-          type='tertiary'
-          onClick={handleResetFilters}
-          className='text-gray-500 hover:text-gray-700'
-        >
-          {t('重置')}
-        </Button>
-      </div>
+      <div className='mb-6 h-8' aria-hidden='true' />
 
       <PricingVendors
         filterVendor={filterVendor}

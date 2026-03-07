@@ -20,11 +20,28 @@ For commercial licensing, please contact support@quantumnous.com
 import { useMemo } from 'react';
 import { normalizeHeaderNavModules } from '../../helpers/headerNavModules';
 
-export const useNavigation = (t, docsLink, headerNavModules, pathname = '/') => {
+export const useNavigation = (
+  t,
+  docsLink,
+  headerNavModules,
+  pathname = '/',
+) => {
   const mainNavLinks = useMemo(() => {
     const modules = normalizeHeaderNavModules(headerNavModules);
-    const inConsoleArea =
-      pathname.startsWith('/console') || pathname === '/pricing';
+    const isConsoleArea = pathname.startsWith('/console');
+    const isPricingPage = pathname === '/pricing';
+
+    const getDesktopOrder = (itemKey) => {
+      if (isConsoleArea) {
+        return itemKey === 'docs' ? 0 : itemKey === 'pricing' ? 1 : 2;
+      }
+
+      if (isPricingPage) {
+        return itemKey === 'docs' ? 0 : itemKey === 'console' ? 1 : 2;
+      }
+
+      return itemKey === 'console' ? 0 : itemKey === 'docs' ? 1 : 2;
+    };
 
     const allLinks = [
       {
@@ -60,11 +77,17 @@ export const useNavigation = (t, docsLink, headerNavModules, pathname = '/') => 
     });
 
     return moduleFilteredLinks.map((link) => {
-      const showOnDesktop = inConsoleArea
-        ? link.itemKey !== 'console'
-        : link.itemKey === 'console';
+      let showOnDesktop = link.itemKey === 'console';
+
+      if (isConsoleArea) {
+        showOnDesktop = link.itemKey !== 'console';
+      } else if (isPricingPage) {
+        showOnDesktop = link.itemKey !== 'pricing';
+      }
+
       return {
         ...link,
+        desktopOrder: getDesktopOrder(link.itemKey),
         showOnDesktop,
       };
     });

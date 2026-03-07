@@ -33,7 +33,11 @@ const Navigation = ({
     if (isMobile) {
       return mainNavLinks;
     }
-    return mainNavLinks.filter((link) => link.showOnDesktop !== false);
+    return mainNavLinks
+      .filter((link) => link.showOnDesktop !== false)
+      .sort(
+        (left, right) => (left.desktopOrder ?? 0) - (right.desktopOrder ?? 0),
+      );
   }, [isMobile, mainNavLinks]);
 
   const getTargetPath = (link) => {
@@ -120,7 +124,11 @@ const Navigation = ({
     }
 
     return (
-      <NavLink key={link.itemKey} to={getTargetPath(link)} className={mobileLinkClasses}>
+      <NavLink
+        key={link.itemKey}
+        to={getTargetPath(link)}
+        className={mobileLinkClasses}
+      >
         <span>{link.text}</span>
       </NavLink>
     );
