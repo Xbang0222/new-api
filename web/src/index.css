@@ -18,10 +18,27 @@
   --sidebar-width: 180px;
   --sidebar-width-collapsed: 60px;
   --sidebar-current-width: var(--sidebar-width);
+  --header-brand-scale: 1.3;
 }
 
 body.sidebar-collapsed {
   --sidebar-current-width: var(--sidebar-width-collapsed);
+}
+
+@font-face {
+  font-family: 'BrandNumeric';
+  src: url('/fonts/Number.otf') format('opentype');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'BrandDisplay';
+  src: url('/fonts/Icon.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
 }
 
 body {
@@ -31,11 +48,31 @@ body {
   background-color: var(--semi-color-bg-0);
 }
 
-/* 桌面端禁止 body 纵向滚动 - 防止 VChart tooltip 触发页面滚动条 */
-@media (min-width: 768px) {
-  body {
-    overflow-y: hidden;
-  }
+.brand-title {
+  font-family: 'BrandDisplay', 'PingFang SC', 'Microsoft YaHei', sans-serif !important;
+}
+
+.header-brand-logo-image {
+  transform: scale(var(--header-brand-scale));
+  transform-origin: center;
+  transition: transform 0.2s ease;
+}
+
+.header-brand-text-scale {
+  display: inline-block;
+  transform: scale(var(--header-brand-scale));
+  transform-origin: left center;
+  margin-right: 0.5rem;
+}
+
+.header-brand:hover .header-brand-logo-image {
+  transform: scale(1.43);
+}
+
+.numeric-price-text {
+  font-family: 'BrandNumeric', 'SFMono-Regular', 'JetBrains Mono', Consolas,
+    'Liberation Mono', Menlo, monospace;
+  font-variant-numeric: tabular-nums;
 }
 
 .app-layout {
@@ -475,9 +512,6 @@ html.dark .sbg-variant-green {
 /* 页脚样式 */
 .custom-footer {
   font-size: 1.1em;
-}
-.custom-footer.na-cb6feafeb3990c78 {
-  position: relative;
 }
 
 /* 卡片内容容器通用样式 */
@@ -981,28 +1015,3 @@ html.dark .with-pastel-balls::before {
 .semi-datepicker-range-input {
   border-radius: 10px !important;
 }
-
-@keyframes slideInLeft {
-  from {
-    transform: translateX(-100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
-}
-
-/* Channel advanced settings side panel animations */
-@keyframes slideInRight {
-  from {
-    transform: translateX(100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
-}
-
-.ec-dbcd0a3c01b55203 { forced-color-adjust: auto; }
