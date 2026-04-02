@@ -46,13 +46,14 @@ require (
 	github.com/tidwall/gjson v1.18.0
 	github.com/tidwall/sjson v1.2.5
 	github.com/tiktoken-go/tokenizer v0.6.2
+	github.com/waffo-com/waffo-go v1.3.1
 	github.com/yapingcat/gomedia v0.0.0-20240906162731-17feea57090c
 	golang.org/x/crypto v0.45.0
-	golang.org/x/image v0.23.0
+	golang.org/x/image v0.38.0
 	golang.org/x/net v0.47.0
-	golang.org/x/sync v0.19.0
+	golang.org/x/sync v0.20.0
 	golang.org/x/sys v0.38.0
-	golang.org/x/text v0.32.0
+	golang.org/x/text v0.35.0
 	gopkg.in/yaml.v3 v3.0.1
 	gorm.io/driver/mysql v1.4.3
 	gorm.io/driver/postgres v1.5.2
@@ -120,7 +121,6 @@ require (
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/samber/go-singleflightx v0.3.2 // indirect
-	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect
 	github.com/tklauser/go-sysconf v0.3.12 // indirect

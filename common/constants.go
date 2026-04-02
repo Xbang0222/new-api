@@ -15,8 +15,6 @@ var Version = "v0.0.0"            // this hard coding will be replaced automatic
 var SystemName = "New API"
 var Footer = ""
 var Logo = ""
-var LogoLight = ""
-var LogoDark = ""
 var TopUpLink = ""
 
 // var ChatLink = ""
@@ -179,6 +177,7 @@ var (
 	DownloadRateLimitDuration int64 = 60
 
 	// Per-user search rate limit (applies after authentication, keyed by user ID)
+	SearchRateLimitEnable         = true
 	SearchRateLimitNum            = 10
 	SearchRateLimitDuration int64 = 60
 )
@@ -213,5 +212,6 @@ const (
 const (
 	TopUpStatusPending = "pending"
 	TopUpStatusSuccess = "success"
+	TopUpStatusFailed  = "failed"
 	TopUpStatusExpired = "expired"
 )

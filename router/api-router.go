@@ -36,10 +36,10 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.POST("/user/reset", middleware.CriticalRateLimit(), controller.ResetPassword)
 		// OAuth routes - specific routes must come before :provider wildcard
 		apiRouter.GET("/oauth/state", middleware.CriticalRateLimit(), controller.GenerateOAuthCode)
-		apiRouter.GET("/oauth/email/bind", middleware.CriticalRateLimit(), controller.EmailBind)
+		apiRouter.POST("/oauth/email/bind", middleware.CriticalRateLimit(), controller.EmailBind)
 		// Non-standard OAuth (WeChat, Telegram) - keep original routes
 		apiRouter.GET("/oauth/wechat", middleware.CriticalRateLimit(), controller.WeChatAuth)
-		apiRouter.GET("/oauth/wechat/bind", middleware.CriticalRateLimit(), controller.WeChatBind)
+		apiRouter.POST("/oauth/wechat/bind", middleware.CriticalRateLimit(), controller.WeChatBind)
 		apiRouter.GET("/oauth/telegram/login", middleware.CriticalRateLimit(), controller.TelegramLogin)
 		apiRouter.GET("/oauth/telegram/bind", middleware.CriticalRateLimit(), controller.TelegramBind)
 		// Standard OAuth providers (GitHub, Discord, OIDC, LinuxDO) - unified route
@@ -48,6 +48,7 @@ func SetApiRouter(router *gin.Engine) {
 
 		apiRouter.POST("/stripe/webhook", controller.StripeWebhook)
 		apiRouter.POST("/creem/webhook", controller.CreemWebhook)
+		apiRouter.POST("/waffo/webhook", controller.WaffoWebhook)
 
 		// Universal secure verification routes
 		apiRouter.POST("/verify", middleware.UserAuth(), middleware.CriticalRateLimit(), controller.UniversalVerify)
@@ -89,6 +90,7 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.POST("/stripe/pay", middleware.CriticalRateLimit(), controller.RequestStripePay)
 				selfRoute.POST("/stripe/amount", controller.RequestStripeAmount)
 				selfRoute.POST("/creem/pay", middleware.CriticalRateLimit(), controller.RequestCreemPay)
+				selfRoute.POST("/waffo/pay", middleware.CriticalRateLimit(), controller.RequestWaffoPay)
 				selfRoute.POST("/aff_transfer", controller.TransferAffQuota)
 				selfRoute.PUT("/setting", controller.UpdateUserSetting)
 
@@ -192,6 +194,8 @@ func SetApiRouter(router *gin.Engine) {
 			performanceRoute.DELETE("/disk_cache", controller.ClearDiskCache)
 			performanceRoute.POST("/reset_stats", controller.ResetPerformanceStats)
 			performanceRoute.POST("/gc", controller.ForceGC)
+			performanceRoute.GET("/logs", controller.GetLogFiles)
+			performanceRoute.DELETE("/logs", controller.CleanupLogFiles)
 		}
 		ratioSyncRoute := apiRouter.Group("/ratio_sync")
 		ratioSyncRoute.Use(middleware.RootAuth())
@@ -222,7 +226,7 @@ func SetApiRouter(router *gin.Engine) {
 			channelRoute.POST("/batch", controller.DeleteChannelBatch)
 			channelRoute.POST("/fix", controller.FixChannelsAbilities)
 			channelRoute.GET("/fetch_models/:id", controller.FetchUpstreamModels)
-			channelRoute.POST("/fetch_models", controller.FetchModels)
+			channelRoute.POST("/fetch_models", middleware.RootAuth(), controller.FetchModels)
 			channelRoute.POST("/codex/oauth/start", controller.StartCodexOAuth)
 			channelRoute.POST("/codex/oauth/complete", controller.CompleteCodexOAuth)
 			channelRoute.POST("/:id/codex/oauth/start", controller.StartCodexOAuthForChannel)
@@ -248,6 +252,7 @@ func SetApiRouter(router *gin.Engine) {
 			tokenRoute.GET("/", controller.GetAllTokens)
 			tokenRoute.GET("/search", middleware.SearchRateLimit(), controller.SearchTokens)
 			tokenRoute.GET("/:id", controller.GetToken)
+			tokenRoute.POST("/:id/key", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.GetTokenKey)
 			tokenRoute.POST("/", controller.AddToken)
 			tokenRoute.PUT("/", controller.UpdateToken)
 			tokenRoute.DELETE("/:id", controller.DeleteToken)
