@@ -20,9 +20,12 @@ For commercial licensing, please contact support@quantumnous.com
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { API, isAdmin, showError, timestamp2string } from '../../helpers';
-import { getDefaultTime, getInitialTimestamp } from '../../helpers/dashboard';
-import { TIME_OPTIONS } from '../../constants/dashboard.constants';
+import { API, isAdmin, showError } from '../../helpers';
+import {
+  buildQuickRangePayload,
+  getInitialDashboardPayload,
+} from '../../helpers/dashboard';
+import { TIME_OPTIONS, QUICK_RANGE_PRESETS } from '../../constants/dashboard.constants';
 import { useIsMobile } from '../common/useIsMobile';
 import { useMinimumLoadingTime } from '../common/useMinimumLoadingTime';
 
@@ -31,6 +34,7 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const initialized = useRef(false);
+  const initialDashboardPayloadRef = useRef(getInitialDashboardPayload());
 
   // ========== 基础状态 ==========
   const [loading, setLoading] = useState(false);
@@ -39,18 +43,21 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
   const showLoading = useMinimumLoadingTime(loading);
 
   // ========== 输入状态 ==========
-  const [inputs, setInputs] = useState({
+  const [inputs, setInputs] = useState(() => ({
     username: '',
     token_name: '',
     model_name: '',
-    start_timestamp: getInitialTimestamp(),
-    end_timestamp: timestamp2string(new Date().getTime() / 1000 + 3600),
+    start_timestamp: initialDashboardPayloadRef.current.start_timestamp,
+    end_timestamp: initialDashboardPayloadRef.current.end_timestamp,
     channel: '',
     data_export_default_time: '',
-  });
+  }));
 
   const [dataExportDefaultTime, setDataExportDefaultTime] =
-    useState(getDefaultTime());
+    useState(initialDashboardPayloadRef.current.dataExportDefaultTime);
+  const [activeQuickRangePreset, setActiveQuickRangePreset] = useState(
+    initialDashboardPayloadRef.current.activeQuickRangePreset,
+  );
 
   // ========== 数据状态 ==========
   const [quotaData, setQuotaData] = useState([]);
@@ -82,7 +89,6 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
   const [activeUptimeTab, setActiveUptimeTab] = useState('');
 
   // ========== 常量 ==========
-  const now = new Date();
   const isAdminUser = isAdmin();
 
   // ========== Panel enable flags ==========
@@ -101,6 +107,14 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
       TIME_OPTIONS.map((option) => ({
         ...option,
         label: t(option.label),
+      })),
+    [t],
+  );
+  const quickRangePresets = useMemo(
+    () =>
+      QUICK_RANGE_PRESETS.map((preset) => ({
+        ...preset,
+        label: t(preset.labelKey),
       })),
     [t],
   );
@@ -156,18 +170,21 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
   }, []);
 
   // ========== API 调用函数 ==========
-  const loadQuotaData = useCallback(async () => {
+  const loadQuotaData = useCallback(async (override = {}) => {
     setLoading(true);
     try {
       let url = '';
-      const { start_timestamp, end_timestamp, username } = inputs;
+      const effectiveInputs = { ...inputs, ...(override.inputs || {}) };
+      const effectiveDataExportDefaultTime =
+        override.dataExportDefaultTime || dataExportDefaultTime;
+      const { start_timestamp, end_timestamp, username } = effectiveInputs;
       let localStartTimestamp = Date.parse(start_timestamp) / 1000;
       let localEndTimestamp = Date.parse(end_timestamp) / 1000;
 
       if (isAdminUser) {
-        url = `/api/data/?username=${username}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}&default_time=${dataExportDefaultTime}`;
+        url = `/api/data/?username=${username}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}&default_time=${effectiveDataExportDefaultTime}`;
       } else {
-        url = `/api/data/self/?start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}&default_time=${dataExportDefaultTime}`;
+        url = `/api/data/self/?start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}&default_time=${effectiveDataExportDefaultTime}`;
       }
 
       const res = await API.get(url);
@@ -179,7 +196,7 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
             count: 0,
             model_name: '无数据',
             quota: 0,
-            created_at: now.getTime() / 1000,
+            created_at: Date.now() / 1000,
           });
         }
         data.sort((a, b) => a.created_at - b.created_at);
@@ -191,7 +208,7 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
     } finally {
       setLoading(false);
     }
-  }, [inputs, dataExportDefaultTime, isAdminUser, now]);
+  }, [inputs, dataExportDefaultTime, isAdminUser]);
 
   const loadUptimeData = useCallback(async () => {
     setUptimeLoading(true);
@@ -229,8 +246,41 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
     return data;
   }, [loadQuotaData, loadUptimeData]);
 
+  const applyQuickRangePreset = useCallback(
+    async (presetKey, updateChartDataCallback) => {
+      const quickRangePayload = buildQuickRangePayload(presetKey);
+      setInputs((prev) => ({
+        ...prev,
+        start_timestamp: quickRangePayload.start_timestamp,
+        end_timestamp: quickRangePayload.end_timestamp,
+      }));
+      setDataExportDefaultTime(quickRangePayload.dataExportDefaultTime);
+      setActiveQuickRangePreset(quickRangePayload.presetKey);
+      localStorage.setItem(
+        'data_export_default_time',
+        quickRangePayload.dataExportDefaultTime,
+      );
+
+      const data = await loadQuotaData({
+        inputs: {
+          start_timestamp: quickRangePayload.start_timestamp,
+          end_timestamp: quickRangePayload.end_timestamp,
+        },
+        dataExportDefaultTime: quickRangePayload.dataExportDefaultTime,
+      });
+
+      if (data && data.length > 0 && updateChartDataCallback) {
+        updateChartDataCallback(data);
+      }
+
+      return data;
+    },
+    [loadQuotaData],
+  );
+
   const handleSearchConfirm = useCallback(
     async (updateChartDataCallback) => {
+      setActiveQuickRangePreset(null);
       const data = await refresh();
       if (data && data.length > 0 && updateChartDataCallback) {
         updateChartDataCallback(data);
@@ -264,6 +314,8 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
     // 输入状态
     inputs,
     dataExportDefaultTime,
+    quickRangePresets,
+    activeQuickRangePreset,
 
     // 数据状态
     quotaData,
@@ -315,6 +367,7 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
     getUserData,
     refresh,
     handleSearchConfirm,
+    applyQuickRangePreset,
 
     // 导航和翻译
     navigate,

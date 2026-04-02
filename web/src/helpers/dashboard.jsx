@@ -35,6 +35,8 @@ import {
   DEFAULT_TIME_INTERVALS,
   DEFAULTS,
   ILLUSTRATION_SIZE,
+  QUICK_RANGE_PRESETS,
+  DEFAULT_QUICK_RANGE_PRESET,
 } from '../constants/dashboard.constants';
 
 // ========== 时间相关工具函数 ==========
@@ -48,18 +50,67 @@ export const getTimeInterval = (timeType, isSeconds = false) => {
   return isSeconds ? intervals.seconds : intervals.minutes;
 };
 
-export const getInitialTimestamp = () => {
-  const defaultTime = getDefaultTime();
-  const now = new Date().getTime() / 1000;
+const getQuickRangePresetByKey = (presetKey) => {
+  const fallbackPreset = QUICK_RANGE_PRESETS.find(
+    (preset) => preset.key === DEFAULT_QUICK_RANGE_PRESET,
+  );
+  return (
+    QUICK_RANGE_PRESETS.find((preset) => preset.key === presetKey) ||
+    fallbackPreset
+  );
+};
 
-  switch (defaultTime) {
-    case 'hour':
-      return timestamp2string(now - 86400);
-    case 'week':
-      return timestamp2string(now - 86400 * 30);
-    default:
-      return timestamp2string(now - 86400 * 7);
+export const buildQuickRangePayload = (presetKey) => {
+  const preset = getQuickRangePresetByKey(presetKey);
+  const now = new Date();
+  let startDate = new Date(now.getTime() - 24 * 3600 * 1000);
+
+  if (preset?.mode === 'today') {
+    startDate = new Date(now);
+    startDate.setHours(0, 0, 0, 0);
+  } else if (preset?.mode === 'rolling') {
+    const amount = Number(preset.amount) || 0;
+    if (preset.unit === 'hour') {
+      startDate = new Date(now.getTime() - amount * 3600 * 1000);
+    } else {
+      startDate = new Date(now.getTime() - amount * 24 * 3600 * 1000);
+    }
   }
+
+  return {
+    presetKey: preset?.key || DEFAULT_QUICK_RANGE_PRESET,
+    start_timestamp: timestamp2string(Math.floor(startDate.getTime() / 1000)),
+    end_timestamp: timestamp2string(Math.floor(now.getTime() / 1000)),
+    dataExportDefaultTime: preset?.granularity || 'hour',
+  };
+};
+
+export const getInitialDashboardPayload = () => {
+  const preferredGranularity = getDefaultTime();
+
+  if (preferredGranularity === 'day') {
+    const payload = buildQuickRangePayload('last_7_days');
+    return {
+      ...payload,
+      activeQuickRangePreset: payload.presetKey,
+    };
+  }
+
+  if (preferredGranularity === 'week') {
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    return {
+      start_timestamp: timestamp2string(nowSeconds - 86400 * 30),
+      end_timestamp: timestamp2string(nowSeconds),
+      dataExportDefaultTime: 'week',
+      activeQuickRangePreset: null,
+    };
+  }
+
+  const defaultPayload = buildQuickRangePayload(DEFAULT_QUICK_RANGE_PRESET);
+  return {
+    ...defaultPayload,
+    activeQuickRangePreset: defaultPayload.presetKey,
+  };
 };
 
 // ========== 数据处理工具函数 ==========

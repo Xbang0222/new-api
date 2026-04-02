@@ -27,9 +27,10 @@ import React, { useContext, useEffect, useState } from 'react';
 import { useIsMobile } from '../../hooks/common/useIsMobile';
 import { useSidebarCollapsed } from '../../hooks/common/useSidebarCollapsed';
 import { useTranslation } from 'react-i18next';
+import { useActualTheme } from '../../context/Theme';
 import {
   API,
-  getLogo,
+  getFavicon,
   getSystemName,
   showError,
   setStatusData,
@@ -37,17 +38,17 @@ import {
 import { UserContext } from '../../context/User';
 import { StatusContext } from '../../context/Status';
 import { useLocation } from 'react-router-dom';
-import { normalizeLanguage } from '../../i18n/language';
 const { Sider, Content, Header } = Layout;
 
 const PageLayout = () => {
-  const [userState, userDispatch] = useContext(UserContext);
+  const [, userDispatch] = useContext(UserContext);
   const [, statusDispatch] = useContext(StatusContext);
   const isMobile = useIsMobile();
   const [collapsed, , setCollapsed] = useSidebarCollapsed();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { i18n } = useTranslation();
   const location = useLocation();
+  const actualTheme = useActualTheme();
 
   const cardProPages = [
     '/console/channel',
@@ -70,6 +71,15 @@ const PageLayout = () => {
 
   const isConsoleRoute = location.pathname.startsWith('/console');
   const showSider = isConsoleRoute && (!isMobile || drawerOpen);
+  const updateFavicon = (logoUrl) => {
+    if (!logoUrl) {
+      return;
+    }
+    const linkElement = document.querySelector("link[rel~='icon']");
+    if (linkElement) {
+      linkElement.href = logoUrl;
+    }
+  };
 
   useEffect(() => {
     if (isMobile && drawerOpen && collapsed) {
@@ -92,6 +102,7 @@ const PageLayout = () => {
       if (success) {
         statusDispatch({ type: 'set', payload: data });
         setStatusData(data);
+        updateFavicon(getFavicon(actualTheme));
       } else {
         showError('Unable to connect to server');
       }
@@ -107,41 +118,16 @@ const PageLayout = () => {
     if (systemName) {
       document.title = systemName;
     }
-    let logo = getLogo();
-    if (logo) {
-      let linkElement = document.querySelector("link[rel~='icon']");
-      if (linkElement) {
-        linkElement.href = logo;
-      }
+    updateFavicon(getFavicon());
+    const savedLang = localStorage.getItem('i18nextLng');
+    if (savedLang) {
+      i18n.changeLanguage(savedLang);
     }
-  }, []);
+  }, [i18n]);
 
   useEffect(() => {
-    let preferredLang;
-
-    if (userState?.user?.setting) {
-      try {
-        const settings = JSON.parse(userState.user.setting);
-        preferredLang = normalizeLanguage(settings.language);
-      } catch (e) {
-        // Ignore parse errors
-      }
-    }
-
-    if (!preferredLang) {
-      const savedLang = localStorage.getItem('i18nextLng');
-      if (savedLang) {
-        preferredLang = normalizeLanguage(savedLang);
-      }
-    }
-
-    if (preferredLang) {
-      localStorage.setItem('i18nextLng', preferredLang);
-      if (preferredLang !== i18n.language) {
-        i18n.changeLanguage(preferredLang);
-      }
-    }
-  }, [i18n, userState?.user?.setting]);
+    updateFavicon(getFavicon(actualTheme));
+  }, [actualTheme]);
 
   return (
     <Layout
