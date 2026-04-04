@@ -49,6 +49,9 @@ const routerMap = {
   deployment: '/console/deployment',
   playground: '/console/playground',
   personal: '/console/personal',
+  billing: '/console/billing',
+  invoice: '/console/invoice',
+  invoiceAdmin: '/console/invoice-admin',
 };
 
 const SiderBar = ({ onNavigate = () => {} }) => {
@@ -130,6 +133,16 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         to: '/topup',
       },
       {
+        text: t('充值账单'),
+        itemKey: 'billing',
+        to: '/billing',
+      },
+      {
+        text: t('发票管理'),
+        itemKey: 'invoice',
+        to: '/invoice',
+      },
+      {
         text: t('个人设置'),
         itemKey: 'personal',
         to: '/personal',
@@ -188,6 +201,12 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         itemKey: 'setting',
         to: '/setting',
         className: isRoot() ? '' : 'tableHiddle',
+      },
+      {
+        text: t('发票审核'),
+        itemKey: 'invoiceAdmin',
+        to: '/invoice-admin',
+        className: isAdmin() ? '' : 'tableHiddle',
       },
     ];
 

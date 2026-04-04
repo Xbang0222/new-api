@@ -1,0 +1,185 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
+import {
+  Table,
+  Tag,
+  Button,
+  Typography,
+  Popconfirm,
+  Toast,
+  Space,
+  Tabs,
+  TabPane,
+} from '@douyinfe/semi-ui';
+import { InvoiceAPI } from '../../helpers/invoice';
+import { showError, timestamp2string } from '../../helpers';
+import {
+  INVOICE_STATUS,
+  INVOICE_STATUS_LABEL,
+  INVOICE_STATUS_COLOR,
+} from '../../constants/invoice.constants';
+import CardPro from '../../components/common/ui/CardPro';
+import InvoiceHeaderManager from '../../components/invoice/InvoiceHeaderManager';
+
+const Invoice = () => {
+  const { t } = useTranslation();
+  const [invoices, setInvoices] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(10);
+  const [total, setTotal] = useState(0);
+  const [activeTab, setActiveTab] = useState('invoices');
+
+  const fetchInvoices = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await InvoiceAPI.getMyInvoices({
+        p: page,
+        page_size: pageSize,
+      });
+      if (res.data.success) {
+        setInvoices(res.data.data.items || []);
+        setTotal(res.data.data.total || 0);
+      } else {
+        showError(res.data.message);
+      }
+    } catch (err) {
+      showError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [page, pageSize]);
+
+  useEffect(() => {
+    fetchInvoices();
+  }, [fetchInvoices]);
+
+  const handleCancel = async (invoiceId) => {
+    try {
+      const res = await InvoiceAPI.cancel(invoiceId);
+      if (res.data.success) {
+        Toast.success(t('发票申请已撤销'));
+        fetchInvoices();
+      } else {
+        showError(res.data.message);
+      }
+    } catch (err) {
+      showError(err.message);
+    }
+  };
+
+  const columns = [
+    {
+      title: t('单位名称'),
+      dataIndex: 'company_name',
+      width: 200,
+      render: (text) => (
+        <Typography.Text
+          ellipsis={{ showTooltip: true }}
+          style={{ maxWidth: 180 }}
+        >
+          {text}
+        </Typography.Text>
+      ),
+    },
+    {
+      title: t('税号'),
+      dataIndex: 'tax_number',
+      width: 200,
+      render: (text) => (
+        <Typography.Text
+          copyable
+          ellipsis={{ showTooltip: true }}
+          style={{ maxWidth: 180 }}
+        >
+          {text}
+        </Typography.Text>
+      ),
+    },
+    {
+      title: t('金额'),
+      dataIndex: 'amount',
+      width: 120,
+      render: (val) => `¥ ${Number(val).toFixed(2)}`,
+    },
+    {
+      title: t('状态'),
+      dataIndex: 'status',
+      width: 100,
+      render: (status) => (
+        <Tag shape='circle' color={INVOICE_STATUS_COLOR[status]} size='small'>
+          {t(INVOICE_STATUS_LABEL[status] || '未知')}
+        </Tag>
+      ),
+    },
+    {
+      title: t('申请时间'),
+      dataIndex: 'create_time',
+      width: 180,
+      render: (val) => timestamp2string(val),
+    },
+    {
+      title: t('操作'),
+      width: 120,
+      render: (_, record) => (
+        <Space>
+          {record.status === INVOICE_STATUS.PENDING && (
+            <Popconfirm
+              title={t('确定撤销此发票申请？')}
+              onConfirm={() => handleCancel(record.id)}
+            >
+              <Button size='small' type='danger' theme='light'>
+                {t('撤销')}
+              </Button>
+            </Popconfirm>
+          )}
+          {record.status === INVOICE_STATUS.REJECTED &&
+            record.reject_reason && (
+              <Typography.Text type='danger' style={{ fontSize: 12 }}>
+                {record.reject_reason}
+              </Typography.Text>
+            )}
+        </Space>
+      ),
+    },
+  ];
+
+  return (
+    <div className='mt-[60px] px-2'>
+      <CardPro
+        type='type3'
+        descriptionArea={
+          <Typography.Title heading={5}>{t('发票管理')}</Typography.Title>
+        }
+        tabsArea={
+          <Tabs type='line' activeKey={activeTab} onChange={setActiveTab}>
+            <TabPane tab={t('发票记录')} itemKey='invoices' />
+            <TabPane tab={t('发票抬头')} itemKey='headers' />
+          </Tabs>
+        }
+        t={t}
+      >
+        {activeTab === 'invoices' && (
+          <Table
+            columns={columns}
+            dataSource={invoices}
+            loading={loading}
+            rowKey='id'
+            className='rounded-xl overflow-hidden'
+            pagination={{
+              currentPage: page,
+              pageSize,
+              total,
+              onPageChange: setPage,
+              showTotal: true,
+            }}
+            empty={t('暂无发票记录')}
+          />
+        )}
+        {activeTab === 'headers' && <InvoiceHeaderManager />}
+      </CardPro>
+    </div>
+  );
+};
+
+export default Invoice;
