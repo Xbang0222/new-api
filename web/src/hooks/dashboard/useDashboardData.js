@@ -25,7 +25,10 @@ import {
   buildQuickRangePayload,
   getInitialDashboardPayload,
 } from '../../helpers/dashboard';
-import { TIME_OPTIONS, QUICK_RANGE_PRESETS } from '../../constants/dashboard.constants';
+import {
+  TIME_OPTIONS,
+  QUICK_RANGE_PRESETS,
+} from '../../constants/dashboard.constants';
 import { useIsMobile } from '../common/useIsMobile';
 import { useMinimumLoadingTime } from '../common/useMinimumLoadingTime';
 
@@ -53,8 +56,9 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
     data_export_default_time: '',
   }));
 
-  const [dataExportDefaultTime, setDataExportDefaultTime] =
-    useState(initialDashboardPayloadRef.current.dataExportDefaultTime);
+  const [dataExportDefaultTime, setDataExportDefaultTime] = useState(
+    initialDashboardPayloadRef.current.dataExportDefaultTime,
+  );
   const [activeQuickRangePreset, setActiveQuickRangePreset] = useState(
     initialDashboardPayloadRef.current.activeQuickRangePreset,
   );
@@ -67,6 +71,7 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
   const [pieData, setPieData] = useState([{ type: 'null', value: '0' }]);
   const [lineData, setLineData] = useState([]);
   const [modelColors, setModelColors] = useState({});
+  const [selfRankInfo, setSelfRankInfo] = useState({ rank: 0, total: 0 });
 
   // ========== 图表状态 ==========
   const [activeChartTab, setActiveChartTab] = useState('1');
@@ -170,45 +175,48 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
   }, []);
 
   // ========== API 调用函数 ==========
-  const loadQuotaData = useCallback(async (override = {}) => {
-    setLoading(true);
-    try {
-      let url = '';
-      const effectiveInputs = { ...inputs, ...(override.inputs || {}) };
-      const effectiveDataExportDefaultTime =
-        override.dataExportDefaultTime || dataExportDefaultTime;
-      const { start_timestamp, end_timestamp, username } = effectiveInputs;
-      let localStartTimestamp = Date.parse(start_timestamp) / 1000;
-      let localEndTimestamp = Date.parse(end_timestamp) / 1000;
+  const loadQuotaData = useCallback(
+    async (override = {}) => {
+      setLoading(true);
+      try {
+        let url = '';
+        const effectiveInputs = { ...inputs, ...(override.inputs || {}) };
+        const effectiveDataExportDefaultTime =
+          override.dataExportDefaultTime || dataExportDefaultTime;
+        const { start_timestamp, end_timestamp, username } = effectiveInputs;
+        let localStartTimestamp = Date.parse(start_timestamp) / 1000;
+        let localEndTimestamp = Date.parse(end_timestamp) / 1000;
 
-      if (isAdminUser) {
-        url = `/api/data/?username=${username}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}&default_time=${effectiveDataExportDefaultTime}`;
-      } else {
-        url = `/api/data/self/?start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}&default_time=${effectiveDataExportDefaultTime}`;
-      }
-
-      const res = await API.get(url);
-      const { success, message, data } = res.data;
-      if (success) {
-        setQuotaData(data);
-        if (data.length === 0) {
-          data.push({
-            count: 0,
-            model_name: '无数据',
-            quota: 0,
-            created_at: Date.now() / 1000,
-          });
+        if (isAdminUser) {
+          url = `/api/data/?username=${username}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}&default_time=${effectiveDataExportDefaultTime}`;
+        } else {
+          url = `/api/data/self/?start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}&default_time=${effectiveDataExportDefaultTime}`;
         }
-        data.sort((a, b) => a.created_at - b.created_at);
-        return data;
-      } else {
-        showError(message);
-        return [];
+
+        const res = await API.get(url);
+        const { success, message, data } = res.data;
+        if (success) {
+          setQuotaData(data);
+          if (data.length === 0) {
+            data.push({
+              count: 0,
+              model_name: '无数据',
+              quota: 0,
+              created_at: Date.now() / 1000,
+            });
+          }
+          data.sort((a, b) => a.created_at - b.created_at);
+          return data;
+        } else {
+          showError(message);
+          return [];
+        }
+      } finally {
+        setLoading(false);
       }
-    } finally {
-      setLoading(false);
-    }
-  }, [inputs, dataExportDefaultTime, isAdminUser]);
+    },
+    [inputs, dataExportDefaultTime, isAdminUser],
+  );
 
   const loadUptimeData = useCallback(async () => {
     setUptimeLoading(true);
@@ -231,15 +239,21 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
   }, [activeUptimeTab]);
 
   const loadUserQuotaData = useCallback(async () => {
-    if (!isAdminUser) return [];
     try {
       const { start_timestamp, end_timestamp } = inputs;
       const localStartTimestamp = Date.parse(start_timestamp) / 1000;
       const localEndTimestamp = Date.parse(end_timestamp) / 1000;
-      const url = `/api/data/users?start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}`;
+      const endpoint = isAdminUser
+        ? '/api/data/users'
+        : '/api/data/users/ranking';
+      const url = `${endpoint}?start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}`;
       const res = await API.get(url);
       const { success, message, data } = res.data;
       if (success) {
+        // 非管理员时，后端会额外返回 self_rank 和 total
+        if (!isAdminUser && res.data.self_rank !== undefined) {
+          setSelfRankInfo({ rank: res.data.self_rank, total: res.data.total });
+        }
         return data || [];
       } else {
         showError(message);
@@ -372,6 +386,7 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
     performanceMetrics,
     getGreeting,
     isAdminUser,
+    selfRankInfo,
     hasApiInfoPanel,
     hasInfoPanels,
     apiInfoEnabled,

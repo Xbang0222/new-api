@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React from 'react';
-import { Card, Tabs, TabPane } from '@douyinfe/semi-ui';
+import { Card, Tabs, TabPane, Tag } from '@douyinfe/semi-ui';
 import { PieChart } from 'lucide-react';
 import { VChart } from '@visactor/react-vchart';
 
@@ -31,13 +31,18 @@ const ChartsPanel = ({
   spec_rank_bar,
   spec_user_rank,
   spec_user_trend,
-  isAdminUser,
+  selfRankInfo,
   CARD_PROPS,
   CHART_CONFIG,
   FLEX_CENTER_GAP2,
   hasApiInfoPanel,
   t,
 }) => {
+  const showRankBadge =
+    selfRankInfo &&
+    selfRankInfo.rank > 0 &&
+    (activeChartTab === '5' || activeChartTab === '6');
+
   return (
     <Card
       {...CARD_PROPS}
@@ -47,6 +52,15 @@ const ChartsPanel = ({
           <div className={FLEX_CENTER_GAP2}>
             <PieChart size={16} />
             {t('模型数据分析')}
+            {showRankBadge && (
+              <Tag
+                color='light-blue'
+                size='small'
+                style={{ marginLeft: 8, fontWeight: 600 }}
+              >
+                {t('你的排名')}: #{selfRankInfo.rank} / {selfRankInfo.total}
+              </Tag>
+            )}
           </div>
           <Tabs
             type='slash'
@@ -57,12 +71,8 @@ const ChartsPanel = ({
             <TabPane tab={<span>{t('调用趋势')}</span>} itemKey='2' />
             <TabPane tab={<span>{t('调用次数分布')}</span>} itemKey='3' />
             <TabPane tab={<span>{t('调用次数排行')}</span>} itemKey='4' />
-            {isAdminUser && (
-              <TabPane tab={<span>{t('用户消耗排行')}</span>} itemKey='5' />
-            )}
-            {isAdminUser && (
-              <TabPane tab={<span>{t('用户消耗趋势')}</span>} itemKey='6' />
-            )}
+            <TabPane tab={<span>{t('用户消耗排行')}</span>} itemKey='5' />
+            <TabPane tab={<span>{t('用户消耗趋势')}</span>} itemKey='6' />
           </Tabs>
         </div>
       }
@@ -81,10 +91,10 @@ const ChartsPanel = ({
         {activeChartTab === '4' && (
           <VChart spec={spec_rank_bar} option={CHART_CONFIG} />
         )}
-        {activeChartTab === '5' && isAdminUser && (
+        {activeChartTab === '5' && (
           <VChart spec={spec_user_rank} option={CHART_CONFIG} />
         )}
-        {activeChartTab === '6' && isAdminUser && (
+        {activeChartTab === '6' && (
           <VChart spec={spec_user_trend} option={CHART_CONFIG} />
         )}
       </div>

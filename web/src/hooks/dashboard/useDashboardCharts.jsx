@@ -38,8 +38,16 @@ import {
 } from '../../helpers/dashboard';
 
 const USER_COLORS = [
-  '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6',
-  '#ec4899', '#06b6d4', '#f97316', '#6366f1', '#14b8a6',
+  '#3b82f6',
+  '#ef4444',
+  '#10b981',
+  '#f59e0b',
+  '#8b5cf6',
+  '#ec4899',
+  '#06b6d4',
+  '#f97316',
+  '#6366f1',
+  '#14b8a6',
 ];
 
 export const useDashboardCharts = (
@@ -285,21 +293,26 @@ export const useDashboardCharts = (
       position: 'outside',
       formatMethod: (value, datum) => renderQuota(datum['rawQuota'] || 0, 2),
     },
-    axes: [{
-      orient: 'left',
-      type: 'band',
-      label: { visible: true },
-    }, {
-      orient: 'bottom',
-      type: 'linear',
-      visible: false,
-    }],
+    axes: [
+      {
+        orient: 'left',
+        type: 'band',
+        label: { visible: true },
+      },
+      {
+        orient: 'bottom',
+        type: 'linear',
+        visible: false,
+      },
+    ],
     tooltip: {
       mark: {
-        content: [{
-          key: (datum) => datum['User'],
-          value: (datum) => renderQuota(datum['rawQuota'] || 0, 4),
-        }],
+        content: [
+          {
+            key: (datum) => datum['User'],
+            value: (datum) => renderQuota(datum['rawQuota'] || 0, 4),
+          },
+        ],
       },
     },
     color: { type: 'ordinal', range: USER_COLORS },
@@ -319,21 +332,25 @@ export const useDashboardCharts = (
       text: t('用户消耗趋势'),
       subtext: '',
     },
-    axes: [{
-      orient: 'left',
-      label: {
-        formatMethod: (value) => renderQuota(value, 2),
+    axes: [
+      {
+        orient: 'left',
+        label: {
+          formatMethod: (value) => renderQuota(value, 2),
+        },
       },
-    }],
+    ],
     area: { style: { fillOpacity: 0.15 } },
     line: { style: { lineWidth: 2 } },
     point: { visible: false },
     tooltip: {
       mark: {
-        content: [{
-          key: (datum) => datum['User'],
-          value: (datum) => renderQuota(datum['rawQuota'] || 0, 4),
-        }],
+        content: [
+          {
+            key: (datum) => datum['User'],
+            value: (datum) => renderQuota(datum['rawQuota'] || 0, 4),
+          },
+        ],
       },
     },
     color: { type: 'ordinal', range: USER_COLORS },
@@ -508,18 +525,54 @@ export const useDashboardCharts = (
 
   // ========== 用户维度图表数据处理 ==========
   const updateUserChartData = useCallback(
-    (data) => {
+    (data, currentUsername) => {
       const { rankingData, trendData: userTrend } = processUserData(
         data,
         dataExportDefaultTime,
         10,
       );
 
-      const userRankValues = rankingData.map((item) => ({
-        User: item.User,
-        rawQuota: item.Quota,
-        Quota: getQuotaWithUnit(item.Quota, 4),
-      })).sort((a, b) => b.rawQuota - a.rawQuota);
+      let userRankValues = rankingData
+        .map((item) => ({
+          User: item.User,
+          rawQuota: item.Quota,
+          Quota: getQuotaWithUnit(item.Quota, 4),
+        }))
+        .sort((a, b) => b.rawQuota - a.rawQuota);
+
+      // 如果当前用户不在 Top 10 中，从原始数据计算并追加
+      if (currentUsername) {
+        const isInTop = userRankValues.some((v) => v.User === currentUsername);
+        if (!isInTop) {
+          // 从原始数据汇总当前用户的消耗
+          let selfQuota = 0;
+          data.forEach((item) => {
+            if (item.username === currentUsername) {
+              selfQuota += item.quota;
+            }
+          });
+          if (selfQuota > 0) {
+            // 计算排名
+            const allUserTotals = new Map();
+            data.forEach((item) => {
+              const prev = allUserTotals.get(item.username) || 0;
+              allUserTotals.set(item.username, prev + item.quota);
+            });
+            const sorted = Array.from(allUserTotals.entries()).sort(
+              (a, b) => b[1] - a[1],
+            );
+            const selfRank =
+              sorted.findIndex(([u]) => u === currentUsername) + 1;
+
+            userRankValues.push({
+              User: `#${selfRank} ${currentUsername}`,
+              rawQuota: selfQuota,
+              Quota: getQuotaWithUnit(selfQuota, 4),
+              isSelf: true,
+            });
+          }
+        }
+      }
 
       const totalUserQuota = rankingData.reduce((s, i) => s + i.Quota, 0);
 
