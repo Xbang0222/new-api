@@ -1074,6 +1074,12 @@ func TopUp(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+
+	// custom: invite rebate (PR #3495) — redemption code also triggers rebate
+	if err := model.ProcessInviterReward(id, quota, 0); err != nil {
+		common.SysError("兑换码充值处理邀请返利失败: " + err.Error())
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",

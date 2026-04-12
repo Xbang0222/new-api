@@ -25,12 +25,14 @@ export function setStatusData(data) {
   } else {
     localStorage.removeItem('logo');
   }
-  if (data.logo_light) { // custom: brand
+  if (data.logo_light) {
+    // custom: brand
     localStorage.setItem('logo_light', data.logo_light);
   } else {
     localStorage.removeItem('logo_light');
   }
-  if (data.logo_dark) { // custom: brand
+  if (data.logo_dark) {
+    // custom: brand
     localStorage.setItem('logo_dark', data.logo_dark);
   } else {
     localStorage.removeItem('logo_dark');

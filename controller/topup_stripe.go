@@ -17,6 +17,7 @@ import (
 	"github.com/QuantumNous/new-api/setting/system_setting"
 
 	"github.com/gin-gonic/gin"
+	"github.com/shopspring/decimal" // custom: invite rebate (PR #3495)
 	"github.com/stripe/stripe-go/v81"
 	"github.com/stripe/stripe-go/v81/checkout/session"
 	"github.com/stripe/stripe-go/v81/webhook"
@@ -206,6 +207,16 @@ func sessionCompleted(event stripe.Event) {
 	if err != nil {
 		log.Println(err.Error(), referenceId)
 		return
+	}
+
+	// custom: invite rebate (PR #3495)
+	topUp := model.GetTopUpByTradeNo(referenceId)
+	if topUp != nil {
+		dQuotaPerUnit := decimal.NewFromFloat(common.QuotaPerUnit)
+		quota := int(decimal.NewFromFloat(topUp.Money).Mul(dQuotaPerUnit).IntPart())
+		if err := model.ProcessInviterReward(topUp.UserId, quota, topUp.Id); err != nil {
+			log.Printf("Stripe回调处理邀请返利失败: %v", err)
+		}
 	}
 
 	total, _ := strconv.ParseFloat(event.GetObjectValue("amount_total"), 64)

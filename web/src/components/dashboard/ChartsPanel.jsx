@@ -38,7 +38,9 @@ const ChartsPanel = ({
   hasApiInfoPanel,
   t,
 }) => {
-  {/* custom: user ranking — rank badge display */}
+  {
+    /* custom: user ranking — rank badge display */
+  }
   const showRankBadge =
     selfRankInfo &&
     selfRankInfo.rank > 0 &&

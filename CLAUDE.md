@@ -182,6 +182,7 @@ When modifying upstream files is unavoidable, follow these rules:
 | `custom: invoice` | Invoice/billing module integration points |
 | `custom: subscription priority` | Subscription sort_order priority |
 | `custom: quick range` | Dashboard quick time-range presets |
+| `custom: invite rebate (PR #3495)` | 邀请充值返利，来自未合并的上游 PR |
 
 **Behavioral changes** (modifying existing upstream logic, not just adding new code) MUST include a block comment explaining:
 - What the original logic was
@@ -203,6 +204,15 @@ When modifying upstream files is unavoidable, follow these rules:
 | `web/src/i18n/locales/en.json` | Added translation keys | **High** |
 | `web/src/App.jsx` | Custom routes + brand | Medium |
 | `web/src/components/layout/*` | Navigation + brand | Medium |
+| `controller/option.go` | +46 lines (invite rebate validation) | Low |
+| `controller/topup.go` | +16 lines (invite rebate + ManualCompleteTopUp) | Medium |
+| `controller/topup_stripe.go` | +9 lines (invite rebate) | Low |
+| `controller/topup_creem.go` | +6 lines (invite rebate) | Low |
+| `controller/topup_waffo.go` | +13 lines (invite rebate) | Low |
+| `controller/user.go` | +6 lines (invite rebate) | Low |
+| `model/topup.go` | TopUp struct + ManualCompleteTopUp signature change | **Medium** |
+| `model/user.go` | +70 lines ProcessInviterReward function | Low |
+| `web/src/pages/Setting/Operation/SettingsCreditLimit.jsx` | +115 lines (invite rebate settings UI) | Medium |
 
 #### 7.3 i18n — Avoid Key Collisions
 

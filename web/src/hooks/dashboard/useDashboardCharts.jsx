@@ -525,7 +525,8 @@ export const useDashboardCharts = (
 
   // ========== 用户维度图表数据处理 ==========
   const updateUserChartData = useCallback(
-    (data, currentUsername) => { // custom: user ranking — added currentUsername param
+    (data, currentUsername) => {
+      // custom: user ranking — added currentUsername param
       const { rankingData, trendData: userTrend } = processUserData(
         data,
         dataExportDefaultTime,

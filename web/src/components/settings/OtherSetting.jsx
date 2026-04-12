@@ -197,7 +197,10 @@ const OtherSetting = () => {
       console.error(t('浅色 Logo 更新失败'), error);
       showError(t('浅色 Logo 更新失败'));
     } finally {
-      setLoadingInput((loadingInput) => ({ ...loadingInput, LogoLight: false }));
+      setLoadingInput((loadingInput) => ({
+        ...loadingInput,
+        LogoLight: false,
+      }));
     }
   };
 

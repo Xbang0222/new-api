@@ -13,6 +13,7 @@ import (
 	"github.com/QuantumNous/new-api/logger"
 
 	"github.com/bytedance/gopkg/util/gopool"
+	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 )
 
@@ -337,6 +338,78 @@ func inviteUser(inviterId int) (err error) {
 	user.AffQuota += common.QuotaForInviter
 	user.AffHistoryQuota += common.QuotaForInviter
 	return DB.Save(user).Error
+}
+
+// custom: invite rebate (PR #3495)
+// ProcessInviterReward processes inviter rebate when an invitee recharges.
+// topUpId: associated top-up order ID for idempotency check (pass 0 to skip, e.g. redemption code)
+func ProcessInviterReward(userId int, rechargeQuota int, topUpId int) error {
+	// If rebate is not enabled (type empty or value 0), return immediately
+	if common.InviterRewardType == "" || common.InviterRewardValue == 0 {
+		return nil
+	}
+
+	// Get the recharging user to check if they have an inviter
+	user, err := GetUserById(userId, false)
+	if err != nil {
+		return err
+	}
+
+	// No inviter, return
+	if user.InviterId == 0 {
+		return nil
+	}
+
+	// Idempotency check: if topUpId provided, atomically mark as processed
+	if topUpId > 0 {
+		result := DB.Model(&TopUp{}).
+			Where("id = ? AND inviter_reward_sent = ?", topUpId, false).
+			Update("inviter_reward_sent", true)
+		if result.Error != nil {
+			return fmt.Errorf("检查返利幂等性失败: %w", result.Error)
+		}
+		if result.RowsAffected == 0 {
+			// Already processed, skip
+			return nil
+		}
+	}
+
+	var rewardQuota int
+	var logMessage string
+
+	if common.InviterRewardType == "percentage" {
+		// Percentage rebate — use decimal for financial precision
+		dRecharge := decimal.NewFromInt(int64(rechargeQuota))
+		dPercent := decimal.NewFromInt(int64(common.InviterRewardValue))
+		rewardQuota = int(dRecharge.Mul(dPercent).Div(decimal.NewFromInt(100)).IntPart())
+		logMessage = fmt.Sprintf("邀请用户充值返利 %s（充值额度: %s，返利比例: %d%%）",
+			logger.LogQuota(rewardQuota),
+			logger.LogQuota(rechargeQuota),
+			common.InviterRewardValue)
+	} else {
+		// Fixed rebate
+		rewardQuota = common.InviterRewardValue
+		logMessage = fmt.Sprintf("邀请用户充值返利 %s（固定奖励）",
+			logger.LogQuota(rewardQuota))
+	}
+
+	if rewardQuota <= 0 {
+		return nil
+	}
+
+	// Atomic update: update aff_quota and aff_history in one DB operation
+	err = DB.Model(&User{}).Where("id = ?", user.InviterId).Updates(map[string]interface{}{
+		"aff_quota":   gorm.Expr("aff_quota + ?", rewardQuota),
+		"aff_history": gorm.Expr("aff_history + ?", rewardQuota),
+	}).Error
+	if err != nil {
+		return fmt.Errorf("更新邀请人返利额度失败: %w", err)
+	}
+
+	// Log
+	RecordLog(user.InviterId, LogTypeSystem, logMessage)
+
+	return nil
 }
 
 func (user *User) TransferAffQuotaToQuota(quota int) error {

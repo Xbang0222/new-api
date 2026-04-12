@@ -106,6 +106,8 @@ var TelegramBotName = ""
 var QuotaForNewUser = 0
 var QuotaForInviter = 0
 var QuotaForInvitee = 0
+var InviterRewardType = ""  // custom: invite rebate (PR #3495) — "fixed" or "percentage", empty = disabled
+var InviterRewardValue = 0  // custom: invite rebate (PR #3495)
 var ChannelDisableThreshold = 5.0
 var AutomaticDisableChannelEnabled = false
 var AutomaticEnableChannelEnabled = false
