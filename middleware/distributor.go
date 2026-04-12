@@ -103,10 +103,11 @@ func Distribute() func(c *gin.Context) {
 					preferred, err := model.CacheGetChannel(preferredChannelID)
 					if err == nil && preferred != nil {
 						if preferred.Status != common.ChannelStatusEnabled {
-							// Preferred channel disabled (manual or auto) — evict stale
-							// affinity cache so this and future requests use normal selection.
-							// After fallback succeeds, RecordChannelAffinity re-records the
-							// new channel automatically.
+							// custom: affinity evict — preferred channel disabled (manual or auto),
+							// evict stale affinity cache so this and future requests use normal selection.
+							// Original: ShouldSkipRetryAfterChannelAffinityFailure check -> abort with "该渠道已被禁用"
+							// Changed: evict cache + fallthrough; RecordChannelAffinity re-records the new channel.
+							// Revert: restore ShouldSkipRetryAfterChannelAffinityFailure check and abort here.
 							service.EvictChannelAffinityCache(c)
 							// fall through to CacheGetRandomSatisfiedChannel below
 						} else if usingGroup == "auto" {

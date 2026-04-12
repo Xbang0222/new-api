@@ -184,6 +184,7 @@ When modifying upstream files is unavoidable, follow these rules:
 | `custom: invite rebate (PR #3495)` | 邀请充值返利，来自未合并的上游 PR |
 | `custom: invite rebate anti-abuse` | 邀请返利防薅羊毛（可配置划转门槛） |
 | `custom: token ranking` | Token 消耗排行榜（所有用户可见） |
+| `custom: affinity evict` | 渠道亲和性缓存：禁用渠道时自动清除并 fallback |
 
 **Behavioral changes** (modifying existing upstream logic, not just adding new code) MUST include a block comment explaining:
 - What the original logic was
@@ -212,6 +213,8 @@ When modifying upstream files is unavoidable, follow these rules:
 | `model/topup.go` | TopUp struct + ManualCompleteTopUp signature change | **Medium** |
 | `model/user.go` | +70 lines ProcessInviterReward + configurable transfer threshold | Low |
 | `web/src/pages/Setting/Operation/SettingsCreditLimit.jsx` | +115 lines (invite rebate settings UI) | Medium |
+| `middleware/distributor.go` | 4-line behavioral change (affinity evict on disabled channel) | Low |
+| `service/channel_affinity.go` | +21 lines (EvictChannelAffinityCache function) | Low |
 
 #### 7.3 i18n — Avoid Key Collisions
 
