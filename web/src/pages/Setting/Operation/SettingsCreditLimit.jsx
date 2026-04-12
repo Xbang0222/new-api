@@ -20,7 +20,7 @@ For commercial licensing, please contact support@quantumnous.com
 import React, { useEffect, useState, useRef } from 'react';
 import { Button, Col, Form, Row, Spin, Select } from '@douyinfe/semi-ui'; // custom: invite rebate (PR #3495) — added Select
 import { useTranslation } from 'react-i18next';
-import { API, showError, showSuccess, showWarning } from '../../../helpers';
+import { API, showError, showSuccess, showWarning, getCurrencyConfig } from '../../../helpers';
 
 // custom: invite rebate (PR #3495) — keys this component manages
 const FIELD_KEYS = [
@@ -36,7 +36,7 @@ const FIELD_KEYS = [
 
 const BOOLEAN_KEYS = new Set(['quota_setting.enable_free_model_pre_consume']);
 
-// custom: invite rebate anti-abuse — fields that need quota ↔ dollar conversion on load/save
+// custom: invite rebate anti-abuse — fields that need quota ↔ currency conversion on load/save
 const QUOTA_TO_DOLLAR_KEYS = new Set(['MinAffTransferQuota']);
 
 function getQuotaPerUnit() {
@@ -44,10 +44,23 @@ function getQuotaPerUnit() {
   return v > 0 ? v : 500000;
 }
 
+/** Convert raw quota → display currency amount */
+function quotaToDisplay(rawQuota) {
+  const { rate } = getCurrencyConfig();
+  return (rawQuota / getQuotaPerUnit()) * rate;
+}
+
+/** Convert display currency amount → raw quota */
+function displayToQuota(displayAmount) {
+  const { rate } = getCurrencyConfig();
+  return Math.round((displayAmount / rate) * getQuotaPerUnit());
+}
+
 export default function SettingsCreditLimit(props) {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [rewardType, setRewardType] = useState(''); // custom: invite rebate (PR #3495) — for dynamic UI
+  const currencySymbol = getCurrencyConfig().symbol; // custom: invite rebate anti-abuse
   const refForm = useRef();
   const savedValues = useRef({}); // original values from API for diff comparison
 
@@ -106,10 +119,10 @@ export default function SettingsCreditLimit(props) {
 
     const requestQueue = updateArray.map((item) => {
       let value = item.value;
-      // custom: invite rebate anti-abuse — convert dollar input to raw quota for storage
+      // custom: invite rebate anti-abuse — convert currency input to raw quota for storage
       if (QUOTA_TO_DOLLAR_KEYS.has(item.key)) {
         const numVal = parseFloat(value) || 0;
-        value = String(Math.round(numVal * getQuotaPerUnit()));
+        value = String(displayToQuota(numVal));
       }
       return API.put('/api/option/', { key: item.key, value });
     });
@@ -137,10 +150,10 @@ export default function SettingsCreditLimit(props) {
     for (const key in props.options) {
       if (FIELD_KEYS.includes(key)) {
         let val = props.options[key];
-        // custom: invite rebate anti-abuse — convert raw quota to dollar for display
+        // custom: invite rebate anti-abuse — convert raw quota to display currency
         if (QUOTA_TO_DOLLAR_KEYS.has(key)) {
           const numVal = parseFloat(val) || 0;
-          val = numVal > 0 ? String(numVal / getQuotaPerUnit()) : '0';
+          val = numVal > 0 ? String(quotaToDisplay(numVal)) : '0';
         }
         currentInputs[key] = val;
       }
@@ -273,7 +286,7 @@ export default function SettingsCreditLimit(props) {
                   field={'MinAffTransferQuota'}
                   step={0.5}
                   min={0}
-                  suffix={'$'}
+                  suffix={currencySymbol}
                   extraText={t(
                     '返利余额达到此金额才允许划转，设为0则使用默认值（$1）。建议设置较高值防止小号刷返利',
                   )}
