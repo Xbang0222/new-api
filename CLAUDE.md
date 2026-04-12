@@ -133,7 +133,7 @@ For request structs that are parsed from client JSON and then re-marshaled to up
 
 ### Rule 7: Fork Customization — Minimize Upstream Diff
 
-This project is a fork maintained on the `custom` branch. Upstream (`QuantumNous/new-api`) is actively developed, so all custom code MUST be structured to **minimize merge conflicts** and **maximize maintainability**.
+This project is a fork maintained on the `ruoli` branch. Upstream (`QuantumNous/new-api`) is actively developed, so all custom code MUST be structured to **minimize merge conflicts** and **maximize maintainability**.
 
 #### 7.1 File Isolation — Custom Code in Separate Files
 
@@ -258,7 +258,7 @@ Format: `v{upstream_version}-ruoli-{patch}`
 
 ```
 1. git fetch upstream
-2. git log custom..upstream/main --oneline   # review new commits
+2. git log ruoli..upstream/main --oneline   # review new commits
 3. git merge upstream/main --no-edit
 4. Resolve conflicts:
    - i18n JSON: deep merge (keep both sides' keys)

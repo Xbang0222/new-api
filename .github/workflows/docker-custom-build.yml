@@ -3,7 +3,7 @@ name: Build Custom Docker Image
 on:
   push:
     branches:
-      - custom
+      - ruoli
   workflow_dispatch:
     inputs:
       reason:
@@ -26,7 +26,7 @@ jobs:
       - name: Determine version
         id: version
         run: |
-          VERSION="custom-$(date +'%Y%m%d')-$(git rev-parse --short HEAD)"
+          VERSION="ruoli-$(date +'%Y%m%d')-$(git rev-parse --short HEAD)"
           echo "$VERSION" > VERSION
           echo "value=$VERSION" >> $GITHUB_OUTPUT
           echo "VERSION=$VERSION" >> $GITHUB_ENV
