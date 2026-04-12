@@ -628,7 +628,7 @@ export const useDashboardCharts = (
           TokenUsed: item.token_used,
           IsSelf: item.is_self,
         }))
-        .sort((a, b) => a.TokenUsed - b.TokenUsed); // ascending for horizontal bar (bottom = highest)
+        .sort((a, b) => b.TokenUsed - a.TokenUsed); // descending — highest at top
 
       const totalTokens = values.reduce((s, i) => s + i.TokenUsed, 0);
 

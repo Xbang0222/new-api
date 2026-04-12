@@ -36,6 +36,14 @@ const FIELD_KEYS = [
 
 const BOOLEAN_KEYS = new Set(['quota_setting.enable_free_model_pre_consume']);
 
+// custom: invite rebate anti-abuse — fields that need quota ↔ dollar conversion on load/save
+const QUOTA_TO_DOLLAR_KEYS = new Set(['MinAffTransferQuota']);
+
+function getQuotaPerUnit() {
+  const v = parseFloat(localStorage.getItem('quota_per_unit'));
+  return v > 0 ? v : 500000;
+}
+
 export default function SettingsCreditLimit(props) {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
@@ -96,9 +104,15 @@ export default function SettingsCreditLimit(props) {
       }
     }
 
-    const requestQueue = updateArray.map((item) =>
-      API.put('/api/option/', { key: item.key, value: item.value }),
-    );
+    const requestQueue = updateArray.map((item) => {
+      let value = item.value;
+      // custom: invite rebate anti-abuse — convert dollar input to raw quota for storage
+      if (QUOTA_TO_DOLLAR_KEYS.has(item.key)) {
+        const numVal = parseFloat(value) || 0;
+        value = String(Math.round(numVal * getQuotaPerUnit()));
+      }
+      return API.put('/api/option/', { key: item.key, value });
+    });
 
     setLoading(true);
     Promise.all(requestQueue)
@@ -122,7 +136,13 @@ export default function SettingsCreditLimit(props) {
     const currentInputs = {};
     for (const key in props.options) {
       if (FIELD_KEYS.includes(key)) {
-        currentInputs[key] = props.options[key];
+        let val = props.options[key];
+        // custom: invite rebate anti-abuse — convert raw quota to dollar for display
+        if (QUOTA_TO_DOLLAR_KEYS.has(key)) {
+          const numVal = parseFloat(val) || 0;
+          val = numVal > 0 ? String(numVal / getQuotaPerUnit()) : '0';
+        }
+        currentInputs[key] = val;
       }
     }
     savedValues.current = structuredClone(currentInputs);
@@ -251,13 +271,13 @@ export default function SettingsCreditLimit(props) {
                 <Form.InputNumber
                   label={t('最低划转门槛')}
                   field={'MinAffTransferQuota'}
-                  step={1}
+                  step={0.5}
                   min={0}
-                  suffix={'Token'}
+                  suffix={'$'}
                   extraText={t(
-                    '返利余额达到此金额才允许划转到账户余额，设为0则使用默认值。建议设置较高值防止小号刷返利',
+                    '返利余额达到此金额才允许划转，设为0则使用默认值（$1）。建议设置较高值防止小号刷返利',
                   )}
-                  placeholder={t('例如：5000000（约$10）')}
+                  placeholder={t('例如：10')}
                 />
               </Col>
             </Row>
