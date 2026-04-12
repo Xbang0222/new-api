@@ -30,6 +30,7 @@ const FIELD_KEYS = [
   'QuotaForInvitee',
   'InviterRewardType',
   'InviterRewardValue',
+  'MinAffTransferQuota', // custom: invite rebate anti-abuse
   'quota_setting.enable_free_model_pre_consume',
 ];
 
@@ -243,6 +244,20 @@ export default function SettingsCreditLimit(props) {
                       : t('例如：2000')
                   }
                   disabled={!rewardType}
+                />
+              </Col>
+              {/* custom: invite rebate anti-abuse — minimum transfer threshold */}
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.InputNumber
+                  label={t('最低划转门槛')}
+                  field={'MinAffTransferQuota'}
+                  step={1}
+                  min={0}
+                  suffix={'Token'}
+                  extraText={t(
+                    '返利余额达到此金额才允许划转到账户余额，设为0则使用默认值。建议设置较高值防止小号刷返利',
+                  )}
+                  placeholder={t('例如：5000000（约$10）')}
                 />
               </Col>
             </Row>

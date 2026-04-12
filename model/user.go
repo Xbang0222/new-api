@@ -413,9 +413,13 @@ func ProcessInviterReward(userId int, rechargeQuota int, topUpId int) error {
 }
 
 func (user *User) TransferAffQuotaToQuota(quota int) error {
-	// 检查quota是否小于最小额度
-	if float64(quota) < common.QuotaPerUnit {
-		return fmt.Errorf("转移额度最小为%s！", logger.LogQuota(int(common.QuotaPerUnit)))
+	// custom: invite rebate anti-abuse — configurable minimum transfer threshold
+	minTransfer := common.MinAffTransferQuota
+	if minTransfer <= 0 {
+		minTransfer = int(common.QuotaPerUnit) // fallback to $1
+	}
+	if quota < minTransfer {
+		return fmt.Errorf("转移额度最小为%s！", logger.LogQuota(minTransfer))
 	}
 
 	// 开始数据库事务

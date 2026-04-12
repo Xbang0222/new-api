@@ -182,6 +182,7 @@ When modifying upstream files is unavoidable, follow these rules:
 | `custom: subscription priority` | Subscription sort_order priority |
 | `custom: quick range` | Dashboard quick time-range presets |
 | `custom: invite rebate (PR #3495)` | 邀请充值返利，来自未合并的上游 PR |
+| `custom: invite rebate anti-abuse` | 邀请返利防薅羊毛（可配置划转门槛） |
 
 **Behavioral changes** (modifying existing upstream logic, not just adding new code) MUST include a block comment explaining:
 - What the original logic was
@@ -194,9 +195,9 @@ When modifying upstream files is unavoidable, follow these rules:
 |------|--------|------|
 | `router/api-router.go` | +4 lines (custom routes) | Low |
 | `model/main.go` | +8 lines (invoice migration) | Low |
-| `model/option.go` | +6 lines (invoice settings) | Low |
-| `common/constants.go` | +2 lines | Low |
-| `controller/misc.go` | +5 lines (brand + invite rebate) | Low |
+| `model/option.go` | +8 lines (invoice settings + invite rebate) | Low |
+| `common/constants.go` | +3 lines | Low |
+| `controller/misc.go` | +6 lines (brand + invite rebate + anti-abuse) | Low |
 | `model/subscription.go` | 3-line behavioral change (JOIN + ORDER BY) | **Medium** |
 | `web/src/i18n/locales/en.json` | Added translation keys | **High** |
 | `web/src/App.jsx` | Custom routes + brand | Medium |
@@ -208,7 +209,7 @@ When modifying upstream files is unavoidable, follow these rules:
 | `controller/topup_waffo.go` | +13 lines (invite rebate) | Low |
 | `controller/user.go` | +6 lines (invite rebate) | Low |
 | `model/topup.go` | TopUp struct + ManualCompleteTopUp signature change | **Medium** |
-| `model/user.go` | +70 lines ProcessInviterReward function | Low |
+| `model/user.go` | +70 lines ProcessInviterReward + configurable transfer threshold | Low |
 | `web/src/pages/Setting/Operation/SettingsCreditLimit.jsx` | +115 lines (invite rebate settings UI) | Medium |
 
 #### 7.3 i18n — Avoid Key Collisions

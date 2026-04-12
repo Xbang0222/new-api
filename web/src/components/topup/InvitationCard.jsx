@@ -43,6 +43,13 @@ const InvitationCard = ({
   // custom: invite rebate (PR #3495) — extract rebate info from status
   const rewardType = statusState?.status?.inviter_reward_type || '';
   const rewardValue = statusState?.status?.inviter_reward_value || 0;
+  // custom: invite rebate anti-abuse — minimum transfer threshold
+  const minAffTransferQuota = statusState?.status?.min_aff_transfer_quota || 0;
+  const affQuota = userState?.user?.aff_quota || 0;
+  const transferDisabled =
+    !affQuota ||
+    affQuota <= 0 ||
+    (minAffTransferQuota > 0 && affQuota < minAffTransferQuota);
 
   const renderRewardRule = () => {
     if (rewardType === 'percentage' && rewardValue > 0) {
@@ -114,12 +121,14 @@ const InvitationCard = ({
                     type='primary'
                     theme='solid'
                     size='small'
-                    disabled={
-                      !userState?.user?.aff_quota ||
-                      userState?.user?.aff_quota <= 0
-                    }
+                    disabled={transferDisabled}
                     onClick={() => setOpenTransfer(true)}
                     className='!rounded-lg'
+                    title={
+                      minAffTransferQuota > 0 && affQuota < minAffTransferQuota
+                        ? t('返利余额未达到最低划转门槛')
+                        : undefined
+                    }
                   >
                     <Zap size={12} className='mr-1' />
                     {t('划转到余额')}

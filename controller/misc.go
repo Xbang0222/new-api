@@ -120,8 +120,9 @@ func GetStatus(c *gin.Context) {
 		"privacy_policy_enabled":      legalSetting.PrivacyPolicy != "",
 		"checkin_enabled":             operation_setting.GetCheckinSetting().Enabled,
 		// custom: invite rebate (PR #3495) — expose rebate info to frontend
-		"inviter_reward_type":  common.InviterRewardType,
-		"inviter_reward_value": common.InviterRewardValue,
+		"inviter_reward_type":    common.InviterRewardType,
+		"inviter_reward_value":   common.InviterRewardValue,
+		"min_aff_transfer_quota": common.MinAffTransferQuota, // custom: invite rebate anti-abuse
 	}
 
 	// 根据启用状态注入可选内容
