@@ -20,76 +20,90 @@ For commercial licensing, please contact support@quantumnous.com
 import React, { useEffect, useState, useRef } from 'react';
 import { Button, Col, Form, Row, Spin, Select } from '@douyinfe/semi-ui'; // custom: invite rebate (PR #3495) — added Select
 import { useTranslation } from 'react-i18next';
-import {
-  compareObjects,
-  API,
-  showError,
-  showSuccess,
-  showWarning,
-} from '../../../helpers';
+import { API, showError, showSuccess, showWarning } from '../../../helpers';
+
+// custom: invite rebate (PR #3495) — keys this component manages
+const FIELD_KEYS = [
+  'QuotaForNewUser',
+  'PreConsumedQuota',
+  'QuotaForInviter',
+  'QuotaForInvitee',
+  'InviterRewardType',
+  'InviterRewardValue',
+  'quota_setting.enable_free_model_pre_consume',
+];
+
+const BOOLEAN_KEYS = new Set(['quota_setting.enable_free_model_pre_consume']);
 
 export default function SettingsCreditLimit(props) {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
-  const [inputs, setInputs] = useState({
-    QuotaForNewUser: '',
-    PreConsumedQuota: '',
-    QuotaForInviter: '',
-    QuotaForInvitee: '',
-    InviterRewardType: '', // custom: invite rebate (PR #3495)
-    InviterRewardValue: '', // custom: invite rebate (PR #3495)
-    'quota_setting.enable_free_model_pre_consume': true,
-  });
+  const [rewardType, setRewardType] = useState(''); // custom: invite rebate (PR #3495) — for dynamic UI
   const refForm = useRef();
-  const [inputsRow, setInputsRow] = useState(inputs);
+  const savedValues = useRef({}); // original values from API for diff comparison
 
   function onSubmit() {
-    const updateArray = compareObjects(inputs, inputsRow);
+    const formValues = refForm.current.getValues();
+
+    // Build current values map (normalize types to strings for comparison)
+    const current = {};
+    for (const key of FIELD_KEYS) {
+      const val = formValues[key];
+      if (BOOLEAN_KEYS.has(key)) {
+        current[key] = Boolean(val);
+      } else {
+        current[key] = String(val ?? '');
+      }
+    }
+
+    // Compare with saved values
+    const updateArray = [];
+    for (const key of FIELD_KEYS) {
+      const oldVal = savedValues.current[key];
+      const newVal = current[key];
+      if (String(oldVal ?? '') !== String(newVal ?? '')) {
+        updateArray.push({
+          key,
+          value: BOOLEAN_KEYS.has(key) ? String(newVal) : newVal,
+        });
+      }
+    }
+
     if (!updateArray.length) return showWarning(t('你似乎并没有修改什么'));
 
     // custom: invite rebate (PR #3495) — validate rebate value range
-    const rewardValueChanged = updateArray.some(
+    const rewardValueEntry = updateArray.find(
       (item) => item.key === 'InviterRewardValue',
     );
-    if (rewardValueChanged) {
-      const rewardValue = parseInt(inputs.InviterRewardValue);
+    if (rewardValueEntry) {
+      const rewardValue = parseInt(rewardValueEntry.value);
+      const currentType = current.InviterRewardType;
       if (isNaN(rewardValue)) {
         showError(t('充值返利值必须是有效的数字'));
         return;
       }
-      if (inputs.InviterRewardType === 'percentage') {
-        if (rewardValue < 0 || rewardValue > 100) {
-          showError(t('当充值返利类型为百分比时，返利值应在0-100之间'));
-          return;
-        }
-      } else if (inputs.InviterRewardType === 'fixed') {
-        if (rewardValue < 0) {
-          showError(t('当充值返利类型为固定时，返利值应大于等于0'));
-          return;
-        }
+      if (
+        currentType === 'percentage' &&
+        (rewardValue < 0 || rewardValue > 100)
+      ) {
+        showError(t('当充值返利类型为百分比时，返利值应在0-100之间'));
+        return;
+      }
+      if (currentType === 'fixed' && rewardValue < 0) {
+        showError(t('当充值返利类型为固定时，返利值应大于等于0'));
+        return;
       }
     }
 
-    const requestQueue = updateArray.map((item) => {
-      let value = '';
-      if (typeof inputs[item.key] === 'boolean') {
-        value = String(inputs[item.key]);
-      } else {
-        value = inputs[item.key];
-      }
-      return API.put('/api/option/', {
-        key: item.key,
-        value,
-      });
-    });
+    const requestQueue = updateArray.map((item) =>
+      API.put('/api/option/', { key: item.key, value: item.value }),
+    );
+
     setLoading(true);
     Promise.all(requestQueue)
       .then((res) => {
-        // custom: invite rebate (PR #3495) — improved error check
         if (res.some((r) => !r || !r.data || !r.data.success)) {
-          if (requestQueue.length === 1) {
-            return;
-          }
+          if (requestQueue.length === 1) return;
           return showError(t('部分保存失败，请重试'));
         }
         showSuccess(t('保存成功'));
@@ -105,20 +119,22 @@ export default function SettingsCreditLimit(props) {
 
   useEffect(() => {
     const currentInputs = {};
-    for (let key in props.options) {
-      if (Object.keys(inputs).includes(key)) {
+    for (const key in props.options) {
+      if (FIELD_KEYS.includes(key)) {
         currentInputs[key] = props.options[key];
       }
     }
-    setInputs(currentInputs);
-    setInputsRow(structuredClone(currentInputs));
-    refForm.current.setValues(currentInputs);
+    savedValues.current = structuredClone(currentInputs);
+    setRewardType(currentInputs.InviterRewardType || ''); // custom: invite rebate (PR #3495)
+    if (refForm.current) {
+      refForm.current.setValues(currentInputs);
+    }
   }, [props.options]);
+
   return (
     <>
       <Spin spinning={loading}>
         <Form
-          values={inputs}
           getFormApi={(formAPI) => (refForm.current = formAPI)}
           style={{ marginBottom: 15 }}
         >
@@ -132,12 +148,6 @@ export default function SettingsCreditLimit(props) {
                   min={0}
                   suffix={'Token'}
                   placeholder={''}
-                  onChange={(value) =>
-                    setInputs({
-                      ...inputs,
-                      QuotaForNewUser: String(value ?? ''),
-                    })
-                  }
                 />
               </Col>
               <Col xs={24} sm={12} md={8} lg={8} xl={8}>
@@ -149,12 +159,6 @@ export default function SettingsCreditLimit(props) {
                   suffix={'Token'}
                   extraText={t('请求结束后多退少补')}
                   placeholder={''}
-                  onChange={(value) =>
-                    setInputs({
-                      ...inputs,
-                      PreConsumedQuota: String(value ?? ''),
-                    })
-                  }
                 />
               </Col>
               <Col xs={24} sm={12} md={8} lg={8} xl={8}>
@@ -166,12 +170,6 @@ export default function SettingsCreditLimit(props) {
                   suffix={'Token'}
                   extraText={''}
                   placeholder={t('例如：2000')}
-                  onChange={(value) =>
-                    setInputs({
-                      ...inputs,
-                      QuotaForInviter: String(value ?? ''),
-                    })
-                  }
                 />
               </Col>
             </Row>
@@ -185,12 +183,6 @@ export default function SettingsCreditLimit(props) {
                   suffix={'Token'}
                   extraText={''}
                   placeholder={t('例如：1000')}
-                  onChange={(value) =>
-                    setInputs({
-                      ...inputs,
-                      QuotaForInvitee: String(value ?? ''),
-                    })
-                  }
                 />
               </Col>
             </Row>
@@ -202,12 +194,6 @@ export default function SettingsCreditLimit(props) {
                   extraText={t(
                     '开启后，对免费模型（倍率为0，或者价格为0）的模型也会预消耗额度',
                   )}
-                  onChange={(value) =>
-                    setInputs({
-                      ...inputs,
-                      'quota_setting.enable_free_model_pre_consume': value,
-                    })
-                  }
                 />
               </Col>
             </Row>
@@ -224,12 +210,7 @@ export default function SettingsCreditLimit(props) {
                     '设置被邀请人充值时，邀请人获得返利的类型。留空表示关闭返利功能',
                   )}
                   placeholder={t('关闭（不启用返利）')}
-                  onChange={(value) =>
-                    setInputs({
-                      ...inputs,
-                      InviterRewardType: value || '',
-                    })
-                  }
+                  onChange={(value) => setRewardType(value || '')}
                   showClear
                 >
                   <Select.Option value='fixed'>{t('固定额度')}</Select.Option>
@@ -242,36 +223,26 @@ export default function SettingsCreditLimit(props) {
                 <Form.InputNumber
                   label={
                     t('充值返利值') +
-                    (inputs.InviterRewardType === 'percentage' ? ' (%)' : '')
+                    (rewardType === 'percentage' ? ' (%)' : '')
                   }
                   field={'InviterRewardValue'}
                   step={1}
                   min={0}
-                  max={
-                    inputs.InviterRewardType === 'percentage' ? 100 : undefined
-                  }
-                  suffix={
-                    inputs.InviterRewardType === 'percentage' ? '%' : 'Token'
-                  }
+                  max={rewardType === 'percentage' ? 100 : undefined}
+                  suffix={rewardType === 'percentage' ? '%' : 'Token'}
                   extraText={
-                    inputs.InviterRewardType === 'percentage'
+                    rewardType === 'percentage'
                       ? t(
                           '被邀请人每次充值时，邀请人获得充值额度的百分比作为返利',
                         )
                       : t('被邀请人每次充值时，邀请人获得的固定返利额度')
                   }
                   placeholder={
-                    inputs.InviterRewardType === 'percentage'
+                    rewardType === 'percentage'
                       ? t('例如：10（表示10%）')
                       : t('例如：2000')
                   }
-                  disabled={!inputs.InviterRewardType}
-                  onChange={(value) =>
-                    setInputs({
-                      ...inputs,
-                      InviterRewardValue: String(value ?? ''),
-                    })
-                  }
+                  disabled={!rewardType}
                 />
               </Col>
             </Row>

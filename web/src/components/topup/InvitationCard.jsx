@@ -38,7 +38,41 @@ const InvitationCard = ({
   setOpenTransfer,
   affLink,
   handleAffLinkClick,
+  statusState, // custom: invite rebate (PR #3495)
 }) => {
+  // custom: invite rebate (PR #3495) — extract rebate info from status
+  const rewardType = statusState?.status?.inviter_reward_type || '';
+  const rewardValue = statusState?.status?.inviter_reward_value || 0;
+
+  const renderRewardRule = () => {
+    if (rewardType === 'percentage' && rewardValue > 0) {
+      return (
+        <Text type='tertiary' className='text-sm'>
+          {t('好友每次充值，您获得充值金额的')}{' '}
+          <Text strong type='success' className='text-sm'>
+            {rewardValue}%
+          </Text>{' '}
+          {t('作为返利')}
+        </Text>
+      );
+    }
+    if (rewardType === 'fixed' && rewardValue > 0) {
+      return (
+        <Text type='tertiary' className='text-sm'>
+          {t('好友每次充值，您获得')}{' '}
+          <Text strong type='success' className='text-sm'>
+            {renderQuota(rewardValue)}
+          </Text>{' '}
+          {t('固定返利')}
+        </Text>
+      );
+    }
+    return (
+      <Text type='tertiary' className='text-sm'>
+        {t('邀请好友注册，好友充值后您可获得相应奖励')}
+      </Text>
+    );
+  };
   return (
     <Card className='!rounded-2xl shadow-sm border-0'>
       {/* 卡片头部 */}
@@ -194,6 +228,7 @@ const InvitationCard = ({
         </Card>
 
         {/* 奖励说明 */}
+        {/* custom: invite rebate (PR #3495) — dynamic reward rules */}
         <Card
           className='!rounded-xl w-full'
           title={<Text type='tertiary'>{t('奖励说明')}</Text>}
@@ -201,9 +236,7 @@ const InvitationCard = ({
           <div className='space-y-3'>
             <div className='flex items-start gap-2'>
               <Badge dot type='success' />
-              <Text type='tertiary' className='text-sm'>
-                {t('邀请好友注册，好友充值后您可获得相应奖励')}
-              </Text>
+              {renderRewardRule()}
             </div>
 
             <div className='flex items-start gap-2'>
