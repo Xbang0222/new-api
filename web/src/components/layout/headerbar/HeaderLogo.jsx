@@ -38,6 +38,7 @@ const HeaderLogo = ({
   }
 
   return (
+    // custom: brand — header-brand class, brand-title, hover effects
     <Link to='/' className='header-brand group flex items-center gap-4'>
       <div className='relative w-8 h-8 md:w-8 md:h-8'>
         <SkeletonWrapper loading={isLoading || !logoLoaded} type='image' />

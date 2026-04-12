@@ -50,7 +50,7 @@ export const useHeaderBar = ({ onMobileMenuToggle, drawerOpen }) => {
   const theme = useTheme();
   const actualTheme = useActualTheme();
   const setTheme = useSetTheme();
-  const logo = getLogo(actualTheme);
+  const logo = getLogo(actualTheme); // custom: brand
   const currentDate = new Date();
   const isNewYear = currentDate.getMonth() === 0 && currentDate.getDate() === 1;
 

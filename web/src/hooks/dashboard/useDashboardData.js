@@ -22,12 +22,12 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { API, isAdmin, showError } from '../../helpers';
 import {
-  buildQuickRangePayload,
-  getInitialDashboardPayload,
+  buildQuickRangePayload, // custom: quick range
+  getInitialDashboardPayload, // custom: quick range
 } from '../../helpers/dashboard';
 import {
   TIME_OPTIONS,
-  QUICK_RANGE_PRESETS,
+  QUICK_RANGE_PRESETS, // custom: quick range
 } from '../../constants/dashboard.constants';
 import { useIsMobile } from '../common/useIsMobile';
 import { useMinimumLoadingTime } from '../common/useMinimumLoadingTime';
@@ -37,7 +37,7 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const initialized = useRef(false);
-  const initialDashboardPayloadRef = useRef(getInitialDashboardPayload());
+  const initialDashboardPayloadRef = useRef(getInitialDashboardPayload()); // custom: quick range
 
   // ========== 基础状态 ==========
   const [loading, setLoading] = useState(false);
@@ -59,6 +59,7 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
   const [dataExportDefaultTime, setDataExportDefaultTime] = useState(
     initialDashboardPayloadRef.current.dataExportDefaultTime,
   );
+  // custom: quick range
   const [activeQuickRangePreset, setActiveQuickRangePreset] = useState(
     initialDashboardPayloadRef.current.activeQuickRangePreset,
   );
@@ -71,7 +72,7 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
   const [pieData, setPieData] = useState([{ type: 'null', value: '0' }]);
   const [lineData, setLineData] = useState([]);
   const [modelColors, setModelColors] = useState({});
-  const [selfRankInfo, setSelfRankInfo] = useState({ rank: 0, total: 0 });
+  const [selfRankInfo, setSelfRankInfo] = useState({ rank: 0, total: 0 }); // custom: user ranking
 
   // ========== 图表状态 ==========
   const [activeChartTab, setActiveChartTab] = useState('1');
@@ -115,6 +116,7 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
       })),
     [t],
   );
+  // custom: quick range — preset time range options
   const quickRangePresets = useMemo(
     () =>
       QUICK_RANGE_PRESETS.map((preset) => ({
@@ -238,6 +240,7 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
     }
   }, [activeUptimeTab]);
 
+  // custom: user ranking — route to different endpoint based on role
   const loadUserQuotaData = useCallback(async () => {
     try {
       const { start_timestamp, end_timestamp } = inputs;
@@ -281,6 +284,7 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
     return data;
   }, [loadQuotaData, loadUptimeData]);
 
+  // custom: quick range — apply preset and refresh data
   const applyQuickRangePreset = useCallback(
     async (presetKey, updateChartDataCallback) => {
       const quickRangePayload = buildQuickRangePayload(presetKey);

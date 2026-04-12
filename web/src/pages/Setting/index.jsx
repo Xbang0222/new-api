@@ -110,6 +110,7 @@ const Setting = () => {
       content: <PaymentSetting />,
       itemKey: 'payment',
     });
+    // custom: invoice settings tab
     panes.push({
       tab: (
         <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>

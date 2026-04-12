@@ -72,6 +72,7 @@ const PageLayout = () => {
 
   const isConsoleRoute = location.pathname.startsWith('/console');
   const showSider = isConsoleRoute && (!isMobile || drawerOpen);
+  // custom: brand — dynamic favicon
   const updateFavicon = (logoUrl) => {
     if (!logoUrl) {
       return;

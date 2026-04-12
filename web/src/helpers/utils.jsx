@@ -64,6 +64,7 @@ function inferThemeMode() {
   return 'light';
 }
 
+// custom: brand
 export function getLogo(themeMode) {
   const logo = localStorage.getItem('logo');
   const logoLight = localStorage.getItem('logo_light');
@@ -85,6 +86,7 @@ export function getLogo(themeMode) {
   return logo || '/logo.png';
 }
 
+// custom: brand
 export function getFavicon(themeMode) {
   const logo = localStorage.getItem('logo');
   const logoLight = localStorage.getItem('logo_light');

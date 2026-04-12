@@ -32,3 +32,4 @@ data/
 .worktrees/
 
 token_estimator_test.go
+CLAUDE.local.md

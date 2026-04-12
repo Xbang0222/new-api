@@ -105,6 +105,7 @@ const HeaderBar = ({ onMobileMenuToggle, drawerOpen }) => {
             />
           </div>
 
+          {/* custom: brand — layout */}
           {isMobile && (
             <Navigation
               mainNavLinks={mainNavLinks}

@@ -130,3 +130,129 @@ For request structs that are parsed from client JSON and then re-marshaled to up
   - field absent in client JSON => `nil` => omitted on marshal;
   - field explicitly set to zero/false => non-`nil` pointer => must still be sent upstream.
 - Avoid using non-pointer scalars with `omitempty` for optional request parameters, because zero values (`0`, `0.0`, `false`) will be silently dropped during marshal.
+
+### Rule 7: Fork Customization — Minimize Upstream Diff
+
+This project is a fork maintained on the `custom` branch. Upstream (`QuantumNous/new-api`) is actively developed, so all custom code MUST be structured to **minimize merge conflicts** and **maximize maintainability**.
+
+#### 7.1 File Isolation — Custom Code in Separate Files
+
+**Always prefer creating new files over modifying upstream files.**
+
+- Backend: use `_custom.go` suffix for custom controllers, e.g. `controller/usedata_custom.go`
+- Backend: custom modules get their own full vertical slice (model + dto + service + controller + router), e.g. the invoice module
+- Frontend: custom pages go in their own directories, e.g. `web/src/pages/Invoice/`
+- Frontend: custom components go in their own files, e.g. `web/src/components/billing/InvoiceApplicationModal.jsx`
+- Frontend: shared custom utilities go in dedicated helpers, e.g. `web/src/helpers/brand.js`, `web/src/helpers/invoice.js`
+- Custom constants go in separate files, e.g. `web/src/constants/invoice.constants.js`
+
+**Current custom-only files (zero merge conflict risk):**
+
+| Layer | Files |
+|-------|-------|
+| Backend | `controller/usedata_custom.go`, `controller/invoice.go`, `service/invoice.go`, `model/invoice.go`, `dto/invoice.go`, `router/invoice-router.go`, `setting/operation_setting/invoice_setting.go` |
+| Frontend pages | `pages/Invoice/`, `pages/InvoiceAdmin/`, `pages/Billing/` |
+| Frontend components | `components/billing/InvoiceApplicationModal.jsx`, `components/invoice/InvoiceHeaderManager.jsx`, `components/settings/InvoiceSetting.jsx` |
+| Helpers & constants | `helpers/brand.js`, `helpers/invoice.js`, `helpers/headerNavModules.js`, `constants/invoice.constants.js`, `constants/dashboard.constants.js` |
+| CI/Deploy | `.github/workflows/docker-custom-build.yml`, `deploy.sh`, `DEPLOY.md` |
+| Assets | `web/public/fonts/`, `web/public/logo_day.ico`, `web/public/logo_night.ico` |
+
+#### 7.2 Upstream File Changes — Keep Minimal and Documented
+
+When modifying upstream files is unavoidable, follow these rules:
+
+1. **Minimize the diff** — add as few lines as possible (ideally 1–3 lines per file)
+2. **Concentrate changes** — group custom code behind a clear marker or conditional
+3. **Comment custom additions** — mark with `// custom: <feature>` comment so they are easy to find during merge
+4. **Prefer composition over modification** — import and call custom modules instead of inlining logic
+
+**Comment marker format:**
+
+- Go files: `// custom: <feature>` (line comment or block comment above the change)
+- JSX/JS files: `{/* custom: <feature> */}` or `// custom: <feature>`
+- CSS files: `/* custom: <feature> */`
+- HTML files: `<!-- custom: <feature> -->`
+
+**Feature tags** (use consistently):
+
+| Tag | Scope |
+|-----|-------|
+| `custom: brand` | Logo, favicon, fonts, brand styling |
+| `custom: user ranking` | Non-admin user consumption ranking |
+| `custom: invoice` | Invoice/billing module integration points |
+| `custom: subscription priority` | Subscription sort_order priority |
+| `custom: quick range` | Dashboard quick time-range presets |
+
+**Behavioral changes** (modifying existing upstream logic, not just adding new code) MUST include a block comment explaining:
+- What the original logic was
+- What was changed and why
+- How to revert if needed
+
+**Current upstream file modifications (merge conflict risk):**
+
+| File | Change | Risk |
+|------|--------|------|
+| `router/api-router.go` | +4 lines (custom routes) | Low |
+| `model/main.go` | +8 lines (invoice migration) | Low |
+| `model/option.go` | +6 lines (invoice settings) | Low |
+| `common/constants.go` | +2 lines | Low |
+| `controller/misc.go` | +2 lines | Low |
+| `model/subscription.go` | 3-line behavioral change (JOIN + ORDER BY) | **Medium** |
+| `web/src/components/dashboard/*` | Role-based data routing | **Medium** |
+| `web/src/hooks/dashboard/*` | Endpoint switching + chart logic | **Medium** |
+| `web/src/i18n/locales/en.json` | Added translation keys | **High** |
+| `web/src/App.jsx` | Custom routes + brand | Medium |
+| `web/src/components/layout/*` | Navigation + brand | Medium |
+
+#### 7.3 i18n — Avoid Key Collisions
+
+- Custom translation keys SHOULD use descriptive, unique key names that are unlikely to collide with upstream additions
+- When merging upstream i18n updates, use **deep merge** (not git's line-based merge) to preserve both sides' keys
+- `zh.json` is our custom locale file — upstream does not have it, so it never conflicts
+
+#### 7.4 Adding New Custom Features — Checklist
+
+Before implementing a new custom feature:
+
+**Isolation:**
+- [ ] Can the entire feature live in new files? (strongly preferred)
+- [ ] If upstream files must change, is it limited to imports / 1-line calls?
+- [ ] Is the new route registered in `router/api-router.go` or a custom `router/*-router.go`?
+- [ ] Are custom DB models migrated in `model/main.go` with `db.AutoMigrate()`?
+
+**Engineering quality:**
+- [ ] Every line added to upstream files has a `// custom: <feature>` marker
+- [ ] Behavioral changes to upstream logic include a block comment (original → modified → why)
+- [ ] Custom Go files use `_custom.go` suffix or live in a dedicated module directory
+- [ ] Custom frontend logic is extracted to helper/hook files, upstream files only import and call
+- [ ] No duplicated logic — reuse existing custom helpers (`brand.js`, `invoice.js`, etc.)
+
+**Maintainability:**
+- [ ] Does the feature degrade gracefully if custom tables/data don't exist?
+- [ ] Are i18n keys unlikely to collide with upstream?
+- [ ] Has `VERSION` been bumped with `-ruoli-` suffix?
+- [ ] Can `grep -rn "custom: <feature>"` find all touchpoints for this feature?
+- [ ] Is the feature documented in the custom-only files table (§7.1) or upstream modifications table (§7.2)?
+
+#### 7.5 Version Numbering
+
+Format: `v{upstream_version}-ruoli-{patch}`
+
+- Track upstream version exactly — when merging upstream v0.12.6, version becomes `v0.12.6-ruoli-0.1`
+- Increment the `-ruoli-` patch number for custom-only changes
+- Update `VERSION` file before each build/deploy
+
+#### 7.6 Upstream Sync Workflow
+
+```
+1. git fetch upstream
+2. git log custom..upstream/main --oneline   # review new commits
+3. git merge upstream/main --no-edit
+4. Resolve conflicts:
+   - i18n JSON: deep merge (keep both sides' keys)
+   - Go files: re-apply our 1-3 line additions
+   - Frontend: check dashboard hooks/components carefully
+5. go build ./... && cd web && bun run build  # verify both ends
+6. Update VERSION to new upstream version + -ruoli-0.1
+7. Commit and test
+```

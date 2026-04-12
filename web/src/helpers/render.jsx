@@ -135,6 +135,7 @@ export function getLucideIcon(key, selected = false) {
       return <CheckSquare {...commonProps} color={iconColor} />;
     case 'topup':
       return <CreditCard {...commonProps} color={iconColor} />;
+    // custom: invoice icons
     case 'billing':
       return <Receipt {...commonProps} color={iconColor} />;
     case 'invoice':

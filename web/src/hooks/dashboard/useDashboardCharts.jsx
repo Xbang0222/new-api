@@ -525,7 +525,7 @@ export const useDashboardCharts = (
 
   // ========== 用户维度图表数据处理 ==========
   const updateUserChartData = useCallback(
-    (data, currentUsername) => {
+    (data, currentUsername) => { // custom: user ranking — added currentUsername param
       const { rankingData, trendData: userTrend } = processUserData(
         data,
         dataExportDefaultTime,
@@ -540,6 +540,7 @@ export const useDashboardCharts = (
         }))
         .sort((a, b) => b.rawQuota - a.rawQuota);
 
+      // custom: user ranking — append self to chart if not in Top 10
       // 如果当前用户不在 Top 10 中，从原始数据计算并追加
       if (currentUsername) {
         const isInTop = userRankValues.some((v) => v.User === currentUsername);

@@ -25,6 +25,7 @@ body.sidebar-collapsed {
   --sidebar-current-width: var(--sidebar-width-collapsed);
 }
 
+/* custom: brand fonts */
 @font-face {
   font-family: 'BrandNumeric';
   src: url('/fonts/Number.otf') format('opentype');
@@ -48,6 +49,7 @@ body {
   background-color: var(--semi-color-bg-0);
 }
 
+/* custom: brand animations */
 .brand-title {
   font-family: 'BrandDisplay', 'PingFang SC', 'Microsoft YaHei', sans-serif !important;
 }

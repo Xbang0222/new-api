@@ -69,8 +69,8 @@ func InitOptionMap() {
 	common.OptionMap["Footer"] = common.Footer
 	common.OptionMap["SystemName"] = common.SystemName
 	common.OptionMap["Logo"] = common.Logo
-	common.OptionMap["LogoLight"] = common.LogoLight
-	common.OptionMap["LogoDark"] = common.LogoDark
+	common.OptionMap["LogoLight"] = common.LogoLight // custom: brand
+	common.OptionMap["LogoDark"] = common.LogoDark   // custom: brand
 	common.OptionMap["ServerAddress"] = ""
 	common.OptionMap["WorkerUrl"] = system_setting.WorkerUrl
 	common.OptionMap["WorkerValidKey"] = system_setting.WorkerValidKey
@@ -427,9 +427,9 @@ func updateOptionMap(key string, value string) (err error) {
 		common.SystemName = value
 	case "Logo":
 		common.Logo = value
-	case "LogoLight":
+	case "LogoLight": // custom: brand
 		common.LogoLight = value
-	case "LogoDark":
+	case "LogoDark": // custom: brand
 		common.LogoDark = value
 	case "WeChatServerAddress":
 		common.WeChatServerAddress = value

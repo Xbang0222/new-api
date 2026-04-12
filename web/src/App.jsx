@@ -59,7 +59,7 @@ const Dashboard = lazy(() => import('./pages/Dashboard'));
 const About = lazy(() => import('./pages/About'));
 const UserAgreement = lazy(() => import('./pages/UserAgreement'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
-// Invoice module (custom)
+// custom: invoice — lazy imports
 const Billing = lazy(() => import('./pages/Billing'));
 const InvoicePage = lazy(() => import('./pages/Invoice'));
 const InvoiceAdmin = lazy(() => import('./pages/InvoiceAdmin'));
@@ -271,7 +271,7 @@ function App() {
             </PrivateRoute>
           }
         />
-        {/* Invoice module (custom) */}
+        {/* custom: invoice routes */}
         <Route
           path='/console/billing'
           element={

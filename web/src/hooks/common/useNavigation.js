@@ -20,6 +20,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { useMemo } from 'react';
 import { normalizeHeaderNavModules } from '../../helpers/headerNavModules';
 
+// custom: brand — context-aware nav
 export const useNavigation = (
   t,
   docsLink,

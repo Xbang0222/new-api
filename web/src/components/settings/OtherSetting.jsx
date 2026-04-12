@@ -476,6 +476,7 @@ const OtherSetting = () => {
               <Button onClick={submitLogo} loading={loadingInput['Logo']}>
                 {t('设置 Logo')}
               </Button>
+              {/* custom: brand */}
               <Form.Input
                 label={t('浅色 Logo 图片地址')}
                 placeholder={t('在此输入浅色 Logo 图片地址')}

@@ -990,6 +990,11 @@ func PreConsumeUserSubscription(requestId string, userId int, modelName string, 
 		}
 
 		var subs []UserSubscription
+		// custom: subscription priority
+		// Original: Where("user_id = ? AND status = ? AND end_time > ?", ...).Order("end_time asc, id asc")
+		// Modified: JOIN subscription_plans, Order by sort_order desc first, then end_time asc
+		// Purpose: consume high-priority plans first (higher sort_order = higher priority)
+		// Revert: remove Joins(), restore original Where() and Order() — see upstream/main
 		if err := tx.Set("gorm:query_option", "FOR UPDATE").
 			Joins("LEFT JOIN subscription_plans ON subscription_plans.id = user_subscriptions.plan_id").
 			Where("user_subscriptions.user_id = ? AND user_subscriptions.status = ? AND user_subscriptions.end_time > ?", userId, "active", now).

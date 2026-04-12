@@ -86,6 +86,7 @@ const Dashboard = () => {
   );
 
   // ========== 数据处理 ==========
+  // custom: user ranking — removed isAdminUser gate, open to all users
   const loadUserData = async () => {
     const userData = await dashboardData.loadUserQuotaData();
     if (userData && userData.length > 0) {
@@ -116,6 +117,7 @@ const Dashboard = () => {
     await loadUserData();
   };
 
+  // custom: quick range — preset time range selection
   const handleQuickRangeSelect = async (presetKey) => {
     await dashboardData.applyQuickRangePreset(
       presetKey,
@@ -160,6 +162,7 @@ const Dashboard = () => {
       <DashboardHeader
         getGreeting={dashboardData.getGreeting}
         greetingVisible={dashboardData.greetingVisible}
+        // custom: quick range
         quickRangePresets={dashboardData.quickRangePresets}
         activeQuickRangePreset={dashboardData.activeQuickRangePreset}
         onQuickRangeSelect={handleQuickRangeSelect}
@@ -203,7 +206,7 @@ const Dashboard = () => {
             spec_rank_bar={dashboardCharts.spec_rank_bar}
             spec_user_rank={dashboardCharts.spec_user_rank}
             spec_user_trend={dashboardCharts.spec_user_trend}
-            selfRankInfo={dashboardData.selfRankInfo}
+            selfRankInfo={dashboardData.selfRankInfo} // custom: user ranking
             CARD_PROPS={CARD_PROPS}
             CHART_CONFIG={CHART_CONFIG}
             FLEX_CENTER_GAP2={FLEX_CENTER_GAP2}

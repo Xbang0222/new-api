@@ -22,6 +22,7 @@ import { NavLink } from 'react-router-dom';
 import { Grid2x2, FileText, LayoutGrid } from 'lucide-react';
 import SkeletonWrapper from '../components/SkeletonWrapper';
 
+// custom: brand — redesigned navigation
 const Navigation = ({
   mainNavLinks,
   isMobile,
