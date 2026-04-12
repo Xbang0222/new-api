@@ -501,10 +501,10 @@ func (user *User) Insert(inviterId int) error {
 			RecordLog(user.Id, LogTypeSystem, fmt.Sprintf("使用邀请码赠送 %s", logger.LogQuota(common.QuotaForInvitee)))
 		}
 		if common.QuotaForInviter > 0 {
-			//_ = IncreaseUserQuota(inviterId, common.QuotaForInviter)
 			RecordLog(inviterId, LogTypeSystem, fmt.Sprintf("邀请用户赠送 %s", logger.LogQuota(common.QuotaForInviter)))
-			_ = inviteUser(inviterId)
 		}
+		// custom: invite rebate — always track invite count, even without QuotaForInviter
+		_ = inviteUser(inviterId)
 	}
 	return nil
 }
@@ -563,10 +563,11 @@ func (user *User) FinalizeOAuthUserCreation(inviterId int) {
 		}
 		if common.QuotaForInviter > 0 {
 			RecordLog(inviterId, LogTypeSystem, fmt.Sprintf("邀请用户赠送 %s", logger.LogQuota(common.QuotaForInviter)))
+		}
+			// custom: invite rebate — always track invite count, even without QuotaForInviter
 			_ = inviteUser(inviterId)
 		}
 	}
-}
 
 func (user *User) Update(updatePassword bool) error {
 	var err error
