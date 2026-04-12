@@ -570,6 +570,88 @@ export const useDashboardCharts = (
     [dataExportDefaultTime, t],
   );
 
+  // ========== custom: token ranking — Token consumption leaderboard ==========
+  const [spec_token_rank, setSpecTokenRank] = useState({
+    type: 'bar',
+    data: [{ id: 'tokenRankData', values: [] }],
+    xField: 'TokenUsed',
+    yField: 'User',
+    seriesField: 'User',
+    direction: 'horizontal',
+    legends: { visible: false },
+    title: {
+      visible: true,
+      text: t('Token消耗排行'),
+      subtext: '',
+    },
+    bar: {
+      state: { hover: { stroke: '#000', lineWidth: 1 } },
+    },
+    label: {
+      visible: true,
+      position: 'outside',
+      formatMethod: (value, datum) => renderNumber(datum['TokenUsed'] || 0),
+    },
+    axes: [
+      {
+        orient: 'left',
+        type: 'band',
+        label: { visible: true },
+      },
+      {
+        orient: 'bottom',
+        type: 'linear',
+        visible: false,
+      },
+    ],
+    tooltip: {
+      mark: {
+        content: [
+          {
+            key: (datum) => datum['User'],
+            value: (datum) =>
+              (datum['TokenUsed'] || 0).toLocaleString() + ' tokens',
+          },
+        ],
+      },
+    },
+    color: { type: 'ordinal', range: USER_COLORS },
+  });
+
+  const updateTokenRankChart = useCallback(
+    (tokenRankingData) => {
+      if (!tokenRankingData?.ranking) return;
+
+      const values = tokenRankingData.ranking
+        .map((item) => ({
+          User: item.username,
+          TokenUsed: item.token_used,
+          IsSelf: item.is_self,
+        }))
+        .sort((a, b) => a.TokenUsed - b.TokenUsed); // ascending for horizontal bar (bottom = highest)
+
+      const totalTokens = values.reduce((s, i) => s + i.TokenUsed, 0);
+
+      let subtext = `${t('总计')}：${renderNumber(totalTokens)} tokens`;
+      if (
+        tokenRankingData.self_rank > 10 &&
+        tokenRankingData.self_tokens > 0
+      ) {
+        subtext += ` | ${t('你的排名')}：#${tokenRankingData.self_rank}/${tokenRankingData.total_users} (${renderNumber(tokenRankingData.self_tokens)} tokens)`;
+      }
+
+      setSpecTokenRank((prev) => ({
+        ...prev,
+        data: [{ id: 'tokenRankData', values }],
+        title: {
+          ...prev.title,
+          subtext,
+        },
+      }));
+    },
+    [t],
+  );
+
   // ========== 初始化图表主题 ==========
   useEffect(() => {
     initVChartSemiTheme({
@@ -584,8 +666,10 @@ export const useDashboardCharts = (
     spec_rank_bar,
     spec_user_rank,
     spec_user_trend,
+    spec_token_rank, // custom: token ranking
     updateChartData,
     updateUserChartData,
+    updateTokenRankChart, // custom: token ranking
     generateModelColors,
   };
 };

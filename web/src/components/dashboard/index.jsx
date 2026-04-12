@@ -86,11 +86,19 @@ const Dashboard = () => {
   );
 
   // ========== 数据处理 ==========
-  const loadUserData = async () => {
+  const loadUserData = async (override) => {
     if (!dashboardData.isAdminUser) return;
-    const userData = await dashboardData.loadUserQuotaData();
+    const userData = await dashboardData.loadUserQuotaData(override);
     if (userData && userData.length > 0) {
       dashboardCharts.updateUserChartData(userData);
+    }
+  };
+
+  // custom: token ranking — load and update token ranking chart
+  const loadTokenRankingData = async (overrideInputs) => {
+    const data = await dashboardData.loadTokenRanking(overrideInputs);
+    if (data) {
+      dashboardCharts.updateTokenRankChart(data);
     }
   };
 
@@ -101,6 +109,7 @@ const Dashboard = () => {
       }
     });
     await loadUserData();
+    await loadTokenRankingData(); // custom: token ranking
     await dashboardData.loadUptimeData();
   };
 
@@ -110,19 +119,28 @@ const Dashboard = () => {
       dashboardCharts.updateChartData(data);
     }
     await loadUserData();
+    await loadTokenRankingData(); // custom: token ranking
   };
 
   const handleSearchConfirm = async () => {
     await dashboardData.handleSearchConfirm(dashboardCharts.updateChartData);
     await loadUserData();
+    await loadTokenRankingData(); // custom: token ranking
   };
 
   // custom: quick range — preset time range selection
   const handleQuickRangeSelect = async (presetKey) => {
-    await dashboardData.applyQuickRangePreset(
-      presetKey,
-      dashboardCharts.updateChartData,
-    );
+    const payload =
+      await dashboardData.applyQuickRangePreset(
+        presetKey,
+        dashboardCharts.updateChartData,
+      );
+    // Reload user data and token ranking with new time range
+    const override = payload
+      ? { inputs: { start_timestamp: payload.start_timestamp, end_timestamp: payload.end_timestamp } }
+      : undefined;
+    await loadUserData(override);
+    await loadTokenRankingData(override); // custom: token ranking
   };
 
   // ========== 数据准备 ==========
@@ -206,6 +224,7 @@ const Dashboard = () => {
             spec_rank_bar={dashboardCharts.spec_rank_bar}
             spec_user_rank={dashboardCharts.spec_user_rank}
             spec_user_trend={dashboardCharts.spec_user_trend}
+            spec_token_rank={dashboardCharts.spec_token_rank}
             isAdminUser={dashboardData.isAdminUser}
             CARD_PROPS={CARD_PROPS}
             CHART_CONFIG={CHART_CONFIG}

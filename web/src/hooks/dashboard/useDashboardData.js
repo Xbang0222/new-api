@@ -239,9 +239,10 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
     }
   }, [activeUptimeTab]);
 
-  const loadUserQuotaData = useCallback(async () => {
+  const loadUserQuotaData = useCallback(async (override = {}) => {
     try {
-      const { start_timestamp, end_timestamp } = inputs;
+      const effectiveInputs = { ...inputs, ...(override.inputs || {}) };
+      const { start_timestamp, end_timestamp } = effectiveInputs;
       const localStartTimestamp = Date.parse(start_timestamp) / 1000;
       const localEndTimestamp = Date.parse(end_timestamp) / 1000;
       const url = `/api/data/users?start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}`;
@@ -256,6 +257,30 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
     } catch (err) {
       console.error(err);
       return [];
+    }
+  }, [inputs]);
+
+  // custom: token ranking — load token consumption leaderboard
+  const [tokenRankingData, setTokenRankingData] = useState(null);
+
+  const loadTokenRanking = useCallback(async (overrideInputs) => {
+    try {
+      const src = overrideInputs?.inputs || inputs;
+      const localStartTimestamp = Date.parse(src.start_timestamp) / 1000;
+      const localEndTimestamp = Date.parse(src.end_timestamp) / 1000;
+      const url = `/api/data/token-ranking?start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}`;
+      const res = await API.get(url);
+      const { success, message, data } = res.data;
+      if (success) {
+        setTokenRankingData(data);
+        return data;
+      } else {
+        showError(message);
+        return null;
+      }
+    } catch (err) {
+      console.error(err);
+      return null;
     }
   }, [inputs]);
 
@@ -303,7 +328,7 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
         updateChartDataCallback(data);
       }
 
-      return data;
+      return quickRangePayload; // custom: token ranking — return payload for downstream loaders
     },
     [loadQuotaData],
   );
@@ -394,11 +419,15 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
     handleCloseModal,
     loadQuotaData,
     loadUserQuotaData,
+    loadTokenRanking, // custom: token ranking
     loadUptimeData,
     getUserData,
     refresh,
     handleSearchConfirm,
     applyQuickRangePreset,
+
+    // custom: token ranking
+    tokenRankingData,
 
     // 导航和翻译
     navigate,

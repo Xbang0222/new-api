@@ -212,6 +212,7 @@
         "Telegram Bot 名称": "Telegram Bot Name",
         "Telegram ID": "Telegram ID",
         "Token Endpoint": "Token Endpoint",
+        "Token消耗排行": "Token Consumption Ranking",
         "Total tokens": "",
         "Turnstile Secret Key": "Turnstile Secret Key",
         "Turnstile Site Key": "Turnstile Site Key",

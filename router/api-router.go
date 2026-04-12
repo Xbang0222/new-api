@@ -295,6 +295,7 @@ func SetApiRouter(router *gin.Engine) {
 		dataRoute.GET("/", middleware.AdminAuth(), controller.GetAllQuotaDates)
 		dataRoute.GET("/users", middleware.AdminAuth(), controller.GetQuotaDatesByUser)
 		dataRoute.GET("/self", middleware.UserAuth(), controller.GetUserQuotaDates)
+		dataRoute.GET("/token-ranking", middleware.UserAuth(), controller.GetTokenRanking) // custom: token ranking
 
 		logRoute.Use(middleware.CORS(), middleware.CriticalRateLimit())
 		{

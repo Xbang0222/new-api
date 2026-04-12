@@ -150,7 +150,7 @@ This project is a fork maintained on the `custom` branch. Upstream (`QuantumNous
 
 | Layer | Files |
 |-------|-------|
-| Backend | `controller/invoice.go`, `service/invoice.go`, `model/invoice.go`, `dto/invoice.go`, `router/invoice-router.go`, `setting/operation_setting/invoice_setting.go` |
+| Backend | `controller/invoice.go`, `service/invoice.go`, `model/invoice.go`, `dto/invoice.go`, `router/invoice-router.go`, `setting/operation_setting/invoice_setting.go`, `controller/usedata_custom.go`, `model/usedata_custom.go` |
 | Frontend pages | `pages/Invoice/`, `pages/InvoiceAdmin/`, `pages/Billing/` |
 | Frontend components | `components/billing/InvoiceApplicationModal.jsx`, `components/invoice/InvoiceHeaderManager.jsx`, `components/settings/InvoiceSetting.jsx` |
 | Helpers & constants | `helpers/brand.js`, `helpers/invoice.js`, `helpers/headerNavModules.js`, `constants/invoice.constants.js`, `constants/dashboard.constants.js` |
@@ -183,6 +183,7 @@ When modifying upstream files is unavoidable, follow these rules:
 | `custom: quick range` | Dashboard quick time-range presets |
 | `custom: invite rebate (PR #3495)` | 邀请充值返利，来自未合并的上游 PR |
 | `custom: invite rebate anti-abuse` | 邀请返利防薅羊毛（可配置划转门槛） |
+| `custom: token ranking` | Token 消耗排行榜（所有用户可见） |
 
 **Behavioral changes** (modifying existing upstream logic, not just adding new code) MUST include a block comment explaining:
 - What the original logic was
@@ -193,7 +194,7 @@ When modifying upstream files is unavoidable, follow these rules:
 
 | File | Change | Risk |
 |------|--------|------|
-| `router/api-router.go` | +4 lines (custom routes) | Low |
+| `router/api-router.go` | +5 lines (custom routes) | Low |
 | `model/main.go` | +8 lines (invoice migration) | Low |
 | `model/option.go` | +8 lines (invoice settings + invite rebate) | Low |
 | `common/constants.go` | +3 lines | Low |
