@@ -525,8 +525,7 @@ export const useDashboardCharts = (
 
   // ========== 用户维度图表数据处理 ==========
   const updateUserChartData = useCallback(
-    (data, currentUsername) => {
-      // custom: user ranking — added currentUsername param
+    (data) => {
       const { rankingData, trendData: userTrend } = processUserData(
         data,
         dataExportDefaultTime,
@@ -540,41 +539,6 @@ export const useDashboardCharts = (
           Quota: getQuotaWithUnit(item.Quota, 4),
         }))
         .sort((a, b) => b.rawQuota - a.rawQuota);
-
-      // custom: user ranking — append self to chart if not in Top 10
-      // 如果当前用户不在 Top 10 中，从原始数据计算并追加
-      if (currentUsername) {
-        const isInTop = userRankValues.some((v) => v.User === currentUsername);
-        if (!isInTop) {
-          // 从原始数据汇总当前用户的消耗
-          let selfQuota = 0;
-          data.forEach((item) => {
-            if (item.username === currentUsername) {
-              selfQuota += item.quota;
-            }
-          });
-          if (selfQuota > 0) {
-            // 计算排名
-            const allUserTotals = new Map();
-            data.forEach((item) => {
-              const prev = allUserTotals.get(item.username) || 0;
-              allUserTotals.set(item.username, prev + item.quota);
-            });
-            const sorted = Array.from(allUserTotals.entries()).sort(
-              (a, b) => b[1] - a[1],
-            );
-            const selfRank =
-              sorted.findIndex(([u]) => u === currentUsername) + 1;
-
-            userRankValues.push({
-              User: `#${selfRank} ${currentUsername}`,
-              rawQuota: selfQuota,
-              Quota: getQuotaWithUnit(selfQuota, 4),
-              isSelf: true,
-            });
-          }
-        }
-      }
 
       const totalUserQuota = rankingData.reduce((s, i) => s + i.Quota, 0);
 

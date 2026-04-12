@@ -150,7 +150,7 @@ This project is a fork maintained on the `custom` branch. Upstream (`QuantumNous
 
 | Layer | Files |
 |-------|-------|
-| Backend | `controller/usedata_custom.go`, `controller/invoice.go`, `service/invoice.go`, `model/invoice.go`, `dto/invoice.go`, `router/invoice-router.go`, `setting/operation_setting/invoice_setting.go` |
+| Backend | `controller/invoice.go`, `service/invoice.go`, `model/invoice.go`, `dto/invoice.go`, `router/invoice-router.go`, `setting/operation_setting/invoice_setting.go` |
 | Frontend pages | `pages/Invoice/`, `pages/InvoiceAdmin/`, `pages/Billing/` |
 | Frontend components | `components/billing/InvoiceApplicationModal.jsx`, `components/invoice/InvoiceHeaderManager.jsx`, `components/settings/InvoiceSetting.jsx` |
 | Helpers & constants | `helpers/brand.js`, `helpers/invoice.js`, `helpers/headerNavModules.js`, `constants/invoice.constants.js`, `constants/dashboard.constants.js` |
@@ -178,7 +178,6 @@ When modifying upstream files is unavoidable, follow these rules:
 | Tag | Scope |
 |-----|-------|
 | `custom: brand` | Logo, favicon, fonts, brand styling |
-| `custom: user ranking` | Non-admin user consumption ranking |
 | `custom: invoice` | Invoice/billing module integration points |
 | `custom: subscription priority` | Subscription sort_order priority |
 | `custom: quick range` | Dashboard quick time-range presets |
@@ -197,10 +196,8 @@ When modifying upstream files is unavoidable, follow these rules:
 | `model/main.go` | +8 lines (invoice migration) | Low |
 | `model/option.go` | +6 lines (invoice settings) | Low |
 | `common/constants.go` | +2 lines | Low |
-| `controller/misc.go` | +2 lines | Low |
+| `controller/misc.go` | +5 lines (brand + invite rebate) | Low |
 | `model/subscription.go` | 3-line behavioral change (JOIN + ORDER BY) | **Medium** |
-| `web/src/components/dashboard/*` | Role-based data routing | **Medium** |
-| `web/src/hooks/dashboard/*` | Endpoint switching + chart logic | **Medium** |
 | `web/src/i18n/locales/en.json` | Added translation keys | **High** |
 | `web/src/App.jsx` | Custom routes + brand | Medium |
 | `web/src/components/layout/*` | Navigation + brand | Medium |

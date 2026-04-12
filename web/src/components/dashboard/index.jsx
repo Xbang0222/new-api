@@ -86,11 +86,11 @@ const Dashboard = () => {
   );
 
   // ========== 数据处理 ==========
-  // custom: user ranking — removed isAdminUser gate, open to all users
   const loadUserData = async () => {
+    if (!dashboardData.isAdminUser) return;
     const userData = await dashboardData.loadUserQuotaData();
     if (userData && userData.length > 0) {
-      dashboardCharts.updateUserChartData(userData, userState?.user?.username);
+      dashboardCharts.updateUserChartData(userData);
     }
   };
 
@@ -206,7 +206,7 @@ const Dashboard = () => {
             spec_rank_bar={dashboardCharts.spec_rank_bar}
             spec_user_rank={dashboardCharts.spec_user_rank}
             spec_user_trend={dashboardCharts.spec_user_trend}
-            selfRankInfo={dashboardData.selfRankInfo} // custom: user ranking
+            isAdminUser={dashboardData.isAdminUser}
             CARD_PROPS={CARD_PROPS}
             CHART_CONFIG={CHART_CONFIG}
             FLEX_CENTER_GAP2={FLEX_CENTER_GAP2}
