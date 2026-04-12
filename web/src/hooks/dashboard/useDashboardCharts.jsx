@@ -633,10 +633,7 @@ export const useDashboardCharts = (
       const totalTokens = values.reduce((s, i) => s + i.TokenUsed, 0);
 
       let subtext = `${t('总计')}：${renderNumber(totalTokens)} tokens`;
-      if (
-        tokenRankingData.self_rank > 10 &&
-        tokenRankingData.self_tokens > 0
-      ) {
+      if (tokenRankingData.self_rank > 10 && tokenRankingData.self_tokens > 0) {
         subtext += ` | ${t('你的排名')}：#${tokenRankingData.self_rank}/${tokenRankingData.total_users} (${renderNumber(tokenRankingData.self_tokens)} tokens)`;
       }
 

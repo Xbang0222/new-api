@@ -522,6 +522,10 @@ func (user *User) InsertWithTx(tx *gorm.DB, inviterId int) error {
 	}
 	user.Quota = common.QuotaForNewUser
 	user.AffCode = common.GetRandomString(4)
+	// custom: invite rebate — defensive: ensure inviter_id is always written
+	if inviterId != 0 && user.InviterId == 0 {
+		user.InviterId = inviterId
+	}
 
 	// 初始化用户设置
 	if user.Setting == "" {

@@ -20,7 +20,13 @@ For commercial licensing, please contact support@quantumnous.com
 import React, { useEffect, useState, useRef } from 'react';
 import { Button, Col, Form, Row, Spin, Select } from '@douyinfe/semi-ui'; // custom: invite rebate (PR #3495) — added Select
 import { useTranslation } from 'react-i18next';
-import { API, showError, showSuccess, showWarning, getCurrencyConfig } from '../../../helpers';
+import {
+  API,
+  showError,
+  showSuccess,
+  showWarning,
+  getCurrencyConfig,
+} from '../../../helpers';
 
 // custom: invite rebate (PR #3495) — keys this component manages
 const FIELD_KEYS = [

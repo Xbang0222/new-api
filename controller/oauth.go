@@ -268,6 +268,7 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 	if affCode != nil {
 		inviterId, _ = model.GetUserIdByAffCode(affCode.(string))
 	}
+	user.InviterId = inviterId // custom: invite rebate — fix OAuth missing inviter_id
 
 	// Use transaction to ensure user creation and OAuth binding are atomic
 	if genericProvider, ok := provider.(*oauth.GenericOAuthProvider); ok {

@@ -413,6 +413,10 @@ func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQu
 func checkAndSendQuotaNotify(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQuota int) {
 	gopool.Go(func() {
 		userSetting := relayInfo.UserSetting
+		// custom: opt-in notification — 用户未配置通知方式则不发送额度预警
+		if userSetting.NotifyType == "" {
+			return
+		}
 		threshold := common.QuotaRemindThreshold
 		if userSetting.QuotaWarningThreshold != 0 {
 			threshold = int(userSetting.QuotaWarningThreshold)
@@ -468,6 +472,10 @@ func checkAndSendSubscriptionQuotaNotify(relayInfo *relaycommon.RelayInfo) {
 		}
 
 		userSetting := relayInfo.UserSetting
+		// custom: opt-in notification — 用户未配置通知方式则不发送订阅额度预警
+		if userSetting.NotifyType == "" {
+			return
+		}
 		threshold := common.QuotaRemindThreshold
 		if userSetting.QuotaWarningThreshold != 0 {
 			threshold = int(userSetting.QuotaWarningThreshold)
