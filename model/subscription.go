@@ -11,6 +11,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/pkg/cachex"
 	"github.com/samber/hot"
+	"github.com/shopspring/decimal" // custom: invite rebate — for subscription rebate calculation
 	"gorm.io/gorm"
 )
 
@@ -567,6 +568,17 @@ func CompleteSubscriptionOrder(tradeNo string, providerPayload string) error {
 	if logUserId > 0 {
 		msg := fmt.Sprintf("订阅购买成功，套餐: %s，支付金额: %.2f，支付方式: %s", logPlanTitle, logMoney, logPaymentMethod)
 		RecordLog(logUserId, LogTypeTopup, msg)
+	}
+	// custom: invite rebate — subscription payment also triggers rebate
+	if logUserId > 0 && logMoney > 0 {
+		topUp := GetTopUpByTradeNo(tradeNo)
+		if topUp != nil && topUp.Id > 0 {
+			dQuotaPerUnit := decimal.NewFromFloat(common.QuotaPerUnit)
+			rechargeQuota := int(decimal.NewFromFloat(logMoney).Mul(dQuotaPerUnit).IntPart())
+			if err := ProcessInviterReward(logUserId, rechargeQuota, topUp.Id); err != nil {
+				common.SysError("订阅支付处理邀请返利失败: " + err.Error())
+			}
+		}
 	}
 	return nil
 }
