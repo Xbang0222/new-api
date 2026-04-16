@@ -587,7 +587,8 @@ const TopUp = () => {
   useEffect(() => {
     // 始终获取最新用户数据，确保余额等统计信息准确
     getUserQuota().then();
-    setTransferAmount(quotaToDisplayAmount(getQuotaPerUnit()));
+    const minRaw = statusState?.status?.min_aff_transfer_quota || getQuotaPerUnit();
+    setTransferAmount(quotaToDisplayAmount(minRaw));
   }, []);
 
   useEffect(() => {
@@ -730,6 +731,7 @@ const TopUp = () => {
         getQuotaPerUnit={getQuotaPerUnit}
         transferAmount={transferAmount}
         setTransferAmount={setTransferAmount}
+        minTransferQuota={statusState?.status?.min_aff_transfer_quota || 0}
       />
 
       {/* 充值确认模态框 */}
@@ -831,6 +833,7 @@ const TopUp = () => {
           activeSubscriptions={activeSubscriptions}
           allSubscriptions={allSubscriptions}
           reloadSubscriptionSelf={getSubscriptionSelf}
+          onRefreshUserQuota={getUserQuota}
         />
         <InvitationCard
           t={t}

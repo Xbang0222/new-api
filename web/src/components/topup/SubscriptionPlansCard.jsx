@@ -83,7 +83,7 @@ const SubscriptionPlansCard = ({
   allSubscriptions = [],
   reloadSubscriptionSelf,
   withCard = true,
-  userQuota = 0, // custom: wallet subscription payment
+  onRefreshUserQuota, // custom: wallet subscription — refresh balance after wallet payment
 }) => {
   const [open, setOpen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState(null);
@@ -93,9 +93,18 @@ const SubscriptionPlansCard = ({
 
   const epayMethods = useMemo(() => getEpayMethods(payMethods), [payMethods]);
 
+  // custom: wallet subscription — add wallet as first option in the epay dropdown
+  const allPayMethods = useMemo(() => {
+    const walletOpt = {
+      type: 'wallet',
+      name: t('钱包支付'),
+    };
+    return [walletOpt, ...epayMethods];
+  }, [epayMethods, t]);
+
   const openBuy = (p) => {
     setSelectedPlan(p);
-    setSelectedEpayMethod(epayMethods?.[0]?.type || '');
+    setSelectedEpayMethod(allPayMethods?.[0]?.type || '');
     setOpen(true);
   };
 
@@ -175,6 +184,8 @@ const SubscriptionPlansCard = ({
       showError(t('请选择支付方式'));
       return;
     }
+    // custom: wallet subscription — intercept wallet selection
+    if (selectedEpayMethod === 'wallet') return payWallet();
     setPaying(true);
     try {
       const res = await API.post('/api/subscription/epay/pay', {
@@ -210,6 +221,7 @@ const SubscriptionPlansCard = ({
         showSuccess(t('订阅购买成功'));
         closeBuy();
         await reloadSubscriptionSelf?.();
+        await onRefreshUserQuota?.(); // custom: wallet subscription — refresh balance
       } else {
         const errorMsg =
           typeof res.data?.data === 'string'
@@ -695,7 +707,7 @@ const SubscriptionPlansCard = ({
         paying={paying}
         selectedEpayMethod={selectedEpayMethod}
         setSelectedEpayMethod={setSelectedEpayMethod}
-        epayMethods={epayMethods}
+        epayMethods={allPayMethods}
         enableOnlineTopUp={enableOnlineTopUp}
         enableStripeTopUp={enableStripeTopUp}
         enableCreemTopUp={enableCreemTopUp}
@@ -710,8 +722,6 @@ const SubscriptionPlansCard = ({
         onPayStripe={payStripe}
         onPayCreem={payCreem}
         onPayEpay={payEpay}
-        onPayWallet={payWallet}
-        userQuota={userQuota}
       />
     </>
   );

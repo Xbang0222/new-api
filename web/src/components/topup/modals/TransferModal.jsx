@@ -33,9 +33,11 @@ const TransferModal = ({
   getQuotaPerUnit,
   transferAmount,
   setTransferAmount,
+  minTransferQuota = 0, // custom: invite rebate anti-abuse — admin-configured minimum (raw quota)
 }) => {
   const { symbol } = getCurrencyConfig();
-  const minDisplay = quotaToDisplayAmount(getQuotaPerUnit());
+  const minRaw = minTransferQuota > 0 ? minTransferQuota : getQuotaPerUnit();
+  const minDisplay = quotaToDisplayAmount(minRaw);
   const maxDisplay = quotaToDisplayAmount(userState?.user?.aff_quota || 0);
 
   return (

@@ -28,12 +28,11 @@ import {
   Divider,
   Tooltip,
 } from '@douyinfe/semi-ui';
-import { Crown, CalendarClock, Package, Wallet } from 'lucide-react';
+import { Crown, CalendarClock, Package } from 'lucide-react';
 import { SiStripe } from 'react-icons/si';
 import { IconCreditCard } from '@douyinfe/semi-icons';
 import { renderQuota } from '../../../helpers';
 import { getCurrencyConfig } from '../../../helpers/render';
-import { displayAmountToQuota } from '../../../helpers/quota'; // custom: wallet subscription payment
 import {
   formatSubscriptionDuration,
   formatSubscriptionResetPeriod,
@@ -57,8 +56,6 @@ const SubscriptionPurchaseModal = ({
   onPayStripe,
   onPayCreem,
   onPayEpay,
-  onPayWallet, // custom: wallet subscription payment
-  userQuota = 0, // custom: wallet subscription payment
 }) => {
   const plan = selectedPlan?.plan;
   const totalAmount = Number(plan?.total_amount || 0);
@@ -73,9 +70,6 @@ const SubscriptionPurchaseModal = ({
   const hasCreem = enableCreemTopUp && !!plan?.creem_product_id;
   const hasEpay = enableOnlineTopUp && epayMethods.length > 0;
   const hasAnyPayment = hasStripe || hasCreem || hasEpay;
-  // custom: wallet subscription payment — check wallet balance against plan price
-  const quotaCost = displayAmountToQuota(price);
-  const walletSufficient = userQuota >= quotaCost;
   const purchaseLimit = Number(purchaseLimitInfo?.limit || 0);
   const purchaseCount = Number(purchaseLimitInfo?.count || 0);
   const purchaseLimitReached =
@@ -185,27 +179,15 @@ const SubscriptionPurchaseModal = ({
             />
           )}
 
-          {(hasAnyPayment || (price > 0 && onPayWallet)) ? (
+          {hasAnyPayment ? (
             <div className='space-y-3'>
               <Text size='small' type='tertiary'>
                 {t('选择支付方式')}：
               </Text>
 
-              {/* Stripe / Creem / Wallet — custom: wallet subscription payment */}
-              {(hasStripe || hasCreem || (price > 0 && onPayWallet)) && (
+              {/* Stripe / Creem */}
+              {(hasStripe || hasCreem) && (
                 <div className='flex gap-2 flex-wrap'>
-                  {price > 0 && onPayWallet && (
-                    <Button
-                      theme='light'
-                      className='flex-1'
-                      icon={<Wallet size={14} />}
-                      onClick={onPayWallet}
-                      loading={paying}
-                      disabled={purchaseLimitReached || !walletSufficient}
-                    >
-                      {t('钱包支付')}
-                    </Button>
-                  )}
                   {hasStripe && (
                     <Button
                       theme='light'
@@ -231,11 +213,6 @@ const SubscriptionPurchaseModal = ({
                     </Button>
                   )}
                 </div>
-              )}
-              {price > 0 && onPayWallet && !walletSufficient && !purchaseLimitReached && (
-                <Text size='small' type='warning'>
-                  {t('钱包余额不足，请先充值')} ({renderQuota(userQuota)})
-                </Text>
               )}
 
               {/* 易支付 */}

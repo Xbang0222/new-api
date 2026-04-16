@@ -97,6 +97,7 @@ const RechargeCard = ({
   activeSubscriptions = [],
   allSubscriptions = [],
   reloadSubscriptionSelf,
+  onRefreshUserQuota, // custom: wallet subscription — refresh balance after wallet payment
 }) => {
   const onlineFormApiRef = useRef(null);
   const redeemFormApiRef = useRef(null);
@@ -684,7 +685,7 @@ const RechargeCard = ({
                 allSubscriptions={allSubscriptions}
                 reloadSubscriptionSelf={reloadSubscriptionSelf}
                 withCard={false}
-                userQuota={userState?.user?.quota || 0}
+                onRefreshUserQuota={onRefreshUserQuota}
               />
             </div>
           </TabPane>
