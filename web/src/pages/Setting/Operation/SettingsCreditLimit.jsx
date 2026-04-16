@@ -27,6 +27,10 @@ import {
   showWarning,
   getCurrencyConfig,
 } from '../../../helpers';
+import {
+  quotaToDisplayAmount,
+  displayAmountToQuota,
+} from '../../../helpers/quota'; // custom: invite rebate — canonical quota ↔ currency conversion
 
 // custom: invite rebate (PR #3495) — keys this component manages
 const FIELD_KEYS = [
@@ -44,23 +48,6 @@ const BOOLEAN_KEYS = new Set(['quota_setting.enable_free_model_pre_consume']);
 
 // custom: invite rebate anti-abuse — fields that need quota ↔ currency conversion on load/save
 const QUOTA_TO_DOLLAR_KEYS = new Set(['MinAffTransferQuota']);
-
-function getQuotaPerUnit() {
-  const v = parseFloat(localStorage.getItem('quota_per_unit'));
-  return v > 0 ? v : 500000;
-}
-
-/** Convert raw quota → display currency amount */
-function quotaToDisplay(rawQuota) {
-  const { rate } = getCurrencyConfig();
-  return (rawQuota / getQuotaPerUnit()) * rate;
-}
-
-/** Convert display currency amount → raw quota */
-function displayToQuota(displayAmount) {
-  const { rate } = getCurrencyConfig();
-  return Math.round((displayAmount / rate) * getQuotaPerUnit());
-}
 
 export default function SettingsCreditLimit(props) {
   const { t } = useTranslation();
@@ -99,12 +86,27 @@ export default function SettingsCreditLimit(props) {
 
     if (!updateArray.length) return showWarning(t('你似乎并没有修改什么'));
 
+    // custom: invite rebate — when InviterRewardType changes, force-include InviterRewardValue
+    // because switching types changes the semantic meaning of the value (currency vs percentage)
+    const typeChanged = updateArray.some(
+      (item) => item.key === 'InviterRewardType',
+    );
+    const valueIncluded = updateArray.some(
+      (item) => item.key === 'InviterRewardValue',
+    );
+    if (typeChanged && !valueIncluded) {
+      updateArray.push({
+        key: 'InviterRewardValue',
+        value: current.InviterRewardValue,
+      });
+    }
+
     // custom: invite rebate (PR #3495) — validate rebate value range
     const rewardValueEntry = updateArray.find(
       (item) => item.key === 'InviterRewardValue',
     );
     if (rewardValueEntry) {
-      const rewardValue = parseInt(rewardValueEntry.value);
+      const rewardValue = parseFloat(rewardValueEntry.value);
       const currentType = current.InviterRewardType;
       if (isNaN(rewardValue)) {
         showError(t('充值返利值必须是有效的数字'));
@@ -128,7 +130,14 @@ export default function SettingsCreditLimit(props) {
       // custom: invite rebate anti-abuse — convert currency input to raw quota for storage
       if (QUOTA_TO_DOLLAR_KEYS.has(item.key)) {
         const numVal = parseFloat(value) || 0;
-        value = String(displayToQuota(numVal));
+        value = String(displayAmountToQuota(numVal));
+      } else if (
+        // custom: invite rebate — convert InviterRewardValue from display currency to raw quota in fixed mode
+        item.key === 'InviterRewardValue' &&
+        current.InviterRewardType === 'fixed'
+      ) {
+        const numVal = parseFloat(value) || 0;
+        value = String(displayAmountToQuota(numVal));
       }
       return API.put('/api/option/', { key: item.key, value });
     });
@@ -159,13 +168,19 @@ export default function SettingsCreditLimit(props) {
         // custom: invite rebate anti-abuse — convert raw quota to display currency
         if (QUOTA_TO_DOLLAR_KEYS.has(key)) {
           const numVal = parseFloat(val) || 0;
-          val = numVal > 0 ? String(quotaToDisplay(numVal)) : '0';
+          val = numVal > 0 ? String(quotaToDisplayAmount(numVal)) : '0';
         }
         currentInputs[key] = val;
       }
     }
+    // custom: invite rebate — convert InviterRewardValue from raw quota to display currency in fixed mode
+    const loadedType = currentInputs.InviterRewardType || '';
+    if (loadedType === 'fixed') {
+      const numVal = parseFloat(currentInputs.InviterRewardValue) || 0;
+      currentInputs.InviterRewardValue = String(quotaToDisplayAmount(numVal));
+    }
     savedValues.current = structuredClone(currentInputs);
-    setRewardType(currentInputs.InviterRewardType || ''); // custom: invite rebate (PR #3495)
+    setRewardType(loadedType); // custom: invite rebate (PR #3495)
     if (refForm.current) {
       refForm.current.setValues(currentInputs);
     }
@@ -250,7 +265,14 @@ export default function SettingsCreditLimit(props) {
                     '设置被邀请人充值时，邀请人获得返利的类型。留空表示关闭返利功能',
                   )}
                   placeholder={t('关闭（不启用返利）')}
-                  onChange={(value) => setRewardType(value || '')}
+                  onChange={(value) => {
+                    const newType = value || '';
+                    // custom: invite rebate — reset value when switching types (units change)
+                    if (newType !== rewardType && refForm.current) {
+                      refForm.current.setValue('InviterRewardValue', '');
+                    }
+                    setRewardType(newType);
+                  }}
                   showClear
                 >
                   <Select.Option value='fixed'>{t('固定额度')}</Select.Option>
@@ -266,10 +288,10 @@ export default function SettingsCreditLimit(props) {
                     (rewardType === 'percentage' ? ' (%)' : '')
                   }
                   field={'InviterRewardValue'}
-                  step={1}
+                  step={rewardType === 'percentage' ? 1 : 0.5}
                   min={0}
                   max={rewardType === 'percentage' ? 100 : undefined}
-                  suffix={rewardType === 'percentage' ? '%' : 'Token'}
+                  suffix={rewardType === 'percentage' ? '%' : currencySymbol}
                   extraText={
                     rewardType === 'percentage'
                       ? t(
@@ -280,7 +302,7 @@ export default function SettingsCreditLimit(props) {
                   placeholder={
                     rewardType === 'percentage'
                       ? t('例如：10（表示10%）')
-                      : t('例如：2000')
+                      : t('例如：2')
                   }
                   disabled={!rewardType}
                 />
