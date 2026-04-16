@@ -667,6 +667,7 @@ const RechargeCard = ({
                 allSubscriptions={allSubscriptions}
                 reloadSubscriptionSelf={reloadSubscriptionSelf}
                 withCard={false}
+                userQuota={userState?.user?.quota || 0}
               />
             </div>
           </TabPane>

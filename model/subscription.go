@@ -1208,3 +1208,91 @@ func PostConsumeUserSubscriptionDelta(userSubscriptionId int, delta int64) error
 		return tx.Save(&sub).Error
 	})
 }
+
+// custom: wallet subscription payment
+// PurchaseSubscriptionWithWallet purchases a subscription using the user's wallet balance.
+// All operations run in a single transaction for atomicity.
+func PurchaseSubscriptionWithWallet(userId int, plan *SubscriptionPlan, quotaCost int) error {
+	tradeNo := fmt.Sprintf("SUBWLT%d%s%d", userId, common.GetRandomString(6), common.GetTimestamp())
+	now := common.GetTimestamp()
+
+	var logPlanTitle string
+	var logMoney float64
+	var upgradeGroup string
+
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		// 1. Lock user row and check balance
+		var user User
+		if err := tx.Set("gorm:query_option", "FOR UPDATE").First(&user, userId).Error; err != nil {
+			return errors.New("查询用户失败")
+		}
+		if user.Quota < quotaCost {
+			return errors.New("钱包余额不足，请先充值")
+		}
+
+		// 2. Check purchase limit within transaction
+		if plan.MaxPurchasePerUser > 0 {
+			var count int64
+			if err := tx.Model(&UserSubscription{}).
+				Where("user_id = ? AND plan_id = ?", userId, plan.Id).
+				Count(&count).Error; err != nil {
+				return err
+			}
+			if count >= int64(plan.MaxPurchasePerUser) {
+				return errors.New("已达到该套餐购买上限")
+			}
+		}
+
+		// 3. Deduct wallet balance
+		if err := tx.Model(&User{}).Where("id = ?", userId).
+			Update("quota", gorm.Expr("quota - ?", quotaCost)).Error; err != nil {
+			return errors.New("扣除余额失败")
+		}
+
+		// 4. Create subscription order (status=success, synchronous payment)
+		order := &SubscriptionOrder{
+			UserId:        userId,
+			PlanId:        plan.Id,
+			Money:         plan.PriceAmount,
+			TradeNo:       tradeNo,
+			PaymentMethod: "wallet",
+			CreateTime:    now,
+			CompleteTime:  now,
+			Status:        common.TopUpStatusSuccess,
+		}
+		if err := tx.Create(order).Error; err != nil {
+			return errors.New("创建订单失败")
+		}
+
+		// 5. Create user subscription
+		upgradeGroup = strings.TrimSpace(plan.UpgradeGroup)
+		if _, err := CreateUserSubscriptionFromPlanTx(tx, userId, plan, "order"); err != nil {
+			return errors.New("创建订阅失败")
+		}
+
+		// 6. Create TopUp record for billing history
+		if err := upsertSubscriptionTopUpTx(tx, order); err != nil {
+			return errors.New("创建充值记录失败")
+		}
+
+		logPlanTitle = plan.Title
+		logMoney = plan.PriceAmount
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	// Post-transaction: update caches and log (non-critical)
+	if err := cacheDecrUserQuota(userId, int64(quotaCost)); err != nil {
+		common.SysLog("failed to update user quota cache after wallet subscription: " + err.Error())
+	}
+	if upgradeGroup != "" {
+		_ = UpdateUserGroupCache(userId, upgradeGroup)
+	}
+	msg := fmt.Sprintf("订阅购买成功（钱包支付），套餐: %s，扣除金额: %.2f，支付方式: 钱包", logPlanTitle, logMoney)
+	RecordLog(userId, LogTypeTopup, msg)
+
+	// Note: wallet payment does NOT trigger invite rebate (funds already earned rebate at top-up time)
+	return nil
+}

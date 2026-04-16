@@ -28,11 +28,12 @@ import {
   Divider,
   Tooltip,
 } from '@douyinfe/semi-ui';
-import { Crown, CalendarClock, Package } from 'lucide-react';
+import { Crown, CalendarClock, Package, Wallet } from 'lucide-react';
 import { SiStripe } from 'react-icons/si';
 import { IconCreditCard } from '@douyinfe/semi-icons';
 import { renderQuota } from '../../../helpers';
 import { getCurrencyConfig } from '../../../helpers/render';
+import { displayAmountToQuota } from '../../../helpers/quota'; // custom: wallet subscription payment
 import {
   formatSubscriptionDuration,
   formatSubscriptionResetPeriod,
@@ -56,6 +57,8 @@ const SubscriptionPurchaseModal = ({
   onPayStripe,
   onPayCreem,
   onPayEpay,
+  onPayWallet, // custom: wallet subscription payment
+  userQuota = 0, // custom: wallet subscription payment
 }) => {
   const plan = selectedPlan?.plan;
   const totalAmount = Number(plan?.total_amount || 0);
@@ -70,6 +73,9 @@ const SubscriptionPurchaseModal = ({
   const hasCreem = enableCreemTopUp && !!plan?.creem_product_id;
   const hasEpay = enableOnlineTopUp && epayMethods.length > 0;
   const hasAnyPayment = hasStripe || hasCreem || hasEpay;
+  // custom: wallet subscription payment — check wallet balance against plan price
+  const quotaCost = displayAmountToQuota(price);
+  const walletSufficient = userQuota >= quotaCost;
   const purchaseLimit = Number(purchaseLimitInfo?.limit || 0);
   const purchaseCount = Number(purchaseLimitInfo?.count || 0);
   const purchaseLimitReached =
@@ -179,11 +185,35 @@ const SubscriptionPurchaseModal = ({
             />
           )}
 
-          {hasAnyPayment ? (
+          {hasAnyPayment || price > 0 ? (
             <div className='space-y-3'>
               <Text size='small' type='tertiary'>
                 {t('选择支付方式')}：
               </Text>
+
+              {/* custom: wallet subscription payment */}
+              {price > 0 && onPayWallet && (
+                <div>
+                  <Button
+                    theme='light'
+                    className='w-full'
+                    icon={<Wallet size={14} />}
+                    onClick={onPayWallet}
+                    loading={paying}
+                    disabled={purchaseLimitReached || !walletSufficient}
+                  >
+                    {t('钱包支付')}
+                    {' ('}
+                    {t('余额')}: {renderQuota(userQuota)}
+                    {')'}
+                  </Button>
+                  {!walletSufficient && !purchaseLimitReached && (
+                    <Text size='small' type='warning' className='mt-1 block'>
+                      {t('钱包余额不足，请先充值')}
+                    </Text>
+                  )}
+                </div>
+              )}
 
               {/* Stripe / Creem */}
               {(hasStripe || hasCreem) && (
@@ -242,14 +272,14 @@ const SubscriptionPurchaseModal = ({
                 </div>
               )}
             </div>
-          ) : (
+          ) : price <= 0 ? (
             <Banner
               type='info'
               description={t('管理员未开启在线支付功能，请联系管理员配置。')}
               className='!rounded-xl'
               closeIcon={null}
             />
-          )}
+          ) : null}
         </div>
       ) : null}
     </Modal>

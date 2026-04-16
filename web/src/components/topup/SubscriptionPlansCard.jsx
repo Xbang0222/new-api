@@ -83,6 +83,7 @@ const SubscriptionPlansCard = ({
   allSubscriptions = [],
   reloadSubscriptionSelf,
   withCard = true,
+  userQuota = 0, // custom: wallet subscription payment
 }) => {
   const [open, setOpen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState(null);
@@ -184,6 +185,31 @@ const SubscriptionPlansCard = ({
         submitEpayForm({ url: res.data.url, params: res.data.data });
         showSuccess(t('已发起支付'));
         closeBuy();
+      } else {
+        const errorMsg =
+          typeof res.data?.data === 'string'
+            ? res.data.data
+            : res.data?.message || t('支付失败');
+        showError(errorMsg);
+      }
+    } catch (e) {
+      showError(t('支付请求失败'));
+    } finally {
+      setPaying(false);
+    }
+  };
+
+  // custom: wallet subscription payment
+  const payWallet = async () => {
+    setPaying(true);
+    try {
+      const res = await API.post('/api/subscription/wallet/pay', {
+        plan_id: selectedPlan.plan.id,
+      });
+      if (res.data?.message === 'success') {
+        showSuccess(t('订阅购买成功'));
+        closeBuy();
+        await reloadSubscriptionSelf?.();
       } else {
         const errorMsg =
           typeof res.data?.data === 'string'
@@ -684,6 +710,8 @@ const SubscriptionPlansCard = ({
         onPayStripe={payStripe}
         onPayCreem={payCreem}
         onPayEpay={payEpay}
+        onPayWallet={payWallet}
+        userQuota={userQuota}
       />
     </>
   );
