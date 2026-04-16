@@ -20,6 +20,8 @@ For commercial licensing, please contact support@quantumnous.com
 import React from 'react';
 import { Modal, Typography, Input, InputNumber } from '@douyinfe/semi-ui';
 import { CreditCard } from 'lucide-react';
+import { quotaToDisplayAmount } from '../../../helpers/quota';
+import { getCurrencyConfig } from '../../../helpers/render';
 
 const TransferModal = ({
   t,
@@ -32,6 +34,10 @@ const TransferModal = ({
   transferAmount,
   setTransferAmount,
 }) => {
+  const { symbol } = getCurrencyConfig();
+  const minDisplay = quotaToDisplayAmount(getQuotaPerUnit());
+  const maxDisplay = quotaToDisplayAmount(userState?.user?.aff_quota || 0);
+
   return (
     <Modal
       title={
@@ -59,13 +65,16 @@ const TransferModal = ({
         </div>
         <div>
           <Typography.Text strong className='block mb-2'>
-            {t('划转额度')} · {t('最低') + renderQuota(getQuotaPerUnit())}
+            {t('划转额度')} · {t('最低') + ' ' + symbol + minDisplay.toFixed(2)}
           </Typography.Text>
           <InputNumber
-            min={getQuotaPerUnit()}
-            max={userState?.user?.aff_quota || 0}
+            min={minDisplay}
+            max={maxDisplay}
+            step={0.5}
+            precision={2}
             value={transferAmount}
             onChange={(value) => setTransferAmount(value)}
+            suffix={symbol}
             className='w-full !rounded-lg'
           />
         </div>

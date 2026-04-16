@@ -201,7 +201,8 @@ func GetAvailableTopUpsForInvoice(userId int, pageInfo *common.PageInfo) ([]*Top
 
 	query := DB.Model(&TopUp{}).
 		Where("user_id = ? AND status = ?", userId, common.TopUpStatusSuccess).
-		Where("id NOT IN (?)", subQuery)
+		Where("id NOT IN (?)", subQuery).
+		Where("payment_method IS NULL OR payment_method != ?", "wallet") // custom: wallet subscription — exclude wallet spending from invoicing
 
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err

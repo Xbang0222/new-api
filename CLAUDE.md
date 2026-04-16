@@ -150,7 +150,7 @@ This project is a fork maintained on the `ruoli` branch. Upstream (`QuantumNous/
 
 | Layer | Files |
 |-------|-------|
-| Backend | `controller/invoice.go`, `service/invoice.go`, `model/invoice.go`, `dto/invoice.go`, `router/invoice-router.go`, `setting/operation_setting/invoice_setting.go`, `controller/usedata_custom.go`, `model/usedata_custom.go` |
+| Backend | `controller/invoice.go`, `service/invoice.go`, `model/invoice.go`, `dto/invoice.go`, `router/invoice-router.go`, `setting/operation_setting/invoice_setting.go`, `controller/usedata_custom.go`, `model/usedata_custom.go`, `controller/subscription_payment_wallet.go` |
 | Frontend pages | `pages/Invoice/`, `pages/InvoiceAdmin/`, `pages/Billing/` |
 | Frontend components | `components/billing/InvoiceApplicationModal.jsx`, `components/invoice/InvoiceHeaderManager.jsx`, `components/settings/InvoiceSetting.jsx` |
 | Helpers & constants | `helpers/brand.js`, `helpers/invoice.js`, `helpers/headerNavModules.js`, `constants/invoice.constants.js`, `constants/dashboard.constants.js` |
@@ -185,6 +185,7 @@ When modifying upstream files is unavoidable, follow these rules:
 | `custom: invite rebate anti-abuse` | 邀请返利防薅羊毛（可配置划转门槛） |
 | `custom: token ranking` | Token 消耗排行榜（所有用户可见） |
 | `custom: affinity evict` | 渠道亲和性缓存：禁用渠道时自动清除并 fallback |
+| `custom: wallet subscription` | 订阅支持钱包余额支付 |
 
 **Behavioral changes** (modifying existing upstream logic, not just adding new code) MUST include a block comment explaining:
 - What the original logic was
@@ -215,6 +216,10 @@ When modifying upstream files is unavoidable, follow these rules:
 | `web/src/pages/Setting/Operation/SettingsCreditLimit.jsx` | +115 lines (invite rebate settings UI) | Medium |
 | `middleware/distributor.go` | 4-line behavioral change (affinity evict on disabled channel) | Low |
 | `service/channel_affinity.go` | +21 lines (EvictChannelAffinityCache function) | Low |
+| `model/subscription.go` | +85 lines (PurchaseSubscriptionWithWallet function) | Low |
+| `web/src/components/topup/modals/SubscriptionPurchaseModal.jsx` | +35 lines (wallet payment button) | Medium |
+| `web/src/components/topup/SubscriptionPlansCard.jsx` | +30 lines (payWallet handler) | Medium |
+| `web/src/components/topup/RechargeCard.jsx` | +1 line (pass userQuota prop) | Low |
 
 #### 7.3 i18n — Avoid Key Collisions
 

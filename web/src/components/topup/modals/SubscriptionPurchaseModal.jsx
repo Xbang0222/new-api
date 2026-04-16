@@ -185,39 +185,27 @@ const SubscriptionPurchaseModal = ({
             />
           )}
 
-          {hasAnyPayment || price > 0 ? (
+          {(hasAnyPayment || (price > 0 && onPayWallet)) ? (
             <div className='space-y-3'>
               <Text size='small' type='tertiary'>
                 {t('选择支付方式')}：
               </Text>
 
-              {/* custom: wallet subscription payment */}
-              {price > 0 && onPayWallet && (
-                <div>
-                  <Button
-                    theme='light'
-                    className='w-full'
-                    icon={<Wallet size={14} />}
-                    onClick={onPayWallet}
-                    loading={paying}
-                    disabled={purchaseLimitReached || !walletSufficient}
-                  >
-                    {t('钱包支付')}
-                    {' ('}
-                    {t('余额')}: {renderQuota(userQuota)}
-                    {')'}
-                  </Button>
-                  {!walletSufficient && !purchaseLimitReached && (
-                    <Text size='small' type='warning' className='mt-1 block'>
-                      {t('钱包余额不足，请先充值')}
-                    </Text>
+              {/* Stripe / Creem / Wallet — custom: wallet subscription payment */}
+              {(hasStripe || hasCreem || (price > 0 && onPayWallet)) && (
+                <div className='flex gap-2 flex-wrap'>
+                  {price > 0 && onPayWallet && (
+                    <Button
+                      theme='light'
+                      className='flex-1'
+                      icon={<Wallet size={14} />}
+                      onClick={onPayWallet}
+                      loading={paying}
+                      disabled={purchaseLimitReached || !walletSufficient}
+                    >
+                      {t('钱包支付')}
+                    </Button>
                   )}
-                </div>
-              )}
-
-              {/* Stripe / Creem */}
-              {(hasStripe || hasCreem) && (
-                <div className='flex gap-2'>
                   {hasStripe && (
                     <Button
                       theme='light'
@@ -243,6 +231,11 @@ const SubscriptionPurchaseModal = ({
                     </Button>
                   )}
                 </div>
+              )}
+              {price > 0 && onPayWallet && !walletSufficient && !purchaseLimitReached && (
+                <Text size='small' type='warning'>
+                  {t('钱包余额不足，请先充值')} ({renderQuota(userQuota)})
+                </Text>
               )}
 
               {/* 易支付 */}
@@ -272,14 +265,14 @@ const SubscriptionPurchaseModal = ({
                 </div>
               )}
             </div>
-          ) : price <= 0 ? (
+          ) : (
             <Banner
               type='info'
               description={t('管理员未开启在线支付功能，请联系管理员配置。')}
               className='!rounded-xl'
               closeIcon={null}
             />
-          ) : null}
+          )}
         </div>
       ) : null}
     </Modal>
