@@ -587,7 +587,8 @@ const TopUp = () => {
   useEffect(() => {
     // 始终获取最新用户数据，确保余额等统计信息准确
     getUserQuota().then();
-    const minRaw = statusState?.status?.min_aff_transfer_quota || getQuotaPerUnit();
+    const minRaw =
+      statusState?.status?.min_aff_transfer_quota || getQuotaPerUnit();
     setTransferAmount(quotaToDisplayAmount(minRaw));
   }, []);
 

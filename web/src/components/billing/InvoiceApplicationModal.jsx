@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Modal,
@@ -30,7 +30,8 @@ const InvoiceApplicationModal = ({
 
   // 可开票的充值记录
   const [availableTopUps, setAvailableTopUps] = useState([]);
-  const [selectedRowKeys, setSelectedRowKeys] = useState([]);
+  // 跨页选中缓存：id -> TopUp（含 money），作为选中状态的 single source of truth
+  const [selectedTopUpMap, setSelectedTopUpMap] = useState(() => new Map());
   const [topUpPage, setTopUpPage] = useState(1);
   const [topUpTotal, setTopUpTotal] = useState(0);
 
@@ -108,12 +109,44 @@ const InvoiceApplicationModal = ({
     }
   };
 
-  const selectedTopUps = availableTopUps.filter((t) =>
-    selectedRowKeys.includes(t.id),
+  // 从缓存派生：驱动 Semi Table 的行高亮 + 提交时的 topup_ids
+  const selectedRowKeys = useMemo(
+    () => Array.from(selectedTopUpMap.keys()),
+    [selectedTopUpMap],
   );
-  const selectedAmount = selectedTopUps.reduce(
-    (sum, t) => sum + Number(t.money || 0),
-    0,
+
+  // 跨页累计金额
+  const selectedAmount = useMemo(() => {
+    let sum = 0;
+    for (const t of selectedTopUpMap.values()) {
+      const v = Number(t.money);
+      if (Number.isFinite(v)) sum += v;
+    }
+    return sum;
+  }, [selectedTopUpMap]);
+
+  // 只对"当前页的选中差异"应用到缓存，不影响其他页已选项
+  const handleTopUpSelectionChange = useCallback(
+    (newSelectedRowKeys) => {
+      const currentPageIds = new Set(availableTopUps.map((t) => t.id));
+      const nextPageSelected = new Set(newSelectedRowKeys);
+
+      setSelectedTopUpMap((prev) => {
+        const next = new Map(prev);
+        for (const id of currentPageIds) {
+          if (!nextPageSelected.has(id)) {
+            next.delete(id);
+          }
+        }
+        for (const topup of availableTopUps) {
+          if (nextPageSelected.has(topup.id)) {
+            next.set(topup.id, topup);
+          }
+        }
+        return next;
+      });
+    },
+    [availableTopUps],
   );
 
   const handleSubmit = async () => {
@@ -215,7 +248,7 @@ const InvoiceApplicationModal = ({
           rowKey='id'
           rowSelection={{
             selectedRowKeys,
-            onChange: setSelectedRowKeys,
+            onChange: handleTopUpSelectionChange,
           }}
           pagination={
             topUpTotal > 10
