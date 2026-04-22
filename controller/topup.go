@@ -508,16 +508,15 @@ func AdminCompleteTopUp(c *gin.Context) {
 	LockOrder(req.TradeNo)
 	defer UnlockOrder(req.TradeNo)
 
-	// custom: invite rebate (PR #3495) — use new return values for rebate processing
-	completed, creditedQuota, topUpId, topUpUserId, err := model.ManualCompleteTopUp(req.TradeNo, c.ClientIP())
+	// custom: invite rebate (PR #3495) — ManualCompleteResult 仅在 Completed=true 时用于触发返利
+	result, err := model.ManualCompleteTopUp(req.TradeNo, c.ClientIP())
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
 
-	// 只有真正从非成功切换到成功时才触发返利
-	if completed && creditedQuota > 0 {
-		if err := model.ProcessInviterReward(topUpUserId, creditedQuota, topUpId); err != nil {
+	if result.Completed && result.CreditedQuota > 0 {
+		if err := model.ProcessInviterReward(result.UserID, result.CreditedQuota, result.TopUpID); err != nil {
 			logger.LogError(c.Request.Context(), fmt.Sprintf("管理员补单处理邀请返利失败: %v", err))
 		}
 	}

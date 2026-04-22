@@ -38,6 +38,17 @@ var (
 	ErrTopUpStatusInvalid    = errors.New("topup status invalid")
 )
 
+// ManualCompleteResult 管理员补单的结果。
+// 当 Completed=false（订单已是 Success，幂等命中）时，其他字段不应被使用。
+//
+// custom: invite rebate (PR #3495) — 调用方仅当 Completed=true 时才应触发邀请返利等后续动作。
+type ManualCompleteResult struct {
+	Completed     bool
+	CreditedQuota int
+	TopUpID       int
+	UserID        int
+}
+
 func (topUp *TopUp) Insert() error {
 	var err error
 	err = DB.Create(topUp).Error
@@ -307,11 +318,12 @@ func SearchAllTopUps(keyword string, pageInfo *common.PageInfo) (topups []*TopUp
 	return topups, total, nil
 }
 
-// custom: invite rebate (PR #3495) — changed signature to return completion status for rebate processing
-// ManualCompleteTopUp 管理员手动完成订单并给用户充值
-func ManualCompleteTopUp(tradeNo string, callerIp string) (completed bool, creditedQuota int, topUpId int, topUpUserId int, err error) {
+// ManualCompleteTopUp 管理员手动完成订单并给用户充值。
+//
+// custom: invite rebate (PR #3495) — 返回 ManualCompleteResult 用于邀请返利处理。
+func ManualCompleteTopUp(tradeNo, callerIp string) (ManualCompleteResult, error) {
 	if tradeNo == "" {
-		return false, 0, 0, 0, errors.New("未提供订单号")
+		return ManualCompleteResult{}, errors.New("未提供订单号")
 	}
 
 	refCol := "`trade_no`"
@@ -326,7 +338,7 @@ func ManualCompleteTopUp(tradeNo string, callerIp string) (completed bool, credi
 	var orderId int
 	var paymentMethod string
 
-	err = DB.Transaction(func(tx *gorm.DB) error {
+	err := DB.Transaction(func(tx *gorm.DB) error {
 		topUp := &TopUp{}
 		// 行级锁，避免并发补单
 		if err := tx.Set("gorm:query_option", "FOR UPDATE").Where(refCol+" = ?", tradeNo).First(topUp).Error; err != nil {
@@ -382,14 +394,19 @@ func ManualCompleteTopUp(tradeNo string, callerIp string) (completed bool, credi
 	})
 
 	if err != nil {
-		return false, 0, 0, 0, err
+		return ManualCompleteResult{}, err
 	}
 
 	if orderCompleted {
 		// 事务外记录日志，避免阻塞
 		RecordTopupLog(userId, fmt.Sprintf("管理员补单成功，充值金额: %v，支付金额：%f", logger.FormatQuota(quotaToAdd), payMoney), callerIp, paymentMethod, "admin")
 	}
-	return orderCompleted, quotaToAdd, orderId, userId, nil
+	return ManualCompleteResult{
+		Completed:     orderCompleted,
+		CreditedQuota: quotaToAdd,
+		TopUpID:       orderId,
+		UserID:        userId,
+	}, nil
 }
 func RechargeCreem(referenceId string, customerEmail string, customerName string, callerIp string) (err error) {
 	if referenceId == "" {

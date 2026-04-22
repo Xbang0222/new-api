@@ -12,7 +12,9 @@ import {
   Form,
   Toast,
   Popconfirm,
+  Tooltip,
 } from '@douyinfe/semi-ui';
+import { IconInfoCircle } from '@douyinfe/semi-icons';
 import { InvoiceAPI } from '../../helpers/invoice';
 import { showError, timestamp2string } from '../../helpers';
 import CardPro from '../../components/common/ui/CardPro';
@@ -122,12 +124,9 @@ const InvoiceAdmin = () => {
     {
       title: t('单位名称'),
       dataIndex: 'company_name',
-      width: 180,
+      width: 140,
       render: (text) => (
-        <Typography.Text
-          ellipsis={{ showTooltip: true }}
-          style={{ maxWidth: 160 }}
-        >
+        <Typography.Text ellipsis={{ showTooltip: true }}>
           {text}
         </Typography.Text>
       ),
@@ -135,18 +134,19 @@ const InvoiceAdmin = () => {
     {
       title: t('税号'),
       dataIndex: 'tax_number',
-      width: 180,
+      width: 140,
+      render: (text) => (
+        <Typography.Text copyable ellipsis={{ showTooltip: true }}>
+          {text}
+        </Typography.Text>
+      ),
     },
     {
       title: t('邮箱'),
       dataIndex: 'email',
-      width: 160,
+      width: 200,
       render: (text) => (
-        <Typography.Text
-          copyable
-          ellipsis={{ showTooltip: true }}
-          style={{ maxWidth: 140 }}
-        >
+        <Typography.Text copyable ellipsis={{ showTooltip: true }}>
           {text || '-'}
         </Typography.Text>
       ),
@@ -154,13 +154,13 @@ const InvoiceAdmin = () => {
     {
       title: t('金额'),
       dataIndex: 'amount',
-      width: 100,
+      width: 90,
       render: (val) => `¥ ${Number(val).toFixed(2)}`,
     },
     {
       title: t('状态'),
       dataIndex: 'status',
-      width: 100,
+      width: 80,
       render: (status) => (
         <Tag color={INVOICE_STATUS_COLOR[status]}>
           {t(INVOICE_STATUS_LABEL[status] || '未知')}
@@ -170,12 +170,17 @@ const InvoiceAdmin = () => {
     {
       title: t('申请时间'),
       dataIndex: 'create_time',
-      width: 170,
-      render: (val) => timestamp2string(val),
+      width: 110,
+      render: (val) => {
+        const full = timestamp2string(val);
+        const date = full.split(' ')[0];
+        return <Tooltip content={full}>{date}</Tooltip>;
+      },
     },
     {
       title: t('操作'),
-      width: 180,
+      width: 130,
+      fixed: 'right',
       render: (_, record) => (
         <Space>
           {record.status === INVOICE_STATUS.PENDING && (
@@ -199,13 +204,11 @@ const InvoiceAdmin = () => {
           )}
           {record.status === INVOICE_STATUS.REJECTED &&
             record.reject_reason && (
-              <Typography.Text
-                type='danger'
-                style={{ fontSize: 12 }}
-                ellipsis={{ showTooltip: true }}
-              >
-                {record.reject_reason}
-              </Typography.Text>
+              <Tooltip content={record.reject_reason}>
+                <IconInfoCircle
+                  style={{ color: 'var(--semi-color-danger)', cursor: 'help' }}
+                />
+              </Tooltip>
             )}
         </Space>
       ),
@@ -248,6 +251,7 @@ const InvoiceAdmin = () => {
           loading={loading}
           rowKey='id'
           className='rounded-xl overflow-hidden'
+          scroll={{ x: 'max-content' }}
           pagination={{
             currentPage: page,
             pageSize,
