@@ -30,6 +30,8 @@ data/
 .gocache-temp
 .gopath
 .worktrees/
+.test
+skills-lock.json
 
 token_estimator_test.go
 CLAUDE.local.md
