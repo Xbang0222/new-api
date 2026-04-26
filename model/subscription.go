@@ -601,14 +601,15 @@ func upsertSubscriptionTopUpTx(tx *gorm.DB, order *SubscriptionOrder) error {
 	if err := tx.Where("trade_no = ?", order.TradeNo).First(&topup).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			topup = TopUp{
-				UserId:        order.UserId,
-				Amount:        0,
-				Money:         order.Money,
-				TradeNo:       order.TradeNo,
-				PaymentMethod: order.PaymentMethod,
-				CreateTime:    order.CreateTime,
-				CompleteTime:  now,
-				Status:        common.TopUpStatusSuccess,
+				UserId:          order.UserId,
+				Amount:          0,
+				Money:           order.Money,
+				TradeNo:         order.TradeNo,
+				PaymentMethod:   order.PaymentMethod,
+				PaymentProvider: order.PaymentProvider, // custom: propagate provider for cross-gateway data consistency
+				CreateTime:      order.CreateTime,
+				CompleteTime:    now,
+				Status:          common.TopUpStatusSuccess,
 			}
 			return tx.Create(&topup).Error
 		}
@@ -618,6 +619,12 @@ func upsertSubscriptionTopUpTx(tx *gorm.DB, order *SubscriptionOrder) error {
 	if topup.PaymentMethod == "" {
 		topup.PaymentMethod = order.PaymentMethod
 	} else if topup.PaymentMethod != order.PaymentMethod {
+		return ErrPaymentMethodMismatch
+	}
+	// custom: propagate PaymentProvider with the same mismatch guard as PaymentMethod
+	if topup.PaymentProvider == "" {
+		topup.PaymentProvider = order.PaymentProvider
+	} else if order.PaymentProvider != "" && topup.PaymentProvider != order.PaymentProvider {
 		return ErrPaymentMethodMismatch
 	}
 	if topup.CreateTime == 0 {
@@ -1270,7 +1277,7 @@ func PurchaseSubscriptionWithWallet(userId int, plan *SubscriptionPlan, quotaCos
 			Money:           plan.PriceAmount,
 			TradeNo:         tradeNo,
 			PaymentMethod:   "wallet",
-			PaymentProvider: "wallet", // custom: wallet subscription — guard against future cross-provider checks
+			PaymentProvider: PaymentProviderWallet, // custom: wallet subscription — guard against future cross-provider checks
 			CreateTime:      now,
 			CompleteTime:    now,
 			Status:          common.TopUpStatusSuccess,
