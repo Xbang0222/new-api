@@ -211,12 +211,13 @@ When modifying upstream files is unavoidable, follow these rules:
 | `controller/topup_creem.go` | +6 lines (invite rebate) | Low |
 | `controller/topup_waffo.go` | +13 lines (invite rebate) | Low |
 | `controller/user.go` | +6 lines (invite rebate) | Low |
-| `model/topup.go` | TopUp struct + ManualCompleteTopUp signature change | **Medium** |
+| `model/topup.go` | TopUp struct (InviterRewardSent) + ManualCompleteTopUp signature change + PaymentProviderWallet constant | **Medium** |
 | `model/user.go` | +70 lines ProcessInviterReward + configurable transfer threshold | Low |
 | `web/src/pages/Setting/Operation/SettingsCreditLimit.jsx` | +115 lines (invite rebate settings UI) | Medium |
 | `middleware/distributor.go` | 4-line behavioral change (affinity evict on disabled channel) | Low |
 | `service/channel_affinity.go` | +21 lines (EvictChannelAffinityCache function) | Low |
 | `model/subscription.go` | +85 lines (PurchaseSubscriptionWithWallet function) | Low |
+| `model/subscription.go::upsertSubscriptionTopUpTx` | +6 lines (PaymentProvider 同步, 修补 upstream v0.13.1 helper 缺口) | Low |
 | `web/src/components/topup/modals/SubscriptionPurchaseModal.jsx` | +35 lines (wallet payment button) | Medium |
 | `web/src/components/topup/SubscriptionPlansCard.jsx` | +30 lines (payWallet handler) | Medium |
 | `web/src/components/topup/RechargeCard.jsx` | +1 line (pass userQuota prop) | Low |

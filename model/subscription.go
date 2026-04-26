@@ -621,7 +621,7 @@ func upsertSubscriptionTopUpTx(tx *gorm.DB, order *SubscriptionOrder) error {
 	} else if topup.PaymentMethod != order.PaymentMethod {
 		return ErrPaymentMethodMismatch
 	}
-	// custom: propagate PaymentProvider with the same mismatch guard as PaymentMethod
+	// custom: propagate PaymentProvider; tolerant of empty order.PaymentProvider for legacy data (pre-v0.13.1)
 	if topup.PaymentProvider == "" {
 		topup.PaymentProvider = order.PaymentProvider
 	} else if order.PaymentProvider != "" && topup.PaymentProvider != order.PaymentProvider {
