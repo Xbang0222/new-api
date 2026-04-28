@@ -108,6 +108,8 @@ func Distribute() func(c *gin.Context) {
 							// Original: ShouldSkipRetryAfterChannelAffinityFailure check -> abort with "该渠道已被禁用"
 							// Changed: evict cache + fallthrough; RecordChannelAffinity re-records the new channel.
 							// Revert: restore ShouldSkipRetryAfterChannelAffinityFailure check and abort here.
+							// Note (v0.13.2): EvictChannelAffinityCache already clears SkipRetry inside,
+							// so even if we restored the check, it would always return false post-evict.
 							service.EvictChannelAffinityCache(c)
 							// fall through to CacheGetRandomSatisfiedChannel below
 						} else if usingGroup == "auto" {
