@@ -4176,6 +4176,9 @@
     "默认折叠侧边栏": "Mặc định thu gọn thanh bên",
     "默认测试模型": "Mô hình kiểm tra mặc định",
     "默认用户消息": "Xin chào",
-    "默认补全倍率": "Tỷ lệ hoàn thành mặc định"
+    "默认补全倍率": "Tỷ lệ hoàn thành mặc định",
+    "商城": "Cửa hàng",
+    "商城地址": "URL cửa hàng",
+    "例如 https://shop.example.com，留空不显示按钮": "Ví dụ: https://shop.example.com, để trống để ẩn nút"
   }
 }

@@ -70,6 +70,12 @@ export function setStatusData(data) {
   } else {
     localStorage.removeItem('docs_link');
   }
+  // custom: shop link
+  if (data.shop_link) {
+    localStorage.setItem('shop_link', data.shop_link);
+  } else {
+    localStorage.removeItem('shop_link');
+  }
 }
 
 export function setUserData(data) {

@@ -42,6 +42,7 @@ const HeaderBar = ({ onMobileMenuToggle, drawerOpen }) => {
     isNewYear,
     isSelfUseMode,
     docsLink,
+    shopLink, // custom: shop link
     isDemoSiteMode,
     isConsoleRoute,
     theme,
@@ -68,6 +69,7 @@ const HeaderBar = ({ onMobileMenuToggle, drawerOpen }) => {
     docsLink,
     headerNavModules,
     location.pathname,
+    shopLink, // custom: shop link
   );
 
   return (

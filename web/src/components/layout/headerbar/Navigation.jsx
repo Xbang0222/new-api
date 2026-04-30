@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 
 import React, { useMemo } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Grid2x2, FileText, LayoutGrid } from 'lucide-react';
+import { Grid2x2, FileText, LayoutGrid, ShoppingBag } from 'lucide-react'; // custom: shop link
 import SkeletonWrapper from '../components/SkeletonWrapper';
 
 // custom: brand — redesigned navigation
@@ -57,6 +57,9 @@ const Navigation = ({
     }
     if (itemKey === 'docs') {
       return <FileText size={16} />;
+    }
+    if (itemKey === 'shop') {
+      return <ShoppingBag size={16} />; // custom: shop link
     }
     if (itemKey === 'pricing') {
       return <LayoutGrid size={16} />;

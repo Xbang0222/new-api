@@ -188,6 +188,7 @@ When modifying upstream files is unavoidable, follow these rules:
 | `custom: wallet subscription` | 订阅支持钱包余额支付 |
 | `custom: subscription cycle purchase limit` | 订阅周期限购（窗口计数替代终身计数） |
 | `custom: claude code only` | 渠道级"仅 Claude Code 客户端"白名单（严格 403） |
+| `custom: shop link` | 顶栏"商城"按钮（外链，URL 与 docs_link 同样在通用设置中配置） |
 
 **Behavioral changes** (modifying existing upstream logic, not just adding new code) MUST include a block comment explaining:
 - What the original logic was
@@ -228,6 +229,16 @@ When modifying upstream files is unavoidable, follow these rules:
 | `i18n/locales/{en,zh-CN,zh-TW}.yaml` | +2 lines per file (`distributor.channel_claude_code_only`) | Low |
 | `middleware/distributor.go` | +9 lines guard (claude code only, after channel selected) | Low |
 | `web/src/components/table/channels/modals/EditChannelModal.jsx` | +9 lines (state + load/save/cleanup + Form.Switch) | Medium |
+| `setting/operation_setting/general_setting.go` | +2 lines `ShopLink` field | Low |
+| `controller/misc.go` | +1 line (`shop_link` exposed in /api/status) | Low |
+| `web/src/helpers/data.js` | +5 lines (localStorage shop_link) | Low |
+| `web/src/hooks/common/useHeaderBar.js` | +2 lines (read & expose shopLink) | Low |
+| `web/src/components/layout/headerbar/index.jsx` | +2 lines (destructure & pass shopLink) | Low |
+| `web/src/hooks/common/useNavigation.js` | refactor: ORDER_BY_PAGE lookup + `isSafeExternalUrl` guard + shop link injection | **Medium** |
+| `web/src/components/layout/headerbar/Navigation.jsx` | +5 lines (ShoppingBag icon for shop link) | Low |
+| `web/src/pages/Setting/Operation/SettingsGeneral.jsx` | +12 lines (Form.Input shop_link) | Low |
+| `web/src/components/settings/OperationSetting.jsx` | +1 line (default value) | Low |
+| `web/src/i18n/locales/{fr,ja,ru,vi}.json` | +3 keys per file (商城 / 商城地址 / placeholder) | Low |
 
 #### 7.3 i18n — Avoid Key Collisions
 

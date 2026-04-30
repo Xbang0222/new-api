@@ -3118,6 +3118,9 @@
         "，时间：": "，时间：",
         "，点击更新": "，点击更新",
         "仅允许 Claude Code 客户端": "仅允许 Claude Code 客户端",
-        "开启后，只有来自 Claude Code CLI 的请求才能路由到此渠道，其他客户端一律返回 403。识别依据：User-Agent、X-Claude-Code-Session-Id 头、system 提示词。": "开启后，只有来自 Claude Code CLI 的请求才能路由到此渠道，其他客户端一律返回 403。识别依据：User-Agent、X-Claude-Code-Session-Id 头、system 提示词。"
+        "开启后，只有来自 Claude Code CLI 的请求才能路由到此渠道，其他客户端一律返回 403。识别依据：User-Agent、X-Claude-Code-Session-Id 头、system 提示词。": "开启后，只有来自 Claude Code CLI 的请求才能路由到此渠道，其他客户端一律返回 403。识别依据：User-Agent、X-Claude-Code-Session-Id 头、system 提示词。",
+        "商城": "商城",
+        "商城地址": "商城地址",
+        "例如 https://shop.example.com，留空不显示按钮": "例如 https://shop.example.com，留空不显示按钮"
     }
 }
