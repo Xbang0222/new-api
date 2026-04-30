@@ -38,6 +38,8 @@ import {
   formatSubscriptionDuration,
   formatSubscriptionResetPeriod,
 } from '../../helpers/subscriptionFormat';
+// custom: subscription cycle purchase limit
+import { computePurchaseWindowStart } from '../../helpers/subscription';
 
 const { Text } = Typography;
 
@@ -250,15 +252,31 @@ const SubscriptionPlansCard = ({
   const subscriptionPreferenceLabel =
     billingPreference === 'subscription_only' ? t('仅用订阅') : t('优先订阅');
 
+  // custom: subscription cycle purchase limit
+  // Originally counted every UserSubscription lifetime per plan. We now
+  // restrict counts to the rolling time window that matches the plan's
+  // own duration (mirrors backend `countPurchasesInWindow`), so the
+  // "已达到购买上限 (count/limit)" hint stays consistent with enforcement.
   const planPurchaseCountMap = useMemo(() => {
     const map = new Map();
+    const nowSec = Math.floor(Date.now() / 1000);
+    const windowStartByPlan = new Map();
+    (plans || []).forEach((p) => {
+      const plan = p?.plan;
+      if (!plan?.id) return;
+      windowStartByPlan.set(plan.id, computePurchaseWindowStart(nowSec, plan));
+    });
     (allSubscriptions || []).forEach((sub) => {
-      const planId = sub?.subscription?.plan_id;
+      const s = sub?.subscription;
+      const planId = s?.plan_id;
       if (!planId) return;
+      const windowStart = windowStartByPlan.get(planId) || 0;
+      const createdAt = Number(s?.created_at || 0);
+      if (windowStart > 0 && createdAt > 0 && createdAt < windowStart) return;
       map.set(planId, (map.get(planId) || 0) + 1);
     });
     return map;
-  }, [allSubscriptions]);
+  }, [allSubscriptions, plans]);
 
   const planTitleMap = useMemo(() => {
     const map = new Map();

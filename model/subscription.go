@@ -374,14 +374,69 @@ func getSubscriptionPlanByIdTx(tx *gorm.DB, id int) (*SubscriptionPlan, error) {
 	return &plan, nil
 }
 
-func CountUserSubscriptionsByPlan(userId int, planId int) (int64, error) {
-	if userId <= 0 || planId <= 0 {
-		return 0, errors.New("invalid userId or planId")
+// custom: subscription cycle purchase limit
+// calcPurchaseWindowStart returns the unix timestamp of the start of the
+// rolling purchase counting window. The window length equals the plan's
+// own duration, so a monthly plan gets a 30-day window, a weekly plan
+// gets 7 days, etc. Returns 0 when no valid duration exists, in which
+// case callers fall back to lifetime counting.
+func calcPurchaseWindowStart(now time.Time, plan *SubscriptionPlan) int64 {
+	if plan == nil {
+		return 0
+	}
+	switch plan.DurationUnit {
+	case SubscriptionDurationYear:
+		if plan.DurationValue <= 0 {
+			return 0
+		}
+		return now.AddDate(-plan.DurationValue, 0, 0).Unix()
+	case SubscriptionDurationMonth:
+		if plan.DurationValue <= 0 {
+			return 0
+		}
+		return now.AddDate(0, -plan.DurationValue, 0).Unix()
+	case SubscriptionDurationDay:
+		if plan.DurationValue <= 0 {
+			return 0
+		}
+		return now.Add(-time.Duration(plan.DurationValue) * 24 * time.Hour).Unix()
+	case SubscriptionDurationHour:
+		if plan.DurationValue <= 0 {
+			return 0
+		}
+		return now.Add(-time.Duration(plan.DurationValue) * time.Hour).Unix()
+	case SubscriptionDurationCustom:
+		if plan.CustomSeconds <= 0 {
+			return 0
+		}
+		return now.Add(-time.Duration(plan.CustomSeconds) * time.Second).Unix()
+	default:
+		return 0
+	}
+}
+
+// custom: subscription cycle purchase limit
+// CountPurchasesInWindow returns the number of subscriptions the user has
+// purchased for the given plan within the rolling time window equal to
+// the plan's own duration. This replaces lifetime counting so that
+// MaxPurchasePerUser becomes a per-cycle limit rather than a permanent
+// account-wide cap.
+func CountPurchasesInWindow(userId int, plan *SubscriptionPlan) (int64, error) {
+	return countPurchasesInWindowTx(DB, userId, plan)
+}
+
+// custom: subscription cycle purchase limit
+func countPurchasesInWindowTx(tx *gorm.DB, userId int, plan *SubscriptionPlan) (int64, error) {
+	if userId <= 0 || plan == nil || plan.Id <= 0 {
+		return 0, errors.New("invalid userId or plan")
 	}
 	var count int64
-	if err := DB.Model(&UserSubscription{}).
-		Where("user_id = ? AND plan_id = ?", userId, planId).
-		Count(&count).Error; err != nil {
+	q := tx.Model(&UserSubscription{}).
+		Where("user_id = ? AND plan_id = ?", userId, plan.Id)
+	if windowStart := calcPurchaseWindowStart(time.Now(), plan); windowStart > 0 {
+		q = q.Where("created_at >= ?", windowStart)
+	}
+	if err := q.Count(&count).Error; err != nil {
 		return 0, err
 	}
 	return count, nil
@@ -446,11 +501,16 @@ func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *Subscriptio
 	if userId <= 0 {
 		return nil, errors.New("invalid user id")
 	}
+	// custom: subscription cycle purchase limit
+	// Original behavior counted UserSubscription rows lifetime, which made
+	// MaxPurchasePerUser=1 permanently block users after their first purchase.
+	// We now count within a rolling window equal to the plan's own duration
+	// (monthly plan = 30-day window, weekly = 7-day, etc.).
+	// To revert: replace countPurchasesInWindowTx with the original inline count
+	// `tx.Model(&UserSubscription{}).Where("user_id = ? AND plan_id = ?", ...)`.
 	if plan.MaxPurchasePerUser > 0 {
-		var count int64
-		if err := tx.Model(&UserSubscription{}).
-			Where("user_id = ? AND plan_id = ?", userId, plan.Id).
-			Count(&count).Error; err != nil {
+		count, err := countPurchasesInWindowTx(tx, userId, plan)
+		if err != nil {
 			return nil, err
 		}
 		if count >= int64(plan.MaxPurchasePerUser) {
@@ -1252,11 +1312,10 @@ func PurchaseSubscriptionWithWallet(userId int, plan *SubscriptionPlan, quotaCos
 		}
 
 		// 2. Check purchase limit within transaction
+		// custom: subscription cycle purchase limit — count rolling window, not lifetime
 		if plan.MaxPurchasePerUser > 0 {
-			var count int64
-			if err := tx.Model(&UserSubscription{}).
-				Where("user_id = ? AND plan_id = ?", userId, plan.Id).
-				Count(&count).Error; err != nil {
+			count, err := countPurchasesInWindowTx(tx, userId, plan)
+			if err != nil {
 				return err
 			}
 			if count >= int64(plan.MaxPurchasePerUser) {

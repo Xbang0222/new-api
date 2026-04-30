@@ -224,6 +224,15 @@ When modifying upstream files is unavoidable, follow these rules:
 | `web/src/components/topup/modals/SubscriptionPurchaseModal.jsx` | +35 lines (wallet payment button) | Medium |
 | `web/src/components/topup/SubscriptionPlansCard.jsx` | +30 lines (payWallet handler) | Medium |
 | `web/src/components/topup/RechargeCard.jsx` | +1 line (pass userQuota prop) | Low |
+| `model/subscription.go::CountUserSubscriptionsByPlan` 之后 | +75 lines (`calcPurchaseWindowStart` + `CountPurchasesInWindow` + `countPurchasesInWindowTx` helpers) | Low |
+| `model/subscription.go::CreateUserSubscriptionFromPlanTx` | -5/+8 lines (cycle purchase limit, behavioral change with block comment) | Low |
+| `model/subscription.go::PurchaseSubscriptionWithWallet` | -5/+3 lines (cycle purchase limit) | Low |
+| `controller/subscription_payment_stripe.go` | -1/+2 lines (cycle purchase limit, swap helper call) | Low |
+| `controller/subscription_payment_creem.go` | -1/+2 lines (cycle purchase limit) | Low |
+| `controller/subscription_payment_epay.go` | -1/+2 lines (cycle purchase limit) | Low |
+| `controller/subscription_payment_wallet.go` | -1/+2 lines (cycle purchase limit) | Low |
+| `web/src/components/topup/SubscriptionPlansCard.jsx::planPurchaseCountMap` | +18 lines (cycle window filter, behavioral change with comment) | Low |
+| `web/src/components/table/subscriptions/modals/AddEditSubscriptionModal.jsx` | +1 extraText i18n key (cycle purchase limit) | Low |
 | `dto/channel_settings.go` | +1 line `ClaudeCodeOnly bool` field | Low |
 | `i18n/keys.go` | +2 lines `MsgDistributorChannelClaudeCodeOnly` constant | Low |
 | `i18n/locales/{en,zh-CN,zh-TW}.yaml` | +2 lines per file (`distributor.channel_claude_code_only`) | Low |

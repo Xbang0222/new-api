@@ -366,7 +366,8 @@ const AddEditSubscriptionModal = ({
                         label={t('购买上限')}
                         min={0}
                         precision={0}
-                        extraText={t('0 表示不限')}
+                        // custom: subscription cycle purchase limit — extraText now reflects rolling window semantic
+                        extraText={t('0 表示不限；按订阅周期作为时间窗口（如月度套餐统计过去 30 天）')}
                         style={{ width: '100%' }}
                       />
                     </Col>

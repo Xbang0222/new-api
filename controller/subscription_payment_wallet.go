@@ -36,8 +36,9 @@ func SubscriptionRequestWallet(c *gin.Context) {
 	}
 
 	userId := c.GetInt("id")
+	// custom: subscription cycle purchase limit — count rolling window, not lifetime
 	if plan.MaxPurchasePerUser > 0 {
-		count, err := model.CountUserSubscriptionsByPlan(userId, plan.Id)
+		count, err := model.CountPurchasesInWindow(userId, plan)
 		if err != nil {
 			common.ApiError(c, err)
 			return
