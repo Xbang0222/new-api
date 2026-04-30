@@ -267,6 +267,8 @@ distributor.get_channel_failed: "Failed to get available channel for model {{.Mo
 distributor.no_available_channel: "No available channel for model {{.Model}} under group {{.Group}} (distributor)"
 distributor.invalid_midjourney_request: "Invalid Midjourney request: {{.Error}}"
 distributor.invalid_request_parse_model: "Invalid request, unable to parse model"
+# custom: claude code only
+distributor.channel_claude_code_only: "This channel only accepts requests from the Claude Code CLI"
 
 # Custom OAuth provider messages
 custom_oauth.not_found: "Custom OAuth provider not found"

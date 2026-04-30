@@ -3901,6 +3901,8 @@
     "保存发票设置": "Save Invoice Settings",
     "当前": "Current",
     "启用发票功能": "Enable Invoice Feature",
-    "开票金额": "Invoice Amount"
+    "开票金额": "Invoice Amount",
+    "仅允许 Claude Code 客户端": "Claude Code CLI only",
+    "开启后，只有来自 Claude Code CLI 的请求才能路由到此渠道，其他客户端一律返回 403。识别依据：User-Agent、X-Claude-Code-Session-Id 头、system 提示词。": "When enabled, only requests from the Claude Code CLI will be routed to this channel; all other clients will receive a 403. Detection looks at the User-Agent, X-Claude-Code-Session-Id header, and the system prompt."
   }
 }

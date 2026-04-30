@@ -7,6 +7,7 @@ type ChannelSettings struct {
 	PassThroughBodyEnabled bool   `json:"pass_through_body_enabled,omitempty"`
 	SystemPrompt           string `json:"system_prompt,omitempty"`
 	SystemPromptOverride   bool   `json:"system_prompt_override,omitempty"`
+	ClaudeCodeOnly         bool   `json:"claude_code_only,omitempty"` // custom: claude code only — 仅允许 Claude Code CLI 客户端的请求路由到此渠道
 }
 
 type VertexKeyType string

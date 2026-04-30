@@ -195,6 +195,7 @@ const EditChannelModal = (props) => {
     pass_through_body_enabled: false,
     system_prompt: '',
     system_prompt_override: false,
+    claude_code_only: false, // custom: claude code only
     settings: '',
     // 仅 Vertex: 密钥格式（存入 settings.vertex_key_type）
     vertex_key_type: 'json',
@@ -517,6 +518,7 @@ const EditChannelModal = (props) => {
     proxy: '',
     pass_through_body_enabled: false,
     system_prompt: '',
+    claude_code_only: false, // custom: claude code only
   });
   const showApiConfigCard = true; // 控制是否显示 API 配置卡片
   const getInitValues = () => ({ ...originInputs });
@@ -870,6 +872,7 @@ const EditChannelModal = (props) => {
           data.system_prompt = parsedSettings.system_prompt || '';
           data.system_prompt_override =
             parsedSettings.system_prompt_override || false;
+          data.claude_code_only = parsedSettings.claude_code_only || false; // custom: claude code only
         } catch (error) {
           console.error('解析渠道设置失败:', error);
           data.force_format = false;
@@ -878,6 +881,7 @@ const EditChannelModal = (props) => {
           data.pass_through_body_enabled = false;
           data.system_prompt = '';
           data.system_prompt_override = false;
+          data.claude_code_only = false; // custom: claude code only
         }
       } else {
         data.force_format = false;
@@ -886,6 +890,7 @@ const EditChannelModal = (props) => {
         data.pass_through_body_enabled = false;
         data.system_prompt = '';
         data.system_prompt_override = false;
+        data.claude_code_only = false; // custom: claude code only
       }
 
       if (data.settings) {
@@ -1384,6 +1389,7 @@ const EditChannelModal = (props) => {
       pass_through_body_enabled: false,
       system_prompt: '',
       system_prompt_override: false,
+      claude_code_only: false, // custom: claude code only
     });
     // 重置密钥模式状态
     setKeyMode('append');
@@ -1754,6 +1760,7 @@ const EditChannelModal = (props) => {
       pass_through_body_enabled: localInputs.pass_through_body_enabled || false,
       system_prompt: localInputs.system_prompt || '',
       system_prompt_override: localInputs.system_prompt_override || false,
+      claude_code_only: localInputs.claude_code_only === true, // custom: claude code only
     };
     localInputs.setting = JSON.stringify(channelExtraSettings);
 
@@ -1835,6 +1842,7 @@ const EditChannelModal = (props) => {
     delete localInputs.pass_through_body_enabled;
     delete localInputs.system_prompt;
     delete localInputs.system_prompt_override;
+    delete localInputs.claude_code_only; // custom: claude code only
     delete localInputs.is_enterprise_account;
     // 顶层的 vertex_key_type 不应发送给后端
     delete localInputs.vertex_key_type;
@@ -2530,6 +2538,8 @@ const EditChannelModal = (props) => {
 
                   <Form.TextArea field='system_prompt' label={t('系统提示词')} placeholder={t('输入系统提示词，用户的系统提示词将优先于此设置')} onChange={(value) => handleChannelSettingsChange('system_prompt', value)} autosize showClear extraText={t('用户优先：如果用户在请求中指定了系统提示词，将优先使用用户的设置')} />
                   <Form.Switch field='system_prompt_override' label={t('系统提示词拼接')} checkedText={t('开')} uncheckedText={t('关')} onChange={(value) => handleChannelSettingsChange('system_prompt_override', value)} extraText={t('如果用户请求中包含系统提示词，则使用此设置拼接到用户的系统提示词前面')} />
+                  {/* custom: claude code only */}
+                  <Form.Switch field='claude_code_only' label={t('仅允许 Claude Code 客户端')} checkedText={t('开')} uncheckedText={t('关')} onChange={(value) => handleChannelSettingsChange('claude_code_only', value)} extraText={t('开启后，只有来自 Claude Code CLI 的请求才能路由到此渠道，其他客户端一律返回 403。识别依据：User-Agent、X-Claude-Code-Session-Id 头、system 提示词。')} />
                 </div>
               </div>
             );

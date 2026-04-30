@@ -186,6 +186,8 @@ When modifying upstream files is unavoidable, follow these rules:
 | `custom: token ranking` | Token 消耗排行榜（所有用户可见） |
 | `custom: affinity evict` | 渠道亲和性缓存：禁用渠道时自动清除并 fallback |
 | `custom: wallet subscription` | 订阅支持钱包余额支付 |
+| `custom: subscription cycle purchase limit` | 订阅周期限购（窗口计数替代终身计数） |
+| `custom: claude code only` | 渠道级"仅 Claude Code 客户端"白名单（严格 403） |
 
 **Behavioral changes** (modifying existing upstream logic, not just adding new code) MUST include a block comment explaining:
 - What the original logic was
@@ -221,6 +223,11 @@ When modifying upstream files is unavoidable, follow these rules:
 | `web/src/components/topup/modals/SubscriptionPurchaseModal.jsx` | +35 lines (wallet payment button) | Medium |
 | `web/src/components/topup/SubscriptionPlansCard.jsx` | +30 lines (payWallet handler) | Medium |
 | `web/src/components/topup/RechargeCard.jsx` | +1 line (pass userQuota prop) | Low |
+| `dto/channel_settings.go` | +1 line `ClaudeCodeOnly bool` field | Low |
+| `i18n/keys.go` | +2 lines `MsgDistributorChannelClaudeCodeOnly` constant | Low |
+| `i18n/locales/{en,zh-CN,zh-TW}.yaml` | +2 lines per file (`distributor.channel_claude_code_only`) | Low |
+| `middleware/distributor.go` | +9 lines guard (claude code only, after channel selected) | Low |
+| `web/src/components/table/channels/modals/EditChannelModal.jsx` | +9 lines (state + load/save/cleanup + Form.Switch) | Medium |
 
 #### 7.3 i18n — Avoid Key Collisions
 

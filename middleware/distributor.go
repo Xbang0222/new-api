@@ -162,6 +162,15 @@ func Distribute() func(c *gin.Context) {
 		}
 		common.SetContextKey(c, constant.ContextKeyRequestStartTime, time.Now())
 		SetupContextForSelectedChannel(c, channel, modelRequest.Model)
+		// custom: claude code only — 渠道级"仅 Claude Code"白名单守门
+		// Original: 渠道选定后直接 c.Next() 进入 relay。
+		// Changed: 选定渠道若开启 ClaudeCodeOnly，则要求当前请求是 Claude Code CLI；
+		// 不是则直接 403，不 fallback、不重试（产品要求严格语义）。
+		// Revert: 删除整个 if 块即可恢复上游行为。
+		if channel != nil && channel.GetSetting().ClaudeCodeOnly && !service.IsClaudeCodeRequest(c) {
+			abortWithOpenAiMessage(c, http.StatusForbidden, i18n.T(c, i18n.MsgDistributorChannelClaudeCodeOnly))
+			return
+		}
 		c.Next()
 		if channel != nil && c.Writer != nil && c.Writer.Status() < http.StatusBadRequest {
 			service.RecordChannelAffinity(c, channel.Id)
