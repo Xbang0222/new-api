@@ -31,6 +31,7 @@ data/
 .gopath
 .worktrees/
 .test
+.playwright-cli
 skills-lock.json
 
 token_estimator_test.go
