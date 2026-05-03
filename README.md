@@ -1,6 +1,13 @@
+<blockquote>
+🍴 <strong>本仓库是 <a href="https://github.com/QuantumNous/new-api">QuantumNous/new-api</a> 的长期定制版本，包含若干二次开发功能。</strong><br>
+<em>This repository is a long-term customized fork of <a href="https://github.com/QuantumNous/new-api">QuantumNous/new-api</a> with custom features.</em>
+</blockquote>
+
+---
+
 <div align="center">
 
-![new-api](/web/public/logo.png)
+![new-api](https://raw.githubusercontent.com/QuantumNous/new-api/main/web/default/public/logo.png)
 
 # New API
 
