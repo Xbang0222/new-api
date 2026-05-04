@@ -154,7 +154,7 @@ This project is a fork maintained on the `ruoli` branch. Upstream (`QuantumNous/
 | Frontend pages | `pages/Invoice/`, `pages/InvoiceAdmin/`, `pages/Billing/` |
 | Frontend components | `components/billing/InvoiceApplicationModal.jsx`, `components/invoice/InvoiceHeaderManager.jsx`, `components/settings/InvoiceSetting.jsx` |
 | Helpers & constants | `helpers/brand.js`, `helpers/invoice.js`, `helpers/headerNavModules.js`, `constants/invoice.constants.js`, `constants/dashboard.constants.js` |
-| CI/Deploy | `.github/workflows/docker-custom-build.yml`, `deploy.sh`, `DEPLOY.md` |
+| CI/Deploy | `deploy.sh`, `DEPLOY.md` |
 | Assets | `web/public/fonts/`, `web/public/logo_day.ico`, `web/public/logo_night.ico` |
 
 #### 7.2 Upstream File Changes — Keep Minimal and Documented
