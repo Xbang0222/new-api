@@ -99,3 +99,17 @@ func matchClaudeCodeSystemPrompt(c *gin.Context) bool {
 func hasClaudeCodeMarker(s string) bool {
 	return strings.HasPrefix(strings.TrimLeft(s, " \t\n\r"), claudeCodeSystemMarker)
 }
+
+// IsClaudeCodeAnthropicPath 判断当前请求路径是否在 Anthropic Messages API 表面上，
+// 即 "/v1/messages" 或 "/v1/messages/<sub>"（如 count_tokens）。
+//
+// 这是 Claude Code CLI 原生说的唯一协议——CLI 不会发 /v1/chat/completions 这类
+// OpenAI 兼容路径。所以 claude-code-only 渠道拒绝所有非 /v1/messages* 路径，
+// 防止恶意客户端用「伪造 UA + OpenAI 协议」绕过 fingerprint 检测。
+func IsClaudeCodeAnthropicPath(c *gin.Context) bool {
+	if c == nil || c.Request == nil || c.Request.URL == nil {
+		return false
+	}
+	path := c.Request.URL.Path
+	return path == "/v1/messages" || strings.HasPrefix(path, "/v1/messages/")
+}

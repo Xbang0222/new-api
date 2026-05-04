@@ -164,12 +164,18 @@ func Distribute() func(c *gin.Context) {
 		SetupContextForSelectedChannel(c, channel, modelRequest.Model)
 		// custom: claude code only — 渠道级"仅 Claude Code"白名单守门
 		// Original: 渠道选定后直接 c.Next() 进入 relay。
-		// Changed: 选定渠道若开启 ClaudeCodeOnly，则要求当前请求是 Claude Code CLI；
-		// 不是则直接 403，不 fallback、不重试（产品要求严格语义）。
+		// Changed: 选定渠道若开启 ClaudeCodeOnly，必须满足两层条件，否则 403：
+		//   1. 路径必须是 /v1/messages 或 /v1/messages/*（Claude Code CLI 原生只走
+		//      Anthropic Messages 协议；OpenAI 兼容路径 /v1/chat/completions 一律拒绝，
+		//      防止伪造 UA 通过转换协议绕过）。
+		//   2. fingerprint 命中（UA / session header / system prompt 任一）。
+		// 不 fallback、不重试（产品要求严格语义）。
 		// Revert: 删除整个 if 块即可恢复上游行为。
-		if channel != nil && channel.GetSetting().ClaudeCodeOnly && !service.IsClaudeCodeRequest(c) {
-			abortWithOpenAiMessage(c, http.StatusForbidden, i18n.T(c, i18n.MsgDistributorChannelClaudeCodeOnly))
-			return
+		if channel != nil && channel.GetSetting().ClaudeCodeOnly {
+			if !service.IsClaudeCodeAnthropicPath(c) || !service.IsClaudeCodeRequest(c) {
+				abortWithOpenAiMessage(c, http.StatusForbidden, i18n.T(c, i18n.MsgDistributorChannelClaudeCodeOnly))
+				return
+			}
 		}
 		c.Next()
 		if channel != nil && c.Writer != nil && c.Writer.Status() < http.StatusBadRequest {

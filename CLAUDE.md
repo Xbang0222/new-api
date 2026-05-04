@@ -236,7 +236,7 @@ When modifying upstream files is unavoidable, follow these rules:
 | `dto/channel_settings.go` | +1 line `ClaudeCodeOnly bool` field | Low |
 | `i18n/keys.go` | +2 lines `MsgDistributorChannelClaudeCodeOnly` constant | Low |
 | `i18n/locales/{en,zh-CN,zh-TW}.yaml` | +2 lines per file (`distributor.channel_claude_code_only`) | Low |
-| `middleware/distributor.go` | +9 lines guard (claude code only, after channel selected) | Low |
+| `middleware/distributor.go` | +15 lines guard (claude code only: path whitelist + fingerprint, two-layer) | Low |
 | `web/src/components/table/channels/modals/EditChannelModal.jsx` | +9 lines (state + load/save/cleanup + Form.Switch) | Medium |
 | `setting/operation_setting/general_setting.go` | +2 lines `ShopLink` field | Low |
 | `controller/misc.go` | +1 line (`shop_link` exposed in /api/status) | Low |

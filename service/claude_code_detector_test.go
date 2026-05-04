@@ -153,6 +153,45 @@ func TestIsClaudeCodeRequest_NilContext(t *testing.T) {
 	}
 }
 
+func TestIsClaudeCodeAnthropicPath(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		path string
+		want bool
+	}{
+		{"exact /v1/messages", "/v1/messages", true},
+		{"sub-path /v1/messages/count_tokens", "/v1/messages/count_tokens", true},
+		{"sub-path with trailing slash", "/v1/messages/", true},
+		{"openai chat completions", "/v1/chat/completions", false},
+		{"openai completions", "/v1/completions", false},
+		{"openai responses", "/v1/responses", false},
+		{"gemini path", "/v1beta/models/gemini-pro:generateContent", false},
+		{"realtime ws", "/v1/realtime", false},
+		{"prefix-similar but different segment", "/v1/messages_foo", false},
+		{"root path", "/", false},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			ctx := newGinCtxForDetector(t, http.MethodPost, tt.path, "", nil)
+			if got := IsClaudeCodeAnthropicPath(ctx); got != tt.want {
+				t.Errorf("IsClaudeCodeAnthropicPath(%q) = %v, want %v", tt.path, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsClaudeCodeAnthropicPath_NilContext(t *testing.T) {
+	t.Parallel()
+	if IsClaudeCodeAnthropicPath(nil) {
+		t.Error("IsClaudeCodeAnthropicPath(nil) should return false")
+	}
+}
+
 // 验证检测器调用之后，body 仍可被后续中间件正常读取（不破坏 body 复用）。
 func TestIsClaudeCodeRequest_BodyReusableAfterDetection(t *testing.T) {
 	t.Parallel()
