@@ -134,7 +134,6 @@ const InvoiceAdmin = () => {
     {
       title: t('税号'),
       dataIndex: 'tax_number',
-      width: 140,
       render: (text) => (
         <Typography.Text copyable ellipsis={{ showTooltip: true }}>
           {text}
@@ -144,7 +143,6 @@ const InvoiceAdmin = () => {
     {
       title: t('邮箱'),
       dataIndex: 'email',
-      width: 200,
       render: (text) => (
         <Typography.Text copyable ellipsis={{ showTooltip: true }}>
           {text || '-'}
