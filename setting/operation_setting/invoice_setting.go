@@ -7,6 +7,7 @@ type InvoiceSetting struct {
 	MinAmount      float64 `json:"min_amount"`      // 最低开票金额（元）
 	DefaultContent string  `json:"default_content"` // 默认发票内容
 	MaxHeaders     int     `json:"max_headers"`     // 每用户最多保存几个抬头模板
+	FeeRate        float64 `json:"fee_rate"`        // 开票服务费率（0-1，0 表示不收，例如 0.06 = 6%）
 }
 
 // 默认配置
@@ -15,6 +16,7 @@ var invoiceSetting = InvoiceSetting{
 	MinAmount:      500,
 	DefaultContent: "*信息技术服务*技术服务费",
 	MaxHeaders:     5,
+	FeeRate:        0,
 }
 
 func init() {

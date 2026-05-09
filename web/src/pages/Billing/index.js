@@ -315,6 +315,7 @@ const Billing = () => {
           visible={showInvoiceModal}
           defaultContent={invoiceSetting?.default_content || ''}
           minAmount={invoiceSetting?.min_amount || 500}
+          feeRate={invoiceSetting?.fee_rate ?? 0}
           onClose={() => setShowInvoiceModal(false)}
           onSuccess={() => {
             setShowInvoiceModal(false);

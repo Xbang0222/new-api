@@ -2,6 +2,7 @@ package controller
 
 import (
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -349,6 +350,24 @@ func UpdateOption(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{
 				"success": false,
 				"message": err.Error(),
+			})
+			return
+		}
+	// custom: invoice fee — clamp fee_rate to [0, 1] to prevent runaway deductions
+	// (admin UI clamps client-side but a direct PUT bypasses that).
+	case "invoice_setting.fee_rate":
+		feeRate, parseErr := strconv.ParseFloat(option.Value.(string), 64)
+		if parseErr != nil || math.IsNaN(feeRate) || math.IsInf(feeRate, 0) {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "开票服务费率必须是有效的数字",
+			})
+			return
+		}
+		if feeRate < 0 || feeRate > 1 {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "开票服务费率必须在 0 和 1 之间（例如 0.06 表示 6%）",
 			})
 			return
 		}

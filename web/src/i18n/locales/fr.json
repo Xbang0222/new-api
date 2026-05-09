@@ -3645,6 +3645,13 @@
     "默认补全倍率": "Taux de complétion par défaut",
     "商城": "Boutique",
     "商城地址": "URL de la boutique",
-    "例如 https://shop.example.com，留空不显示按钮": "ex. https://shop.example.com, laisser vide pour masquer le bouton"
+    "例如 https://shop.example.com，留空不显示按钮": "ex. https://shop.example.com, laisser vide pour masquer le bouton",
+    "服务费": "Frais de service",
+    "将从余额扣除": "Déduit du solde",
+    "余额不足以支付开票服务费，请先充值": "Solde insuffisant pour payer les frais de service de facturation. Veuillez recharger d'abord",
+    "开票服务费率": "Taux des frais de service de facturation",
+    "0–1 之间的小数。0 表示不收取服务费；例如 0.06 表示 6%（开 1000 元发票将额外从用户余额扣 60 元）": "Nombre décimal entre 0 et 1. 0 signifie aucun frais de service ; par exemple, 0,06 signifie 6 % (une facture de 1000 ¥ déduit 60 ¥ supplémentaires du solde utilisateur)",
+    "已退还": "Remboursé",
+    "已扣除": "Déduit"
   }
 }

@@ -1,11 +1,22 @@
 package model
 
 import (
+	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"gorm.io/gorm"
 )
+
+// ErrInvoiceStatusChanged is returned by UpdateInvoiceStatus when the row's
+// current status does not match the caller's expected from-status, i.e. another
+// concurrent transaction already transitioned it. Callers translate this back
+// to their domain error (e.g. ErrInvoiceNotPending) so UX is unchanged.
+//
+// custom: invoice fee — added with CAS status transitions to close the
+// cancel-vs-approve race once money is in flight.
+var ErrInvoiceStatusChanged = errors.New("发票状态已被其他操作变更，请刷新后重试")
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -39,8 +50,15 @@ type Invoice struct {
 	RejectReason   string  `json:"reject_reason" gorm:"type:varchar(255)"`
 	InvoiceFileUrl string  `json:"invoice_file_url" gorm:"type:varchar(500)"`
 	AdminId        int     `json:"admin_id"`
-	CreateTime     int64   `json:"create_time"`
-	UpdateTime     int64   `json:"update_time"`
+	// custom: invoice fee — snapshot taken at submit time so admin rate changes
+	// don't affect existing applications. FeeQuota is the integer quota actually
+	// deducted; FeeRefunded guards refund idempotency on cancel/reject.
+	FeeRate     float64 `json:"fee_rate" gorm:"default:0"`
+	FeeAmount   float64 `json:"fee_amount" gorm:"default:0"`
+	FeeQuota    int     `json:"fee_quota" gorm:"default:0"`
+	FeeRefunded bool    `json:"fee_refunded" gorm:"default:false"`
+	CreateTime  int64   `json:"create_time"`
+	UpdateTime  int64   `json:"update_time"`
 }
 
 // ---------------------------------------------------------------------------
@@ -128,10 +146,28 @@ func GetAllInvoices(pageInfo *common.PageInfo, status int, keyword string) ([]*I
 	return invoices, total, err
 }
 
-func UpdateInvoiceStatus(tx *gorm.DB, id int, status int, updates map[string]interface{}) error {
-	updates["status"] = status
+// UpdateInvoiceStatus performs a CAS-style status transition: the row is only
+// updated if its current status equals fromStatus. This closes the race window
+// where two concurrent transactions both pass an in-memory pre-check on
+// `invoice.Status == Pending` and then both write conflicting target statuses
+// (e.g. user-cancel racing admin-approve). On miss it returns
+// ErrInvoiceStatusChanged so callers can map it to their domain error.
+//
+// custom: invoice fee — switched from unconditional update to CAS to keep
+// the fee charge/refund and the status transition consistent under contention.
+func UpdateInvoiceStatus(tx *gorm.DB, id int, fromStatus, toStatus int, updates map[string]interface{}) error {
+	updates["status"] = toStatus
 	updates["update_time"] = common.GetTimestamp()
-	return tx.Model(&Invoice{}).Where("id = ?", id).Updates(updates).Error
+	result := tx.Model(&Invoice{}).
+		Where("id = ? AND status = ?", id, fromStatus).
+		Updates(updates)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ErrInvoiceStatusChanged
+	}
+	return nil
 }
 
 // ===========================================================================
@@ -283,4 +319,34 @@ func DeletePendingTopUp(userId, topUpId int) error {
 		return gorm.ErrRecordNotFound
 	}
 	return nil
+}
+
+// ===========================================================================
+// Invoice fee — quota cache sync helpers (custom: invoice fee)
+// ===========================================================================
+
+// SyncInvoiceFeeCacheDecr syncs the user-quota cache after a successful fee
+// deduction commit. Service callers run the actual SQL update inside their
+// transaction; this helper invalidates the cache afterwards. Errors are logged
+// but not returned because cache drift recovers on next user load.
+func SyncInvoiceFeeCacheDecr(userId int, feeQuota int) {
+	if feeQuota <= 0 {
+		return
+	}
+	if err := cacheDecrUserQuota(userId, int64(feeQuota)); err != nil {
+		common.SysLog(fmt.Sprintf("invoice fee cache decr failed (user=%d quota=%d): %s",
+			userId, feeQuota, err.Error()))
+	}
+}
+
+// SyncInvoiceFeeCacheIncr syncs the user-quota cache after a successful fee
+// refund commit. See SyncInvoiceFeeCacheDecr for rationale.
+func SyncInvoiceFeeCacheIncr(userId int, feeQuota int) {
+	if feeQuota <= 0 {
+		return
+	}
+	if err := cacheIncrUserQuota(userId, int64(feeQuota)); err != nil {
+		common.SysLog(fmt.Sprintf("invoice fee cache incr failed (user=%d quota=%d): %s",
+			userId, feeQuota, err.Error()))
+	}
 }

@@ -27,6 +27,8 @@ func GetInvoiceSetting(c *gin.Context) {
 		"enabled":         cfg.Enabled,
 		"min_amount":      cfg.MinAmount,
 		"default_content": cfg.DefaultContent,
+		// custom: invoice fee
+		"fee_rate": cfg.FeeRate,
 	})
 }
 
@@ -321,9 +323,15 @@ func MarkInvoiceSent(c *gin.Context) {
 		if invoice.Status != model.InvoiceStatusApproved {
 			return errors.New("只有已通过的发票可以标记为已发送")
 		}
-		return model.UpdateInvoiceStatus(tx, invoiceId, model.InvoiceStatusSent, map[string]interface{}{
+		// custom: invoice fee — CAS keeps the in-memory check honest under
+		// concurrent admin actions; on miss surface as the same UX message.
+		err = model.UpdateInvoiceStatus(tx, invoiceId, model.InvoiceStatusApproved, model.InvoiceStatusSent, map[string]interface{}{
 			"admin_id": adminId,
 		})
+		if errors.Is(err, model.ErrInvoiceStatusChanged) {
+			return errors.New("只有已通过的发票可以标记为已发送")
+		}
+		return err
 	}); err != nil {
 		invoiceErrorResponse(c, err)
 		return
@@ -360,7 +368,8 @@ func invoiceErrorResponse(c *gin.Context, err error) {
 		errors.Is(err, service.ErrNoTopUpsSelected),
 		errors.Is(err, service.ErrInvalidTaxNumber),
 		errors.Is(err, service.ErrInvoiceNotPending),
-		errors.Is(err, service.ErrHeaderLimitExceeded):
+		errors.Is(err, service.ErrHeaderLimitExceeded),
+		errors.Is(err, service.ErrInsufficientQuotaForFee): // custom: invoice fee
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": err.Error()})
 
 	case errors.Is(err, service.ErrTopUpAlreadyInvoiced):

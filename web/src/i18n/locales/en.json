@@ -3907,6 +3907,13 @@
     "开启后，只有来自 Claude Code CLI 的请求才能路由到此渠道，其他客户端一律返回 403。识别依据：User-Agent、X-Claude-Code-Session-Id 头、system 提示词。": "When enabled, only requests from the Claude Code CLI will be routed to this channel; all other clients will receive a 403. Detection looks at the User-Agent, X-Claude-Code-Session-Id header, and the system prompt.",
     "商城": "Shop",
     "商城地址": "Shop URL",
-    "例如 https://shop.example.com，留空不显示按钮": "e.g. https://shop.example.com, leave empty to hide the button"
+    "例如 https://shop.example.com，留空不显示按钮": "e.g. https://shop.example.com, leave empty to hide the button",
+    "服务费": "Service fee",
+    "将从余额扣除": "Deducted from balance",
+    "余额不足以支付开票服务费，请先充值": "Insufficient balance to pay the invoice service fee. Please top up first",
+    "开票服务费率": "Invoice service fee rate",
+    "0–1 之间的小数。0 表示不收取服务费；例如 0.06 表示 6%（开 1000 元发票将额外从用户余额扣 60 元）": "A decimal between 0 and 1. 0 means no service fee; for example, 0.06 means 6% (a 1000 yuan invoice deducts an additional 60 yuan from the user's balance)",
+    "已退还": "Refunded",
+    "已扣除": "Deducted"
   }
 }

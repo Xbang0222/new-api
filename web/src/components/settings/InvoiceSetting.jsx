@@ -16,6 +16,7 @@ export default function InvoiceSettingComponent() {
     min_amount: 500,
     default_content: '*信息技术服务*技术服务费',
     max_headers: 5,
+    fee_rate: 0,
   });
   const formApiRef = useRef(null);
 
@@ -43,6 +44,11 @@ export default function InvoiceSettingComponent() {
               case 'invoice_setting.max_headers':
                 newInputs.max_headers = parseInt(item.value) || 5;
                 break;
+              case 'invoice_setting.fee_rate': {
+                const parsed = parseFloat(item.value);
+                newInputs.fee_rate = Number.isFinite(parsed) ? parsed : 0;
+                break;
+              }
             }
           }
           setInputs(newInputs);
@@ -78,6 +84,7 @@ export default function InvoiceSettingComponent() {
         saveOption('min_amount', inputs.min_amount),
         saveOption('default_content', inputs.default_content),
         saveOption('max_headers', inputs.max_headers),
+        saveOption('fee_rate', inputs.fee_rate),
       ]);
       showSuccess(t('保存成功'));
     } catch (error) {
@@ -110,6 +117,18 @@ export default function InvoiceSettingComponent() {
             min={0}
             step={100}
             style={{ width: 200 }}
+          />
+          <Form.InputNumber
+            field='fee_rate'
+            label={t('开票服务费率')}
+            min={0}
+            max={1}
+            step={0.01}
+            precision={4}
+            style={{ width: 200 }}
+            extraText={t(
+              '0–1 之间的小数。0 表示不收取服务费；例如 0.06 表示 6%（开 1000 元发票将额外从用户余额扣 60 元）',
+            )}
           />
           <Form.Input
             field='default_content'

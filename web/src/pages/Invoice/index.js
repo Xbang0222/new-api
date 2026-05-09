@@ -103,6 +103,26 @@ const Invoice = () => {
       render: (val) => `¥ ${Number(val).toFixed(2)}`,
     },
     {
+      // custom: invoice fee — show fee snapshot + refund status
+      title: t('服务费'),
+      dataIndex: 'fee_amount',
+      width: 130,
+      render: (val, record) => {
+        const fee = Number(val) || 0;
+        if (fee <= 0) return '-';
+        return (
+          <Typography.Text size='small'>
+            ¥ {fee.toFixed(2)}
+            {record.fee_refunded && (
+              <Tag size='small' color='blue' style={{ marginLeft: 4 }}>
+                {t('已退还')}
+              </Tag>
+            )}
+          </Typography.Text>
+        );
+      },
+    },
+    {
       title: t('状态'),
       dataIndex: 'status',
       width: 100,

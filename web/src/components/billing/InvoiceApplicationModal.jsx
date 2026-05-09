@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Modal,
@@ -11,22 +11,54 @@ import {
   Spin,
 } from '@douyinfe/semi-ui';
 import { API, showError, timestamp2string } from '../../helpers';
+import { getQuotaPerUnit } from '../../helpers/quota';
 import { InvoiceAPI } from '../../helpers/invoice';
+import { StatusContext } from '../../context/Status';
+
+// custom: invoice fee — small rounding tolerance (1 fen) when comparing the
+// fee against the user's wallet balance, to absorb float drift from the
+// quota → USD → RMB conversion chain. Far below any real billing impact.
+const BALANCE_ROUNDING_TOLERANCE_RMB = 0.01;
 
 const InvoiceApplicationModal = ({
   visible,
   defaultContent,
   minAmount,
+  feeRate = 0,
   onClose,
   onSuccess,
 }) => {
   const { t } = useTranslation();
+  const [statusState] = useContext(StatusContext);
   const [submitLoading, setSubmitLoading] = useState(false);
   const [topUpLoading, setTopUpLoading] = useState(false);
   const [headers, setHeaders] = useState([]);
   const [selectedHeaderId, setSelectedHeaderId] = useState(null);
   const [userEmail, setUserEmail] = useState('');
+  const [userQuota, setUserQuota] = useState(0);
   const formRef = React.useRef();
+
+  // custom: invoice fee — approximate user's wallet balance in RMB so we can
+  // show a "balance insufficient" warning before they submit. Authoritative
+  // check still happens server-side via atomic conditional UPDATE.
+  //
+  // We only display the warning when quota_per_unit was actually present in
+  // localStorage. getQuotaPerUnit() falls back to 1 when missing, which
+  // would make the conversion off by ~500000× and produce a meaningless
+  // "balance insufficient" message — silence is better than confusing.
+  const usdRmbRate = Number(statusState?.status?.price) || 7.3;
+  // Read once: localStorage.quota_per_unit only changes on app load, so
+  // memo with empty deps avoids two reads + one parse per render.
+  const quotaPerUnitConfigured = useMemo(() => {
+    const raw = parseFloat(localStorage.getItem('quota_per_unit'));
+    return Number.isFinite(raw) && raw > 0;
+  }, []);
+  const userQuotaInRmb = useMemo(() => {
+    const q = Number(userQuota) || 0;
+    const perUnit = getQuotaPerUnit();
+    if (!perUnit || perUnit <= 0) return 0;
+    return (q / perUnit) * usdRmbRate;
+  }, [userQuota, usdRmbRate]);
 
   // 可开票的充值记录
   const [availableTopUps, setAvailableTopUps] = useState([]);
@@ -75,15 +107,19 @@ const InvoiceApplicationModal = ({
     }
   }, []);
 
-  // 获取用户邮箱自动填充
-  const fetchUserEmail = useCallback(async () => {
+  // 获取用户自身信息（邮箱用于自动填充，quota 用于服务费余额校验）
+  const fetchUserSelf = useCallback(async () => {
     try {
       const res = await API.get('/api/user/self');
-      if (res.data.success && res.data.data.email) {
-        setUserEmail(res.data.data.email);
-        if (formRef.current) {
-          formRef.current.formApi.setValue('email', res.data.data.email);
+      if (res.data.success) {
+        const data = res.data.data || {};
+        if (data.email) {
+          setUserEmail(data.email);
+          if (formRef.current) {
+            formRef.current.formApi.setValue('email', data.email);
+          }
         }
+        setUserQuota(Number(data.quota) || 0);
       }
     } catch {
       // ignore
@@ -94,9 +130,9 @@ const InvoiceApplicationModal = ({
     if (visible) {
       fetchAvailableTopUps();
       fetchHeaders();
-      fetchUserEmail();
+      fetchUserSelf();
     }
-  }, [visible, fetchAvailableTopUps, fetchHeaders, fetchUserEmail]);
+  }, [visible, fetchAvailableTopUps, fetchHeaders, fetchUserSelf]);
 
   const handleHeaderSelect = (headerId) => {
     setSelectedHeaderId(headerId);
@@ -124,6 +160,17 @@ const InvoiceApplicationModal = ({
     }
     return sum;
   }, [selectedTopUpMap]);
+
+  // custom: invoice fee — derived display values
+  const feeRateNum = Number(feeRate) || 0;
+  const feeAmount = useMemo(
+    () => (feeRateNum > 0 ? selectedAmount * feeRateNum : 0),
+    [selectedAmount, feeRateNum],
+  );
+  const balanceInsufficient =
+    quotaPerUnitConfigured &&
+    feeAmount > 0 &&
+    userQuotaInRmb + BALANCE_ROUNDING_TOLERANCE_RMB < feeAmount;
 
   // 只对"当前页的选中差异"应用到缓存，不影响其他页已选项
   const handleTopUpSelectionChange = useCallback(
@@ -158,6 +205,10 @@ const InvoiceApplicationModal = ({
       showError(`${t('最低开票金额为')} ¥${minAmount}`);
       return;
     }
+    // Intentionally NOT pre-blocking on balanceInsufficient — frontend's
+    // RMB estimate uses statusState.status.price which can lag the backend's
+    // operation_setting.Price after admin updates. Server-side conditional
+    // UPDATE is authoritative; if it fails, the toast will say "余额不足".
 
     try {
       const values = await formRef.current.formApi.validate();
@@ -231,6 +282,10 @@ const InvoiceApplicationModal = ({
       cancelText={t('取消')}
       confirmLoading={submitLoading}
       okButtonProps={{
+        // Note: balance is only warned in the UI, never hard-blocks submit.
+        // Backend does an atomic conditional UPDATE — if quota is insufficient
+        // it returns ErrInsufficientQuotaForFee, so frontend stale rates can't
+        // wrongly trap a legit user. Server is authoritative.
         disabled: selectedRowKeys.length === 0 || selectedAmount < minAmount,
       }}
       width={720}
@@ -269,25 +324,65 @@ const InvoiceApplicationModal = ({
 
       <div
         style={{
-          display: 'flex',
-          justifyContent: 'space-between',
           padding: '8px 12px',
           background: 'var(--semi-color-fill-0)',
           borderRadius: 6,
           marginBottom: 16,
         }}
       >
-        <span>
-          {t('已选择')}: {selectedRowKeys.length} {t('笔')}
-        </span>
-        <span>
-          {t('开票金额')}: <strong>¥ {selectedAmount.toFixed(2)}</strong>
-          {selectedRowKeys.length > 0 && selectedAmount < minAmount && (
-            <Typography.Text type='danger' style={{ marginLeft: 8 }}>
-              （{t('最低开票金额为')} ¥{minAmount}）
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+          }}
+        >
+          <span>
+            {t('已选择')}: {selectedRowKeys.length} {t('笔')}
+          </span>
+          <span>
+            {t('开票金额')}: <strong>¥ {selectedAmount.toFixed(2)}</strong>
+            {selectedRowKeys.length > 0 && selectedAmount < minAmount && (
+              <Typography.Text type='danger' style={{ marginLeft: 8 }}>
+                （{t('最低开票金额为')} ¥{minAmount}）
+              </Typography.Text>
+            )}
+          </span>
+        </div>
+        {feeRateNum > 0 && selectedRowKeys.length > 0 && selectedAmount >= minAmount && (
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              marginTop: 6,
+              paddingTop: 6,
+              borderTop: '1px dashed var(--semi-color-border)',
+            }}
+          >
+            <Typography.Text type='tertiary' size='small'>
+              {t('服务费')} ({(feeRateNum * 100).toFixed(2)}%) ·{' '}
+              {t('将从余额扣除')}
             </Typography.Text>
-          )}
-        </span>
+            <span>
+              <Typography.Text strong type={balanceInsufficient ? 'danger' : undefined}>
+                ¥ {feeAmount.toFixed(2)}
+              </Typography.Text>
+              {quotaPerUnitConfigured && (
+                <Typography.Text type='tertiary' size='small' style={{ marginLeft: 8 }}>
+                  {t('当前余额')} ¥ {userQuotaInRmb.toFixed(2)}
+                </Typography.Text>
+              )}
+            </span>
+          </div>
+        )}
+        {balanceInsufficient && (
+          <Typography.Text
+            type='danger'
+            size='small'
+            style={{ display: 'block', marginTop: 6 }}
+          >
+            {t('余额不足以支付开票服务费，请先充值')}
+          </Typography.Text>
+        )}
       </div>
 
       {/* 步骤 2：发票抬头 */}
