@@ -104,7 +104,7 @@ const Invoice = () => {
     },
     {
       // custom: invoice fee — show fee snapshot + refund status
-      title: t('服务费'),
+      title: t('开票服务费'),
       dataIndex: 'fee_amount',
       width: 130,
       render: (val, record) => {
@@ -115,7 +115,7 @@ const Invoice = () => {
             ¥ {fee.toFixed(2)}
             {record.fee_refunded && (
               <Tag size='small' color='blue' style={{ marginLeft: 4 }}>
-                {t('已退还')}
+                {t('开票服务费已退还')}
               </Tag>
             )}
           </Typography.Text>

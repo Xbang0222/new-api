@@ -38,22 +38,35 @@ func setupOptionControllerTestDB(t *testing.T) {
 func TestUpdateOptionRejectsNonFiniteInvoiceFeeRate(t *testing.T) {
 	setupOptionControllerTestDB(t)
 
-	recorder := httptest.NewRecorder()
-	ctx, _ := gin.CreateTestContext(recorder)
-	ctx.Request = httptest.NewRequest(
-		http.MethodPut,
-		"/api/option/",
-		strings.NewReader(`{"key":"invoice_setting.fee_rate","value":"NaN"}`),
-	)
-
-	UpdateOption(ctx)
-
-	require.Equal(t, http.StatusOK, recorder.Code)
-	var payload struct {
-		Success bool   `json:"success"`
-		Message string `json:"message"`
+	tests := []struct {
+		name  string
+		value string
+	}{
+		{name: "NaN", value: "NaN"},
+		{name: "Inf", value: "Inf"},
+		{name: "NegativeInf", value: "-Inf"},
 	}
-	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &payload))
-	require.False(t, payload.Success)
-	require.Contains(t, payload.Message, "有效的数字")
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			ctx, _ := gin.CreateTestContext(recorder)
+			ctx.Request = httptest.NewRequest(
+				http.MethodPut,
+				"/api/option/",
+				strings.NewReader(`{"key":"invoice_setting.fee_rate","value":"`+tc.value+`"}`),
+			)
+
+			UpdateOption(ctx)
+
+			require.Equal(t, http.StatusOK, recorder.Code)
+			var payload struct {
+				Success bool   `json:"success"`
+				Message string `json:"message"`
+			}
+			require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &payload))
+			require.False(t, payload.Success)
+			require.Contains(t, payload.Message, "有效的数字")
+		})
+	}
 }

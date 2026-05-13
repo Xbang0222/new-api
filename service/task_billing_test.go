@@ -44,6 +44,7 @@ func TestMain(m *testing.M) {
 		&model.Channel{},
 		&model.TopUp{},
 		&model.UserSubscription{},
+		// custom: invoice fee — required so service/invoice_fee_test.go can share this TestMain DB.
 		&model.Invoice{},
 		&model.InvoiceItem{},
 	); err != nil {
@@ -60,6 +61,7 @@ func TestMain(m *testing.M) {
 func truncate(t *testing.T) {
 	t.Helper()
 	t.Cleanup(func() {
+		// custom: invoice fee — keep invoice tables clean between tests.
 		model.DB.Exec("DELETE FROM invoice_items")
 		model.DB.Exec("DELETE FROM invoices")
 		model.DB.Exec("DELETE FROM tasks")

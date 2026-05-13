@@ -359,8 +359,8 @@ const InvoiceApplicationModal = ({
             }}
           >
             <Typography.Text type='tertiary' size='small'>
-              {t('服务费')} ({(feeRateNum * 100).toFixed(2)}%) ·{' '}
-              {t('将从余额扣除')}
+              {t('开票服务费')} ({(feeRateNum * 100).toFixed(2)}%) ·{' '}
+              {t('提交时将从余额扣除')}
             </Typography.Text>
             <span>
               <Typography.Text strong type={balanceInsufficient ? 'danger' : undefined}>

@@ -317,13 +317,13 @@ const InvoiceAdmin = () => {
             {Number(reviewInvoice.fee_amount) > 0 && (
               // custom: invoice fee — display fee snapshot + refund status
               <div style={{ marginBottom: 12 }}>
-                <strong>{t('服务费')}：</strong>¥{' '}
+                <strong>{t('开票服务费')}：</strong>¥{' '}
                 {Number(reviewInvoice.fee_amount).toFixed(2)}
                 <Typography.Text type='tertiary' size='small' style={{ marginLeft: 6 }}>
                   ({(Number(reviewInvoice.fee_rate) * 100).toFixed(2)}%
                   {reviewInvoice.fee_refunded
-                    ? ` · ${t('已退还')}`
-                    : ` · ${t('已扣除')}`}
+                    ? ` · ${t('开票服务费已退还')}`
+                    : ` · ${t('开票服务费已扣除')}`}
                   )
                 </Typography.Text>
               </div>
