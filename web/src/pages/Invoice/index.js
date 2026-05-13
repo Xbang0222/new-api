@@ -11,8 +11,12 @@ import {
   TabPane,
 } from '@douyinfe/semi-ui';
 import { InvoiceAPI, formatInvoiceAmount } from '../../helpers/invoice';
-import { showError, timestamp2string } from '../../helpers';
+import { showError } from '../../helpers';
 import { createCardProPagination } from '../../helpers/utils';
+import {
+  applyCompactColumns,
+  renderTimestampNoWrap,
+} from '../../helpers/customTable';
 import {
   INVOICE_STATUS,
   INVOICE_STATUS_LABEL,
@@ -20,7 +24,9 @@ import {
 } from '../../constants/invoice.constants';
 import CardPro from '../../components/common/ui/CardPro';
 import CardTable from '../../components/common/ui/CardTable';
+import CompactModeToggle from '../../components/common/ui/CompactModeToggle';
 import { useIsMobile } from '../../hooks/common/useIsMobile';
+import { useTableCompactMode } from '../../hooks/common/useTableCompactMode';
 import InvoiceHeaderManager from '../../components/invoice/InvoiceHeaderManager';
 
 const Invoice = () => {
@@ -32,6 +38,9 @@ const Invoice = () => {
   const [pageSize] = useState(10);
   const [total, setTotal] = useState(0);
   const [activeTab, setActiveTab] = useState('invoices');
+
+  // custom: invoice ui — usage-logs 同款双模式
+  const [compactMode, setCompactMode] = useTableCompactMode('invoices');
 
   const fetchInvoices = useCallback(async () => {
     setLoading(true);
@@ -121,12 +130,12 @@ const Invoice = () => {
     {
       title: t('申请时间'),
       dataIndex: 'create_time',
-      width: 180,
-      render: (val) => timestamp2string(val),
+      render: renderTimestampNoWrap,
     },
     {
       title: t('操作'),
       width: 120,
+      fixed: 'right',
       render: (_, record) => (
         <Space>
           {record.status === INVOICE_STATUS.PENDING && (
@@ -150,12 +159,31 @@ const Invoice = () => {
     },
   ];
 
+  // custom: invoice ui — columns 是普通字面量(每次 render 重建),inline 使用 helper
+  // 而非 useMemo:依赖不稳定时 useMemo 等价于 inline,反而误导
+  const tableColumns = applyCompactColumns(columns, compactMode);
+
   return (
     <div className='mt-[60px] px-2'>
       <CardPro
         type='type3'
         descriptionArea={
-          <Typography.Title heading={5}>{t('发票管理')}</Typography.Title>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}
+          >
+            <Typography.Title heading={5}>{t('发票管理')}</Typography.Title>
+            {activeTab === 'invoices' && (
+              <CompactModeToggle
+                compactMode={compactMode}
+                setCompactMode={setCompactMode}
+                t={t}
+              />
+            )}
+          </div>
         }
         tabsArea={
           <Tabs type='line' activeKey={activeTab} onChange={setActiveTab}>
@@ -182,10 +210,11 @@ const Invoice = () => {
           // custom: invoice — CardTable + CardPro.paginationArea 模式,跟 usage-logs
           // 一致;Table 自身 rounded-xl 处理表格主体,分页栏交给 CardPro 槽,跟随 !rounded-2xl。
           <CardTable
-            columns={columns}
+            columns={tableColumns}
             dataSource={invoices}
             loading={loading}
             rowKey='id'
+            scroll={compactMode ? undefined : { x: 'max-content' }}
             className='rounded-xl overflow-hidden'
             size='small'
             empty={t('暂无发票记录')}

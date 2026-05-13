@@ -10,12 +10,18 @@ import {
   Tabs,
   TabPane,
 } from '@douyinfe/semi-ui';
-import { API, showError, timestamp2string } from '../../helpers';
+import { API, showError } from '../../helpers';
 import { InvoiceAPI } from '../../helpers/invoice';
 import { createCardProPagination } from '../../helpers/utils';
+import {
+  applyCompactColumns,
+  renderTimestampNoWrap,
+} from '../../helpers/customTable';
 import CardPro from '../../components/common/ui/CardPro';
 import CardTable from '../../components/common/ui/CardTable';
+import CompactModeToggle from '../../components/common/ui/CompactModeToggle';
 import { useIsMobile } from '../../hooks/common/useIsMobile';
+import { useTableCompactMode } from '../../hooks/common/useTableCompactMode';
 import InvoiceApplicationModal from '../../components/billing/InvoiceApplicationModal';
 
 const STATUS_MAP = {
@@ -43,6 +49,9 @@ const Billing = () => {
   const [availablePage, setAvailablePage] = useState(1);
   const [availableTotal, setAvailableTotal] = useState(0);
   const [availableLoading, setAvailableLoading] = useState(false);
+
+  // custom: invoice ui — usage-logs 同款双模式
+  const [compactMode, setCompactMode] = useTableCompactMode('billing');
 
   const fetchTopUps = useCallback(async () => {
     setLoading(true);
@@ -187,12 +196,12 @@ const Billing = () => {
     {
       title: t('创建时间'),
       dataIndex: 'create_time',
-      width: 170,
-      render: (val) => timestamp2string(val),
+      render: renderTimestampNoWrap,
     },
     {
       title: t('操作'),
       width: 80,
+      fixed: 'right',
       render: (_, record) =>
         record.status === 'pending' ? (
           <Popconfirm
@@ -212,10 +221,15 @@ const Billing = () => {
     {
       title: t('创建时间'),
       dataIndex: 'create_time',
-      width: 170,
-      render: (val) => timestamp2string(val),
+      fixed: 'right',
+      render: renderTimestampNoWrap,
     },
   ];
+
+  // custom: invoice ui — allColumns/simpleColumns 是普通字面量(每次 render 重建),
+  // inline 使用 helper 而非 useMemo:依赖不稳定时 useMemo 等价于 inline,反而误导
+  const allTableColumns = applyCompactColumns(allColumns, compactMode);
+  const simpleTableColumns = applyCompactColumns(simpleColumns, compactMode);
 
   const isEnabled = invoiceSetting?.enabled;
 
@@ -238,15 +252,22 @@ const Billing = () => {
             }}
           >
             <Typography.Title heading={5}>{t('充值账单')}</Typography.Title>
-            {isEnabled && (
-              <Button
-                theme='solid'
-                type='primary'
-                onClick={() => setShowInvoiceModal(true)}
-              >
-                {t('申请开票')}
-              </Button>
-            )}
+            <Space>
+              <CompactModeToggle
+                compactMode={compactMode}
+                setCompactMode={setCompactMode}
+                t={t}
+              />
+              {isEnabled && (
+                <Button
+                  theme='solid'
+                  type='primary'
+                  onClick={() => setShowInvoiceModal(true)}
+                >
+                  {t('申请开票')}
+                </Button>
+              )}
+            </Space>
           </div>
         }
         tabsArea={
@@ -282,12 +303,14 @@ const Billing = () => {
         t={t}
       >
         {/* custom: invoice — CardTable + CardPro.paginationArea 模式,跟 usage-logs 一致 */}
+        {/* custom: invoice ui — 双模式：紧凑剥掉 fixed 按容器分配;自适应用 max-content 防换行 */}
         {activeTab === 'all' && (
           <CardTable
-            columns={allColumns}
+            columns={allTableColumns}
             dataSource={topups}
             loading={loading}
             rowKey='id'
+            scroll={compactMode ? undefined : { x: 'max-content' }}
             className='rounded-xl overflow-hidden'
             size='small'
             empty={t('暂无充值记录')}
@@ -296,10 +319,11 @@ const Billing = () => {
         )}
         {activeTab === 'available' && (
           <CardTable
-            columns={simpleColumns}
+            columns={simpleTableColumns}
             dataSource={availableTopUps}
             loading={availableLoading}
             rowKey='id'
+            scroll={compactMode ? undefined : { x: 'max-content' }}
             className='rounded-xl overflow-hidden'
             size='small'
             empty={t('暂无可开票的充值记录')}
@@ -308,10 +332,11 @@ const Billing = () => {
         )}
         {activeTab === 'invoiced' && (
           <CardTable
-            columns={simpleColumns}
+            columns={simpleTableColumns}
             dataSource={filteredTopUps}
             loading={loading}
             rowKey='id'
+            scroll={compactMode ? undefined : { x: 'max-content' }}
             className='rounded-xl overflow-hidden'
             size='small'
             empty={t('暂无已开票记录')}

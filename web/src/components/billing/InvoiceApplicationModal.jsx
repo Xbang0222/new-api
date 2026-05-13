@@ -16,10 +16,16 @@ import {
   Toast,
   Spin,
 } from '@douyinfe/semi-ui';
-import { API, showError, timestamp2string } from '../../helpers';
+import { API, showError } from '../../helpers';
 import { getQuotaPerUnit } from '../../helpers/quota';
 import { InvoiceAPI, formatInvoiceAmount } from '../../helpers/invoice';
+import {
+  applyCompactColumns,
+  renderTimestampNoWrap,
+} from '../../helpers/customTable';
 import { StatusContext } from '../../context/Status';
+import { useTableCompactMode } from '../../hooks/common/useTableCompactMode';
+import CompactModeToggle from '../common/ui/CompactModeToggle';
 
 // custom: invoice fee — small rounding tolerance (1 fen) when comparing the
 // fee against the user's wallet balance, to absorb float drift from the
@@ -43,6 +49,10 @@ const InvoiceApplicationModal = ({
   const [userEmail, setUserEmail] = useState('');
   const [userQuota, setUserQuota] = useState(0);
   const formRef = React.useRef();
+  // custom: invoice ui — usage-logs 同款双模式
+  const [compactMode, setCompactMode] = useTableCompactMode(
+    'invoice-application',
+  );
 
   // custom: invoice fee — approximate user's wallet balance in RMB so we can
   // show a "balance insufficient" warning before they submit. Authoritative
@@ -266,10 +276,13 @@ const InvoiceApplicationModal = ({
     {
       title: t('充值时间'),
       dataIndex: 'create_time',
-      width: 150,
-      render: (val) => timestamp2string(val),
+      fixed: 'right',
+      render: renderTimestampNoWrap,
     },
   ];
+
+  // custom: invoice ui — topupColumns 是普通字面量,inline 使用 helper
+  const tableColumns = applyCompactColumns(topupColumns, compactMode);
 
   return (
     <Modal
@@ -291,15 +304,30 @@ const InvoiceApplicationModal = ({
       maskClosable={false}
     >
       {/* 步骤 1：选择账单 */}
-      <Typography.Title heading={6} style={{ marginBottom: 8 }}>
-        1. {t('选择充值账单')}
-      </Typography.Title>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: 8,
+        }}
+      >
+        <Typography.Title heading={6} style={{ margin: 0 }}>
+          1. {t('选择充值账单')}
+        </Typography.Title>
+        <CompactModeToggle
+          compactMode={compactMode}
+          setCompactMode={setCompactMode}
+          t={t}
+        />
+      </div>
 
       <Spin spinning={topUpLoading}>
         <Table
-          columns={topupColumns}
+          columns={tableColumns}
           dataSource={availableTopUps}
           rowKey='id'
+          scroll={compactMode ? undefined : { x: 'max-content' }}
           rowSelection={{
             selectedRowKeys,
             onChange: handleTopUpSelectionChange,

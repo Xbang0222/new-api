@@ -34,9 +34,15 @@ import {
 } from '@douyinfe/semi-illustrations';
 import { Coins } from 'lucide-react';
 import { IconSearch } from '@douyinfe/semi-icons';
-import { API, timestamp2string } from '../../../helpers';
+import { API } from '../../../helpers';
 import { isAdmin } from '../../../helpers/utils';
+import {
+  applyCompactColumns,
+  renderTimestampNoWrap,
+} from '../../../helpers/customTable';
 import { useIsMobile } from '../../../hooks/common/useIsMobile';
+import { useTableCompactMode } from '../../../hooks/common/useTableCompactMode';
+import CompactModeToggle from '../../common/ui/CompactModeToggle';
 const { Text } = Typography;
 
 // 状态映射配置
@@ -64,6 +70,8 @@ const TopupHistoryModal = ({ visible, onCancel, t }) => {
   const [pageSize, setPageSize] = useState(10);
   const [keyword, setKeyword] = useState('');
   const isMobile = useIsMobile();
+  // custom: invoice ui — usage-logs 同款双模式：默认自适应 + max-content,紧凑模式按容器宽度分配
+  const [compactMode, setCompactMode] = useTableCompactMode('topup-history');
 
   const loadTopups = async (currentPage, currentPageSize) => {
     setLoading(true);
@@ -246,11 +254,18 @@ const TopupHistoryModal = ({ visible, onCancel, t }) => {
       title: t('创建时间'),
       dataIndex: 'create_time',
       key: 'create_time',
-      render: (time) => timestamp2string(time),
+      fixed: 'right',
+      render: renderTimestampNoWrap,
     });
 
     return baseColumns;
   }, [t, userIsAdmin]);
+
+  // custom: invoice ui — 紧凑模式剥掉 fixed,跟 usage-logs 一致
+  const tableColumns = useMemo(
+    () => applyCompactColumns(columns, compactMode),
+    [columns, compactMode],
+  );
 
   return (
     <Modal
@@ -260,20 +275,28 @@ const TopupHistoryModal = ({ visible, onCancel, t }) => {
       footer={null}
       size={isMobile ? 'full-width' : 'large'}
     >
-      <div className='mb-3'>
+      <div className='mb-3 flex items-center gap-2'>
         <Input
           prefix={<IconSearch />}
           placeholder={t('订单号')}
           value={keyword}
           onChange={handleKeywordChange}
           showClear
+          style={{ flex: 1 }}
+        />
+        <CompactModeToggle
+          compactMode={compactMode}
+          setCompactMode={setCompactMode}
+          t={t}
+          size='default'
         />
       </div>
       <Table
-        columns={columns}
+        columns={tableColumns}
         dataSource={topups}
         loading={loading}
         rowKey='id'
+        scroll={compactMode ? undefined : { x: 'max-content' }}
         pagination={{
           currentPage: page,
           pageSize: pageSize,

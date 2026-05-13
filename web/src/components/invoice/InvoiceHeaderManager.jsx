@@ -12,7 +12,10 @@ import {
 } from '@douyinfe/semi-ui';
 import { InvoiceAPI } from '../../helpers/invoice';
 import { showError } from '../../helpers';
+import { applyCompactColumns } from '../../helpers/customTable';
 import CardTable from '../common/ui/CardTable';
+import CompactModeToggle from '../common/ui/CompactModeToggle';
+import { useTableCompactMode } from '../../hooks/common/useTableCompactMode';
 
 const InvoiceHeaderManager = () => {
   const { t } = useTranslation();
@@ -21,6 +24,8 @@ const InvoiceHeaderManager = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingHeader, setEditingHeader] = useState(null);
   const formRef = React.useRef();
+  // custom: invoice ui — usage-logs 同款双模式
+  const [compactMode, setCompactMode] = useTableCompactMode('invoice-headers');
 
   const fetchHeaders = useCallback(async () => {
     setLoading(true);
@@ -102,6 +107,7 @@ const InvoiceHeaderManager = () => {
     {
       title: t('操作'),
       width: 150,
+      fixed: 'right',
       render: (_, record) => (
         <Space>
           <Button
@@ -127,9 +133,19 @@ const InvoiceHeaderManager = () => {
     },
   ];
 
+  // custom: invoice ui — columns 是普通字面量,inline 使用 helper
+  const tableColumns = applyCompactColumns(columns, compactMode);
+
   return (
     <div style={{ marginTop: 12 }}>
-      <div style={{ marginBottom: 12 }}>
+      <div
+        style={{
+          marginBottom: 12,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}
+      >
         <Button
           theme='solid'
           onClick={() => {
@@ -139,13 +155,19 @@ const InvoiceHeaderManager = () => {
         >
           {t('新建抬头')}
         </Button>
+        <CompactModeToggle
+          compactMode={compactMode}
+          setCompactMode={setCompactMode}
+          t={t}
+        />
       </div>
 
       <CardTable
-        columns={columns}
+        columns={tableColumns}
         dataSource={headers}
         loading={loading}
         rowKey='id'
+        scroll={compactMode ? undefined : { x: 'max-content' }}
         className='rounded-xl overflow-hidden'
         size='small'
         empty={t('暂无保存的抬头模板')}

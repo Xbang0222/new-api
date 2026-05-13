@@ -189,6 +189,7 @@ When modifying upstream files is unavoidable, follow these rules:
 | `custom: subscription cycle purchase limit` | 订阅周期限购（窗口计数替代终身计数） |
 | `custom: claude code only` | 渠道级"仅 Claude Code 客户端"白名单（严格 403） |
 | `custom: shop link` | 顶栏"商城"按钮（外链，URL 与 docs_link 同样在通用设置中配置） |
+| `custom: invoice ui` | 充值/账单/发票表格统一双模式（紧凑/自适应），列宽自适应、时间不换行 |
 
 **Behavioral changes** (modifying existing upstream logic, not just adding new code) MUST include a block comment explaining:
 - What the original logic was
@@ -252,6 +253,7 @@ When modifying upstream files is unavoidable, follow these rules:
 | `service/task_billing_test.go` | +4 lines (shared TestMain: Invoice/InvoiceItem migration + truncate cleanup, custom: invoice fee) | Low |
 | `web/src/i18n/locales/{en,fr,ja,ru,vi,zh,zh-CN,zh-TW}.json` | +7 invoice fee keys per file (开票服务费 / 提交时将从余额扣除 / 余额不足以支付开票服务费，请先充值 / 开票服务费率 / "0–1 之间的小数..." / 开票服务费已退还 / 开票服务费已扣除) | Low |
 | `web/src/components/table/subscriptions/SubscriptionsTable.jsx` | 1-char change (`overflow-hidden` → `rounded-xl overflow-hidden`, custom: subscription ui — 上游漏了 `rounded-xl`,跟 usage-logs 保持一致) | Low |
+| `web/src/components/topup/modals/TopupHistoryModal.jsx` | +20 lines (useTableCompactMode + CompactModeToggle + 时间列 fixed:'right'/renderTimestampNoWrap + Input/Toggle flex 布局, custom: invoice ui — 充值账单弹窗接入双模式) | Medium |
 
 #### 7.3 i18n — Avoid Key Collisions
 
