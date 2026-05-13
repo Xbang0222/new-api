@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Table,
   Button,
   Modal,
   Form,
@@ -13,6 +12,7 @@ import {
 } from '@douyinfe/semi-ui';
 import { InvoiceAPI } from '../../helpers/invoice';
 import { showError } from '../../helpers';
+import CardTable from '../common/ui/CardTable';
 
 const InvoiceHeaderManager = () => {
   const { t } = useTranslation();
@@ -86,14 +86,7 @@ const InvoiceHeaderManager = () => {
     {
       title: t('单位名称'),
       dataIndex: 'company_name',
-      render: (text) => (
-        <Typography.Text
-          ellipsis={{ showTooltip: true }}
-          style={{ maxWidth: 200 }}
-        >
-          {text}
-        </Typography.Text>
-      ),
+      render: (text) => <Typography.Text>{text}</Typography.Text>,
     },
     {
       title: t('纳税人识别号'),
@@ -148,14 +141,15 @@ const InvoiceHeaderManager = () => {
         </Button>
       </div>
 
-      <Table
+      <CardTable
         columns={columns}
         dataSource={headers}
         loading={loading}
         rowKey='id'
         className='rounded-xl overflow-hidden'
-        pagination={false}
+        size='small'
         empty={t('暂无保存的抬头模板')}
+        hidePagination
       />
 
       <Modal

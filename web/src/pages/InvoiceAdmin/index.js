@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Table,
   Tag,
   Button,
   Input,
@@ -15,9 +14,12 @@ import {
   Tooltip,
 } from '@douyinfe/semi-ui';
 import { IconInfoCircle } from '@douyinfe/semi-icons';
-import { InvoiceAPI } from '../../helpers/invoice';
+import { InvoiceAPI, formatInvoiceAmount } from '../../helpers/invoice';
 import { showError, timestamp2string } from '../../helpers';
+import { createCardProPagination } from '../../helpers/utils';
 import CardPro from '../../components/common/ui/CardPro';
+import CardTable from '../../components/common/ui/CardTable';
+import { useIsMobile } from '../../hooks/common/useIsMobile';
 import {
   INVOICE_STATUS,
   INVOICE_STATUS_LABEL,
@@ -27,6 +29,7 @@ import {
 
 const InvoiceAdmin = () => {
   const { t } = useTranslation();
+  const isMobile = useIsMobile();
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
@@ -124,36 +127,25 @@ const InvoiceAdmin = () => {
     {
       title: t('单位名称'),
       dataIndex: 'company_name',
-      width: 140,
-      render: (text) => (
-        <Typography.Text ellipsis={{ showTooltip: true }}>
-          {text}
-        </Typography.Text>
-      ),
+      render: (text) => <Typography.Text>{text}</Typography.Text>,
     },
     {
       title: t('税号'),
       dataIndex: 'tax_number',
-      render: (text) => (
-        <Typography.Text copyable ellipsis={{ showTooltip: true }}>
-          {text}
-        </Typography.Text>
-      ),
+      render: (text) => <Typography.Text copyable>{text}</Typography.Text>,
     },
     {
       title: t('邮箱'),
       dataIndex: 'email',
       render: (text) => (
-        <Typography.Text copyable ellipsis={{ showTooltip: true }}>
-          {text || '-'}
-        </Typography.Text>
+        <Typography.Text copyable>{text || '-'}</Typography.Text>
       ),
     },
     {
       title: t('金额'),
       dataIndex: 'amount',
-      width: 90,
-      render: (val) => `¥ ${Number(val).toFixed(2)}`,
+      width: 120,
+      render: (val) => formatInvoiceAmount(val),
     },
     {
       title: t('状态'),
@@ -168,7 +160,7 @@ const InvoiceAdmin = () => {
     {
       title: t('申请时间'),
       dataIndex: 'create_time',
-      width: 110,
+      width: 130,
       render: (val) => {
         const full = timestamp2string(val);
         const date = full.split(' ')[0];
@@ -241,23 +233,30 @@ const InvoiceAdmin = () => {
             />
           </div>
         }
+        paginationArea={createCardProPagination({
+          currentPage: page,
+          pageSize,
+          total,
+          onPageChange: setPage,
+          isMobile,
+          showSizeChanger: false,
+          t,
+        })}
         t={t}
       >
-        <Table
+        {/* custom: invoice — 复用项目 CardTable + CardPro paginationArea 模式,
+            跟 usage-logs 等表格保持一致圆角。Table 自身 rounded-xl 处理表格主体,
+            分页栏由 CardPro 的 paginationArea 槽接管,跟着 CardPro !rounded-2xl 走。 */}
+        <CardTable
           columns={columns}
           dataSource={invoices}
           loading={loading}
           rowKey='id'
-          className='rounded-xl overflow-hidden'
           scroll={{ x: 'max-content' }}
-          pagination={{
-            currentPage: page,
-            pageSize,
-            total,
-            onPageChange: setPage,
-            showTotal: true,
-          }}
+          className='rounded-xl overflow-hidden'
+          size='small'
           empty={t('暂无发票申请')}
+          hidePagination
         />
       </CardPro>
 
@@ -311,15 +310,19 @@ const InvoiceAdmin = () => {
               {reviewInvoice.tax_number}
             </div>
             <div style={{ marginBottom: 12 }}>
-              <strong>{t('金额')}：</strong>¥{' '}
-              {Number(reviewInvoice.amount).toFixed(2)}
+              <strong>{t('金额')}：</strong>
+              {formatInvoiceAmount(reviewInvoice.amount)}
             </div>
             {Number(reviewInvoice.fee_amount) > 0 && (
               // custom: invoice fee — display fee snapshot + refund status
               <div style={{ marginBottom: 12 }}>
-                <strong>{t('开票服务费')}：</strong>¥{' '}
-                {Number(reviewInvoice.fee_amount).toFixed(2)}
-                <Typography.Text type='tertiary' size='small' style={{ marginLeft: 6 }}>
+                <strong>{t('开票服务费')}：</strong>
+                {formatInvoiceAmount(reviewInvoice.fee_amount)}
+                <Typography.Text
+                  type='tertiary'
+                  size='small'
+                  style={{ marginLeft: 6 }}
+                >
                   ({(Number(reviewInvoice.fee_rate) * 100).toFixed(2)}%
                   {reviewInvoice.fee_refunded
                     ? ` · ${t('开票服务费已退还')}`

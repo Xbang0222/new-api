@@ -251,6 +251,7 @@ When modifying upstream files is unavoidable, follow these rules:
 | `controller/option.go::UpdateOption` | +19 lines (invoice fee_rate validation: NaN/Inf reject + clamp [0,1], custom: invoice fee) | Low |
 | `service/task_billing_test.go` | +4 lines (shared TestMain: Invoice/InvoiceItem migration + truncate cleanup, custom: invoice fee) | Low |
 | `web/src/i18n/locales/{en,fr,ja,ru,vi,zh,zh-CN,zh-TW}.json` | +7 invoice fee keys per file (开票服务费 / 提交时将从余额扣除 / 余额不足以支付开票服务费，请先充值 / 开票服务费率 / "0–1 之间的小数..." / 开票服务费已退还 / 开票服务费已扣除) | Low |
+| `web/src/components/table/subscriptions/SubscriptionsTable.jsx` | 1-char change (`overflow-hidden` → `rounded-xl overflow-hidden`, custom: subscription ui — 上游漏了 `rounded-xl`,跟 usage-logs 保持一致) | Low |
 
 #### 7.3 i18n — Avoid Key Collisions
 

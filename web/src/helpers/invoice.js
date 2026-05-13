@@ -6,6 +6,40 @@
  */
 
 import { API } from './api';
+import { renderQuota } from './render';
+import { getQuotaPerUnit } from './quota';
+
+/**
+ * Format an invoice amount (stored as RMB yuan on the backend) for display,
+ * following the project-wide currency display preference (USD / CNY / CUSTOM /
+ * TOKENS) set in localStorage.quota_display_type.
+ *
+ * Reuses the project's `renderQuota` helper so currency symbol, exchange rate,
+ * custom-currency config and rounding all stay in sync with the rest of the UI
+ * — admin changes to `usd_exchange_rate` and `quota_per_unit` flow through
+ * automatically, no hardcoded rate of our own.
+ *
+ * Flow: RMB → USD (divide by usd_exchange_rate) → quota → renderQuota(quota)
+ */
+export const formatInvoiceAmount = (rmbAmount) => {
+  const rmb = Number(rmbAmount || 0);
+  if (!Number.isFinite(rmb)) return renderQuota(0, 2);
+
+  // Fallback 1 mirrors renderQuota's own CNY branch when status is missing.
+  let usdRate = 1;
+  try {
+    const statusStr = localStorage.getItem('status');
+    if (statusStr) {
+      const s = JSON.parse(statusStr);
+      const rate = Number(s?.usd_exchange_rate);
+      if (Number.isFinite(rate) && rate > 0) usdRate = rate;
+    }
+  } catch (e) {}
+
+  const quotaPerUnit = getQuotaPerUnit();
+  const quota = (rmb / usdRate) * quotaPerUnit;
+  return renderQuota(quota, 2);
+};
 
 export const InvoiceAPI = {
   // ---- 配置 ----

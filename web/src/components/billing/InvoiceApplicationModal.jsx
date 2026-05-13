@@ -1,4 +1,10 @@
-import React, { useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, {
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Modal,
@@ -12,7 +18,7 @@ import {
 } from '@douyinfe/semi-ui';
 import { API, showError, timestamp2string } from '../../helpers';
 import { getQuotaPerUnit } from '../../helpers/quota';
-import { InvoiceAPI } from '../../helpers/invoice';
+import { InvoiceAPI, formatInvoiceAmount } from '../../helpers/invoice';
 import { StatusContext } from '../../context/Status';
 
 // custom: invoice fee — small rounding tolerance (1 fen) when comparing the
@@ -202,7 +208,7 @@ const InvoiceApplicationModal = ({
       return;
     }
     if (selectedAmount < minAmount) {
-      showError(`${t('最低开票金额为')} ¥${minAmount}`);
+      showError(`${t('最低开票金额为')} ${formatInvoiceAmount(minAmount)}`);
       return;
     }
     // Intentionally NOT pre-blocking on balanceInsufficient — frontend's
@@ -243,14 +249,7 @@ const InvoiceApplicationModal = ({
     {
       title: t('交易号'),
       dataIndex: 'trade_no',
-      render: (text) => (
-        <Typography.Text
-          ellipsis={{ showTooltip: true }}
-          style={{ maxWidth: 200 }}
-        >
-          {text}
-        </Typography.Text>
-      ),
+      render: (text) => <Typography.Text>{text}</Typography.Text>,
     },
     {
       title: t('支付方式'),
@@ -262,7 +261,7 @@ const InvoiceApplicationModal = ({
       title: t('实付金额'),
       dataIndex: 'money',
       width: 100,
-      render: (val) => `¥ ${Number(val).toFixed(2)}`,
+      render: (val) => formatInvoiceAmount(val),
     },
     {
       title: t('充值时间'),
@@ -340,40 +339,50 @@ const InvoiceApplicationModal = ({
             {t('已选择')}: {selectedRowKeys.length} {t('笔')}
           </span>
           <span>
-            {t('开票金额')}: <strong>¥ {selectedAmount.toFixed(2)}</strong>
+            {t('开票金额')}:{' '}
+            <strong>{formatInvoiceAmount(selectedAmount)}</strong>
             {selectedRowKeys.length > 0 && selectedAmount < minAmount && (
               <Typography.Text type='danger' style={{ marginLeft: 8 }}>
-                （{t('最低开票金额为')} ¥{minAmount}）
+                （{t('最低开票金额为')} {formatInvoiceAmount(minAmount)}）
               </Typography.Text>
             )}
           </span>
         </div>
-        {feeRateNum > 0 && selectedRowKeys.length > 0 && selectedAmount >= minAmount && (
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              marginTop: 6,
-              paddingTop: 6,
-              borderTop: '1px dashed var(--semi-color-border)',
-            }}
-          >
-            <Typography.Text type='tertiary' size='small'>
-              {t('开票服务费')} ({(feeRateNum * 100).toFixed(2)}%) ·{' '}
-              {t('提交时将从余额扣除')}
-            </Typography.Text>
-            <span>
-              <Typography.Text strong type={balanceInsufficient ? 'danger' : undefined}>
-                ¥ {feeAmount.toFixed(2)}
+        {feeRateNum > 0 &&
+          selectedRowKeys.length > 0 &&
+          selectedAmount >= minAmount && (
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                marginTop: 6,
+                paddingTop: 6,
+                borderTop: '1px dashed var(--semi-color-border)',
+              }}
+            >
+              <Typography.Text type='tertiary' size='small'>
+                {t('开票服务费')} ({(feeRateNum * 100).toFixed(2)}%) ·{' '}
+                {t('提交时将从余额扣除')}
               </Typography.Text>
-              {quotaPerUnitConfigured && (
-                <Typography.Text type='tertiary' size='small' style={{ marginLeft: 8 }}>
-                  {t('当前余额')} ¥ {userQuotaInRmb.toFixed(2)}
+              <span>
+                <Typography.Text
+                  strong
+                  type={balanceInsufficient ? 'danger' : undefined}
+                >
+                  {formatInvoiceAmount(feeAmount)}
                 </Typography.Text>
-              )}
-            </span>
-          </div>
-        )}
+                {quotaPerUnitConfigured && (
+                  <Typography.Text
+                    type='tertiary'
+                    size='small'
+                    style={{ marginLeft: 8 }}
+                  >
+                    {t('当前余额')} {formatInvoiceAmount(userQuotaInRmb)}
+                  </Typography.Text>
+                )}
+              </span>
+            </div>
+          )}
         {balanceInsufficient && (
           <Typography.Text
             type='danger'
@@ -494,7 +503,7 @@ const InvoiceApplicationModal = ({
           size='small'
           style={{ display: 'block', marginTop: 8 }}
         >
-          {t('最低开票金额为')} {minAmount} {t('元，当前已选金额不足')}
+          {t('最低开票金额提示', { amount: formatInvoiceAmount(minAmount) })}
         </Typography.Text>
       )}
     </Modal>

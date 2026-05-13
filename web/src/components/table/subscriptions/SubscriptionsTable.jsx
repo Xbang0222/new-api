@@ -77,7 +77,7 @@ const SubscriptionsTable = (subscriptionsData) => {
           style={{ padding: 30 }}
         />
       }
-      className='overflow-hidden'
+      className='rounded-xl overflow-hidden' /* custom: subscription ui — 上游漏了 rounded-xl,跟 usage-logs 等其他表格保持圆角一致 */
       size='middle'
     />
   );

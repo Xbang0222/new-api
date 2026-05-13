@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Table,
   Tag,
   Button,
   Space,
@@ -13,7 +12,10 @@ import {
 } from '@douyinfe/semi-ui';
 import { API, showError, timestamp2string } from '../../helpers';
 import { InvoiceAPI } from '../../helpers/invoice';
+import { createCardProPagination } from '../../helpers/utils';
 import CardPro from '../../components/common/ui/CardPro';
+import CardTable from '../../components/common/ui/CardTable';
+import { useIsMobile } from '../../hooks/common/useIsMobile';
 import InvoiceApplicationModal from '../../components/billing/InvoiceApplicationModal';
 
 const STATUS_MAP = {
@@ -25,6 +27,7 @@ const STATUS_MAP = {
 
 const Billing = () => {
   const { t } = useTranslation();
+  const isMobile = useIsMobile();
   const [topups, setTopups] = useState([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
@@ -132,26 +135,18 @@ const Billing = () => {
   };
 
   // 按 Tab 过滤数据
-  const getFilteredTopUps = () => {
+  const filteredTopUps = useMemo(() => {
     if (activeTab === 'invoiced') {
       return topups.filter((t) => invoicedIds.has(t.id));
     }
     return topups;
-  };
+  }, [activeTab, topups, invoicedIds]);
 
   const baseColumns = [
     {
       title: t('订单号'),
       dataIndex: 'trade_no',
-      render: (text) => (
-        <Typography.Text
-          copyable
-          ellipsis={{ showTooltip: true }}
-          style={{ maxWidth: 240 }}
-        >
-          {text}
-        </Typography.Text>
-      ),
+      render: (text) => <Typography.Text copyable>{text}</Typography.Text>,
     },
     {
       title: t('支付方式'),
@@ -261,51 +256,66 @@ const Billing = () => {
             {isEnabled && <TabPane tab={t('已开票')} itemKey='invoiced' />}
           </Tabs>
         }
+        paginationArea={
+          activeTab === 'all'
+            ? createCardProPagination({
+                currentPage: page,
+                pageSize,
+                total,
+                onPageChange: setPage,
+                isMobile,
+                showSizeChanger: false,
+                t,
+              })
+            : activeTab === 'available'
+              ? createCardProPagination({
+                  currentPage: availablePage,
+                  pageSize,
+                  total: availableTotal,
+                  onPageChange: setAvailablePage,
+                  isMobile,
+                  showSizeChanger: false,
+                  t,
+                })
+              : null
+        }
         t={t}
       >
+        {/* custom: invoice — CardTable + CardPro.paginationArea 模式,跟 usage-logs 一致 */}
         {activeTab === 'all' && (
-          <Table
+          <CardTable
             columns={allColumns}
             dataSource={topups}
             loading={loading}
             rowKey='id'
             className='rounded-xl overflow-hidden'
-            pagination={{
-              currentPage: page,
-              pageSize,
-              total,
-              onPageChange: setPage,
-              showTotal: true,
-            }}
+            size='small'
             empty={t('暂无充值记录')}
+            hidePagination
           />
         )}
         {activeTab === 'available' && (
-          <Table
+          <CardTable
             columns={simpleColumns}
             dataSource={availableTopUps}
             loading={availableLoading}
             rowKey='id'
             className='rounded-xl overflow-hidden'
-            pagination={{
-              currentPage: availablePage,
-              pageSize,
-              total: availableTotal,
-              onPageChange: setAvailablePage,
-              showTotal: true,
-            }}
+            size='small'
             empty={t('暂无可开票的充值记录')}
+            hidePagination
           />
         )}
         {activeTab === 'invoiced' && (
-          <Table
+          <CardTable
             columns={simpleColumns}
-            dataSource={getFilteredTopUps()}
+            dataSource={filteredTopUps}
             loading={loading}
             rowKey='id'
             className='rounded-xl overflow-hidden'
-            pagination={false}
+            size='small'
             empty={t('暂无已开票记录')}
+            hidePagination
           />
         )}
       </CardPro>

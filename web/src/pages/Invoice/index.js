@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Table,
   Tag,
   Button,
   Typography,
@@ -11,18 +10,22 @@ import {
   Tabs,
   TabPane,
 } from '@douyinfe/semi-ui';
-import { InvoiceAPI } from '../../helpers/invoice';
+import { InvoiceAPI, formatInvoiceAmount } from '../../helpers/invoice';
 import { showError, timestamp2string } from '../../helpers';
+import { createCardProPagination } from '../../helpers/utils';
 import {
   INVOICE_STATUS,
   INVOICE_STATUS_LABEL,
   INVOICE_STATUS_COLOR,
 } from '../../constants/invoice.constants';
 import CardPro from '../../components/common/ui/CardPro';
+import CardTable from '../../components/common/ui/CardTable';
+import { useIsMobile } from '../../hooks/common/useIsMobile';
 import InvoiceHeaderManager from '../../components/invoice/InvoiceHeaderManager';
 
 const Invoice = () => {
   const { t } = useTranslation();
+  const isMobile = useIsMobile();
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
@@ -72,35 +75,18 @@ const Invoice = () => {
     {
       title: t('单位名称'),
       dataIndex: 'company_name',
-      width: 200,
-      render: (text) => (
-        <Typography.Text
-          ellipsis={{ showTooltip: true }}
-          style={{ maxWidth: 180 }}
-        >
-          {text}
-        </Typography.Text>
-      ),
+      render: (text) => <Typography.Text>{text}</Typography.Text>,
     },
     {
       title: t('税号'),
       dataIndex: 'tax_number',
-      width: 200,
-      render: (text) => (
-        <Typography.Text
-          copyable
-          ellipsis={{ showTooltip: true }}
-          style={{ maxWidth: 180 }}
-        >
-          {text}
-        </Typography.Text>
-      ),
+      render: (text) => <Typography.Text copyable>{text}</Typography.Text>,
     },
     {
       title: t('金额'),
       dataIndex: 'amount',
       width: 120,
-      render: (val) => `¥ ${Number(val).toFixed(2)}`,
+      render: (val) => formatInvoiceAmount(val),
     },
     {
       // custom: invoice fee — show fee snapshot + refund status
@@ -112,7 +98,7 @@ const Invoice = () => {
         if (fee <= 0) return '-';
         return (
           <Typography.Text size='small'>
-            ¥ {fee.toFixed(2)}
+            {formatInvoiceAmount(fee)}
             {record.fee_refunded && (
               <Tag size='small' color='blue' style={{ marginLeft: 4 }}>
                 {t('开票服务费已退还')}
@@ -177,23 +163,33 @@ const Invoice = () => {
             <TabPane tab={t('发票抬头')} itemKey='headers' />
           </Tabs>
         }
+        paginationArea={
+          activeTab === 'invoices'
+            ? createCardProPagination({
+                currentPage: page,
+                pageSize,
+                total,
+                onPageChange: setPage,
+                isMobile,
+                showSizeChanger: false,
+                t,
+              })
+            : null
+        }
         t={t}
       >
         {activeTab === 'invoices' && (
-          <Table
+          // custom: invoice — CardTable + CardPro.paginationArea 模式,跟 usage-logs
+          // 一致;Table 自身 rounded-xl 处理表格主体,分页栏交给 CardPro 槽,跟随 !rounded-2xl。
+          <CardTable
             columns={columns}
             dataSource={invoices}
             loading={loading}
             rowKey='id'
             className='rounded-xl overflow-hidden'
-            pagination={{
-              currentPage: page,
-              pageSize,
-              total,
-              onPageChange: setPage,
-              showTotal: true,
-            }}
+            size='small'
             empty={t('暂无发票记录')}
+            hidePagination
           />
         )}
         {activeTab === 'headers' && <InvoiceHeaderManager />}

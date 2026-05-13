@@ -36,3 +36,4 @@ skills-lock.json
 
 token_estimator_test.go
 CLAUDE.local.md
+local-test-data/
