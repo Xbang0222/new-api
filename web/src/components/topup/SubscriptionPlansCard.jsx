@@ -105,9 +105,11 @@ const SubscriptionPlansCard = ({
 
   // custom: subscription deduction order
   useEffect(() => {
+    // Why: user may have an in-progress reorder that hasn't been saved yet
+    // (e.g. parent triggered a silent refresh). Don't clobber their work.
+    if (orderDirty || savingOrder) return;
     setOrderedActiveSubscriptions(activeSubscriptions || []);
-    setOrderDirty(false);
-  }, [activeSubscriptions]);
+  }, [activeSubscriptions, orderDirty, savingOrder]);
 
   // custom: wallet subscription — add wallet as first option in the epay dropdown
   const allPayMethods = useMemo(() => {
@@ -190,7 +192,7 @@ const SubscriptionPlansCard = ({
         await refreshSubscriptionSelfSilently();
       }
     } catch (e) {
-      showError(t('保存失败，请刷新后重试'));
+      showError(e?.response?.data?.message || t('保存失败，请刷新后重试'));
       await refreshSubscriptionSelfSilently();
     } finally {
       setSavingOrder(false);
