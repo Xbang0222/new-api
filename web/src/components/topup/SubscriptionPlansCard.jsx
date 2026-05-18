@@ -17,11 +17,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Badge,
   Button,
   Card,
+  Collapse,
   Divider,
   Select,
   Skeleton,
@@ -32,16 +33,20 @@ import {
 } from '@douyinfe/semi-ui';
 import { API, showError, showSuccess, renderQuota } from '../../helpers';
 import { getCurrencyConfig } from '../../helpers/render';
-import { RefreshCw, Save, Sparkles } from 'lucide-react';
+import { RefreshCw, Sparkles } from 'lucide-react';
 import SubscriptionPurchaseModal from './modals/SubscriptionPurchaseModal';
 // custom: subscription deduction order
 import SubscriptionDeductionOrderList from './SubscriptionDeductionOrderList';
+import SubscriptionHistoryList from './SubscriptionHistoryList';
 import {
   formatSubscriptionDuration,
   formatSubscriptionResetPeriod,
 } from '../../helpers/subscriptionFormat';
 // custom: subscription cycle purchase limit
-import { computePurchaseWindowStart } from '../../helpers/subscription';
+import {
+  computePurchaseWindowStart,
+  isSubscriptionNearExhausted,
+} from '../../helpers/subscription';
 
 const { Text } = Typography;
 
@@ -73,6 +78,62 @@ function submitEpayForm({ url, params }) {
   document.body.removeChild(form);
 }
 
+// custom: subscription deduction order
+const getSubscriptionId = (sub) => sub?.subscription?.id;
+
+// custom: subscription deduction order
+const hasSameSubscriptionOrder = (left, right) => {
+  if (left.length !== right.length) return false;
+  return left.every(
+    (sub, index) => getSubscriptionId(sub) === getSubscriptionId(right[index]),
+  );
+};
+
+// custom: subscription deduction order
+const reorderSubscriptionList = (
+  subscriptions,
+  sourceId,
+  targetId,
+  position = 'before',
+) => {
+  if (!sourceId || !targetId || sourceId === targetId) return subscriptions;
+  const sourceIndex = subscriptions.findIndex(
+    (sub) => String(getSubscriptionId(sub)) === String(sourceId),
+  );
+  const targetIndex = subscriptions.findIndex(
+    (sub) => String(getSubscriptionId(sub)) === String(targetId),
+  );
+  if (sourceIndex < 0 || targetIndex < 0) return subscriptions;
+
+  const next = [...subscriptions];
+  const [moved] = next.splice(sourceIndex, 1);
+  const newTargetIndex = next.findIndex(
+    (sub) => String(getSubscriptionId(sub)) === String(targetId),
+  );
+  if (newTargetIndex < 0) return subscriptions;
+  const insertIndex =
+    position === 'after' ? newTargetIndex + 1 : newTargetIndex;
+  next.splice(insertIndex, 0, moved);
+
+  return hasSameSubscriptionOrder(subscriptions, next) ? subscriptions : next;
+};
+
+// custom: subscription deduction order
+const getDeductionOrderSubscriptionIds = (subscriptions) => {
+  const visibleIds = [];
+  const nearExhaustedIds = [];
+  subscriptions.forEach((sub) => {
+    const id = getSubscriptionId(sub);
+    if (!id) return;
+    if (isSubscriptionNearExhausted(sub?.subscription)) {
+      nearExhaustedIds.push(id);
+      return;
+    }
+    visibleIds.push(id);
+  });
+  return [...visibleIds, ...nearExhaustedIds];
+};
+
 const SubscriptionPlansCard = ({
   t,
   loading = false,
@@ -98,18 +159,15 @@ const SubscriptionPlansCard = ({
   const [orderedActiveSubscriptions, setOrderedActiveSubscriptions] = useState(
     activeSubscriptions || [],
   );
-  const [orderDirty, setOrderDirty] = useState(false);
   const [savingOrder, setSavingOrder] = useState(false);
 
   const epayMethods = useMemo(() => getEpayMethods(payMethods), [payMethods]);
 
   // custom: subscription deduction order
   useEffect(() => {
-    // Why: user may have an in-progress reorder that hasn't been saved yet
-    // (e.g. parent triggered a silent refresh). Don't clobber their work.
-    if (orderDirty || savingOrder) return;
+    if (savingOrder) return;
     setOrderedActiveSubscriptions(activeSubscriptions || []);
-  }, [activeSubscriptions, orderDirty, savingOrder]);
+  }, [activeSubscriptions, savingOrder]);
 
   // custom: wallet subscription — add wallet as first option in the epay dropdown
   const allPayMethods = useMemo(() => {
@@ -142,60 +200,11 @@ const SubscriptionPlansCard = ({
   };
 
   // custom: subscription deduction order
-  const moveSubscriptionOrder = (index, direction) => {
-    const targetIndex = index + direction;
-    if (targetIndex < 0 || targetIndex >= orderedActiveSubscriptions.length) {
-      return;
-    }
-    setOrderedActiveSubscriptions((prev) => {
-      if (targetIndex < 0 || targetIndex >= prev.length) {
-        return prev;
-      }
-      const next = [...prev];
-      [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
-      return next;
-    });
-    setOrderDirty(true);
-  };
-
-  // custom: subscription deduction order
-  const resetSubscriptionOrder = () => {
-    setOrderedActiveSubscriptions(activeSubscriptions || []);
-    setOrderDirty(false);
-  };
-
-  // custom: subscription deduction order
   const refreshSubscriptionSelfSilently = async () => {
     try {
       await reloadSubscriptionSelf?.();
     } catch {
       // custom: subscription deduction order; save result has already been shown
-    }
-  };
-
-  // custom: subscription deduction order
-  const saveSubscriptionOrder = async () => {
-    const subscriptionIds = orderedActiveSubscriptions
-      .map((sub) => sub?.subscription?.id)
-      .filter(Boolean);
-    setSavingOrder(true);
-    try {
-      const res = await API.put('/api/subscription/self/order', {
-        subscription_ids: subscriptionIds,
-      });
-      if (res.data?.success) {
-        showSuccess(t('排序已保存'));
-        setOrderDirty(false);
-        await refreshSubscriptionSelfSilently();
-      } else {
-        showError(res.data?.message || t('保存失败，请刷新后重试'));
-        await refreshSubscriptionSelfSilently();
-      }
-    } catch (e) {
-      showError(e?.response?.data?.message || t('保存失败，请刷新后重试'));
-      await refreshSubscriptionSelfSilently();
-    } finally {
-      setSavingOrder(false);
     }
   };
 
@@ -312,12 +321,30 @@ const SubscriptionPlansCard = ({
     }
   };
 
+  // custom: subscription deduction order
+  const activeVisibleSubscriptions = useMemo(
+    () =>
+      orderedActiveSubscriptions.filter(
+        (sub) => !isSubscriptionNearExhausted(sub?.subscription),
+      ),
+    [orderedActiveSubscriptions],
+  );
+
+  // custom: subscription deduction order
+  const nearExhaustedActiveSubscriptions = useMemo(
+    () =>
+      orderedActiveSubscriptions.filter((sub) =>
+        isSubscriptionNearExhausted(sub?.subscription),
+      ),
+    [orderedActiveSubscriptions],
+  );
+
   // 当前订阅信息 - 支持多个订阅
-  const hasActiveSubscription = activeSubscriptions.length > 0;
+  const hasActiveSubscription = activeVisibleSubscriptions.length > 0;
   const hasAnySubscription =
     allSubscriptions.length > 0 || orderedActiveSubscriptions.length > 0;
   // custom: subscription deduction order
-  const showSubscriptionOrderControls = orderedActiveSubscriptions.length > 1;
+  const showSubscriptionOrderControls = activeVisibleSubscriptions.length > 1;
   const disableSubscriptionPreference = !hasActiveSubscription;
   const isSubscriptionPreference =
     billingPreference === 'subscription_first' ||
@@ -376,6 +403,70 @@ const SubscriptionPlansCard = ({
   }, [activeSubscriptions]);
 
   // custom: subscription deduction order
+  const pendingOrderRef = useRef(null);
+  const inFlightRef = useRef(false);
+
+  // custom: subscription deduction order
+  // NIT 1c: 过滤掉拖动期间已经被父组件移出 active 列表的订阅 ID,
+  // 不依赖后端 WHERE active 兜底
+  const sanitizePendingNext = (next) =>
+    next.filter((sub) => {
+      const id = sub?.subscription?.id;
+      return id && activeSubscriptionIdSet.has(id);
+    });
+
+  // custom: subscription deduction order
+  // 串行队列：同一时刻最多 1 个 PUT 在飞；拖动期间产生的多次 reorder
+  // 只发送最新一次；reloadSubscriptionSelf 只在队列彻底清空后调一次。
+  const flushSaveOrder = async () => {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
+    try {
+      while (pendingOrderRef.current) {
+        const raw = pendingOrderRef.current;
+        pendingOrderRef.current = null;
+        const next = sanitizePendingNext(raw);
+        const subscriptionIds = getDeductionOrderSubscriptionIds(next);
+        try {
+          const res = await API.put('/api/subscription/self/order', {
+            subscription_ids: subscriptionIds,
+          });
+          if (res.data?.success) {
+            showSuccess(t('排序已保存'));
+          } else {
+            showError(res.data?.message || t('保存失败，请刷新后重试'));
+          }
+        } catch (e) {
+          showError(
+            e?.response?.data?.message || t('保存失败，请刷新后重试'),
+          );
+        }
+      }
+      await refreshSubscriptionSelfSilently();
+    } finally {
+      inFlightRef.current = false;
+      setSavingOrder(false);
+    }
+  };
+
+  // custom: subscription deduction order
+  const reorderSubscriptions = (sourceId, targetId, position) => {
+    const next = reorderSubscriptionList(
+      orderedActiveSubscriptions,
+      sourceId,
+      targetId,
+      position,
+    );
+    if (next === orderedActiveSubscriptions) return;
+    // BLOCKING 1b: setSavingOrder 必须与 setOrderedActiveSubscriptions 在同一 batch,
+    // 防止父组件同 tick 的 activeSubscriptions 更新触发 useEffect 用旧 props 覆盖
+    setSavingOrder(true);
+    setOrderedActiveSubscriptions(next);
+    pendingOrderRef.current = next;
+    void flushSaveOrder();
+  };
+
+  // custom: subscription deduction order
   const inactiveSubscriptions = useMemo(() => {
     return (allSubscriptions || []).filter((sub) => {
       const id = sub?.subscription?.id;
@@ -384,9 +475,9 @@ const SubscriptionPlansCard = ({
   }, [allSubscriptions, activeSubscriptionIdSet]);
 
   // custom: subscription deduction order
-  const displaySubscriptions = useMemo(
-    () => [...orderedActiveSubscriptions, ...inactiveSubscriptions],
-    [orderedActiveSubscriptions, inactiveSubscriptions],
+  const historySubscriptions = useMemo(
+    () => [...inactiveSubscriptions, ...nearExhaustedActiveSubscriptions],
+    [inactiveSubscriptions, nearExhaustedActiveSubscriptions],
   );
 
   const getPlanPurchaseCount = (planId) =>
@@ -456,17 +547,16 @@ const SubscriptionPlansCard = ({
                       type='light'
                       prefixIcon={<Badge dot type='success' />}
                     >
-                      {activeSubscriptions.length} {t('个生效中')}
+                      {activeVisibleSubscriptions.length} {t('个生效中')}
                     </Tag>
                   ) : (
                     <Tag color='grey' size='small' shape='circle' type='light'>
                       {t('无生效')}
                     </Tag>
                   )}
-                  {allSubscriptions.length > activeSubscriptions.length && (
+                  {historySubscriptions.length > 0 && (
                     <Tag color='grey' size='small' shape='circle' type='light'>
-                      {allSubscriptions.length - activeSubscriptions.length}{' '}
-                      {t('个已过期')}
+                      {t('历史订阅')} ({historySubscriptions.length})
                     </Tag>
                   )}
                 </div>
@@ -476,7 +566,7 @@ const SubscriptionPlansCard = ({
                     size='small'
                     className='mt-1 block leading-5'
                   >
-                    {t('扣费按列表顺序')}
+                    {t('拖动调整扣费顺序')}
                   </Text>
                 )}
               </div>
@@ -533,42 +623,29 @@ const SubscriptionPlansCard = ({
             {hasAnySubscription ? (
               <>
                 <Divider margin={8} />
-                <SubscriptionDeductionOrderList
-                  t={t}
-                  subscriptions={displaySubscriptions}
-                  orderedActiveCount={orderedActiveSubscriptions.length}
-                  showOrderControls={showSubscriptionOrderControls}
-                  planTitleMap={planTitleMap}
-                  savingOrder={savingOrder}
-                  onMove={moveSubscriptionOrder}
-                />
-                {orderDirty && (
-                  <div className='mt-3 flex flex-col gap-2 rounded-lg border border-semi-color-primary-light-hover bg-semi-color-primary-light-default px-3 py-2 sm:flex-row sm:items-center sm:justify-between'>
-                    <Text type='tertiary' size='small'>
-                      {t('排序已调整')}
-                    </Text>
-                    <div className='flex items-center gap-2 sm:justify-end'>
-                      <Button
-                        size='small'
-                        theme='borderless'
-                        type='tertiary'
-                        onClick={resetSubscriptionOrder}
-                        disabled={savingOrder}
-                      >
-                        {t('取消')}
-                      </Button>
-                      <Button
-                        size='small'
-                        theme='solid'
-                        type='primary'
-                        icon={<Save size={12} />}
-                        onClick={saveSubscriptionOrder}
-                        loading={savingOrder}
-                      >
-                        {t('保存排序')}
-                      </Button>
-                    </div>
-                  </div>
+                {activeVisibleSubscriptions.length > 0 && (
+                  <SubscriptionDeductionOrderList
+                    t={t}
+                    subscriptions={activeVisibleSubscriptions}
+                    showOrderControls={showSubscriptionOrderControls}
+                    planTitleMap={planTitleMap}
+                    savingOrder={savingOrder}
+                    onReorder={reorderSubscriptions}
+                  />
+                )}
+                {historySubscriptions.length > 0 && (
+                  <Collapse className='mt-3'>
+                    <Collapse.Panel
+                      itemKey='history'
+                      header={`${t('历史订阅')} (${historySubscriptions.length})`}
+                    >
+                      <SubscriptionHistoryList
+                        t={t}
+                        subscriptions={historySubscriptions}
+                        planTitleMap={planTitleMap}
+                      />
+                    </Collapse.Panel>
+                  </Collapse>
                 )}
               </>
             ) : (
