@@ -36,6 +36,27 @@ const getSubscriptionStatus = (subscription, now) => {
   return { isActive, isCancelled };
 };
 
+const getUsagePercent = (usedAmount, totalAmount) => {
+  if (
+    !Number.isFinite(usedAmount) ||
+    !Number.isFinite(totalAmount) ||
+    totalAmount <= 0
+  ) {
+    return 0;
+  }
+  return Math.min(100, Math.max(0, (usedAmount / totalAmount) * 100));
+};
+
+const getUsagePercentLabel = (usagePercent) => {
+  if (usagePercent > 0 && usagePercent < 1) return '<1';
+  return String(Math.round(usagePercent));
+};
+
+const getUsageAriaValue = (usagePercent) => {
+  if (!Number.isFinite(usagePercent)) return 0;
+  return Number(usagePercent.toFixed(2));
+};
+
 const SubscriptionStatusTag = ({ t, isActive, isCancelled }) => {
   return (
     <Tag
@@ -96,14 +117,8 @@ const SubscriptionQuotaLine = ({
     );
   }
 
-  const usagePercent = Math.min(
-    100,
-    Math.max(0, (usedAmount / totalAmount) * 100),
-  );
-  const usagePercentLabel =
-    usagePercent > 0 && usagePercent < 1
-      ? '<1'
-      : String(Math.round(usagePercent));
+  const usagePercent = getUsagePercent(usedAmount, totalAmount);
+  const usagePercentLabel = getUsagePercentLabel(usagePercent);
 
   return (
     <Tooltip
@@ -123,7 +138,7 @@ const SubscriptionQuotaLine = ({
           role='progressbar'
           aria-valuemin={0}
           aria-valuemax={100}
-          aria-valuenow={Math.round(usagePercent)}
+          aria-valuenow={getUsageAriaValue(usagePercent)}
           aria-label={`${t('已用')} ${usagePercentLabel}%`}
         >
           <div

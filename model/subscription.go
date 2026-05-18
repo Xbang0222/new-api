@@ -1094,7 +1094,7 @@ func PreConsumeUserSubscription(requestId string, userId int, modelName string, 
 		subQuery := tx.Set("gorm:query_option", "FOR UPDATE").
 			Where("user_id = ? AND status = ? AND end_time > ?", userId, "active", now)
 		if err := orderUserSubscriptionsForDeduction(subQuery).Find(&subs).Error; err != nil {
-			return errors.New("no active subscription")
+			return err
 		}
 		if len(subs) == 0 {
 			return errors.New("no active subscription")

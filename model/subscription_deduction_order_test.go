@@ -120,12 +120,46 @@ func TestPreConsumeUserSubscriptionSkipsInsufficientPreferredSubscription(t *tes
 	assert.Equal(t, int64(100), subscriptionAmountUsed(t, nextSub.Id))
 }
 
-func TestUpdateUserSubscriptionDeductionOrder(t *testing.T) {
+func TestPreConsumeUserSubscriptionUsesSavedDeductionOrder(t *testing.T) {
 	truncateTables(t)
 
 	userId := 7204
 	now := GetDBTimestamp()
 	plan := insertPlanForDeductionTest(t, 9207, 0)
+	earlierSub := insertUserSubscriptionForDeductionTest(t, userId, plan.Id, now+3600, 1000, 0, 0, "active")
+	laterSub := insertUserSubscriptionForDeductionTest(t, userId, plan.Id, now+7200, 1000, 0, 0, "active")
+
+	require.NoError(t, UpdateUserSubscriptionDeductionOrder(userId, []int{laterSub.Id, earlierSub.Id}))
+
+	result, err := PreConsumeUserSubscription("deduction-saved-order", userId, "gpt-test", 0, 100)
+	require.NoError(t, err)
+	assert.Equal(t, laterSub.Id, result.UserSubscriptionId)
+	assert.Equal(t, int64(0), subscriptionAmountUsed(t, earlierSub.Id))
+	assert.Equal(t, int64(100), subscriptionAmountUsed(t, laterSub.Id))
+}
+
+func TestPreConsumeUserSubscriptionTreatsNonPositiveDeductionOrderAsFallback(t *testing.T) {
+	truncateTables(t)
+
+	userId := 7205
+	now := GetDBTimestamp()
+	plan := insertPlanForDeductionTest(t, 9208, 0)
+	laterSub := insertUserSubscriptionForDeductionTest(t, userId, plan.Id, now+7200, 1000, 0, -1, "active")
+	earlierSub := insertUserSubscriptionForDeductionTest(t, userId, plan.Id, now+3600, 1000, 0, 0, "active")
+
+	result, err := PreConsumeUserSubscription("deduction-non-positive-fallback", userId, "gpt-test", 0, 100)
+	require.NoError(t, err)
+	assert.Equal(t, earlierSub.Id, result.UserSubscriptionId)
+	assert.Equal(t, int64(0), subscriptionAmountUsed(t, laterSub.Id))
+	assert.Equal(t, int64(100), subscriptionAmountUsed(t, earlierSub.Id))
+}
+
+func TestUpdateUserSubscriptionDeductionOrder(t *testing.T) {
+	truncateTables(t)
+
+	userId := 7206
+	now := GetDBTimestamp()
+	plan := insertPlanForDeductionTest(t, 9209, 0)
 	first := insertUserSubscriptionForDeductionTest(t, userId, plan.Id, now+3600, 1000, 0, 0, "active")
 	second := insertUserSubscriptionForDeductionTest(t, userId, plan.Id, now+7200, 1000, 0, 0, "active")
 	third := insertUserSubscriptionForDeductionTest(t, userId, plan.Id, now+10800, 1000, 0, 0, "active")
@@ -140,9 +174,9 @@ func TestUpdateUserSubscriptionDeductionOrder(t *testing.T) {
 func TestUpdateUserSubscriptionDeductionOrderRejectsInvalidLists(t *testing.T) {
 	truncateTables(t)
 
-	userId := 7205
+	userId := 7207
 	now := GetDBTimestamp()
-	plan := insertPlanForDeductionTest(t, 9208, 0)
+	plan := insertPlanForDeductionTest(t, 9210, 0)
 	first := insertUserSubscriptionForDeductionTest(t, userId, plan.Id, now+3600, 1000, 0, 0, "active")
 	second := insertUserSubscriptionForDeductionTest(t, userId, plan.Id, now+7200, 1000, 0, 0, "active")
 	cancelled := insertUserSubscriptionForDeductionTest(t, userId, plan.Id, now+10800, 1000, 0, 0, "cancelled")

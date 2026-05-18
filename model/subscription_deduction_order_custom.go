@@ -10,7 +10,7 @@ import (
 func orderUserSubscriptionsForDeduction(query *gorm.DB) *gorm.DB {
 	return query.
 		Order("CASE WHEN COALESCE(deduction_order, 0) > 0 THEN 0 ELSE 1 END ASC").
-		Order("COALESCE(deduction_order, 0) ASC").
+		Order("CASE WHEN COALESCE(deduction_order, 0) > 0 THEN COALESCE(deduction_order, 0) ELSE 0 END ASC").
 		Order("end_time ASC").
 		Order("id ASC")
 }
