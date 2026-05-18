@@ -24,7 +24,6 @@ import { ArrowDown, ArrowUp } from 'lucide-react';
 // custom: subscription deduction order
 const SubscriptionDeductionOrderActions = ({
   t,
-  remainDays,
   canMoveUp,
   canMoveDown,
   savingOrder,
@@ -32,17 +31,15 @@ const SubscriptionDeductionOrderActions = ({
   onMoveDown,
 }) => {
   return (
-    <div className='flex items-center gap-1 flex-shrink-0'>
-      <span className='text-gray-500 mr-1 whitespace-nowrap'>
-        {t('剩余')} {remainDays} {t('天')}
-      </span>
+    <div className='flex flex-shrink-0 flex-col items-center gap-0.5 rounded-full bg-semi-color-fill-0 p-0.5 ring-1 ring-inset ring-semi-color-border'>
       <Tooltip content={t('上移')}>
         <Button
           aria-label={t('上移')}
           size='small'
           theme='borderless'
           type='tertiary'
-          icon={<ArrowUp size={12} />}
+          className='!h-7 !w-7 !rounded-full !p-0'
+          icon={<ArrowUp size={14} />}
           disabled={!canMoveUp || savingOrder}
           onClick={onMoveUp}
         />
@@ -53,7 +50,8 @@ const SubscriptionDeductionOrderActions = ({
           size='small'
           theme='borderless'
           type='tertiary'
-          icon={<ArrowDown size={12} />}
+          className='!h-7 !w-7 !rounded-full !p-0'
+          icon={<ArrowDown size={14} />}
           disabled={!canMoveDown || savingOrder}
           onClick={onMoveDown}
         />

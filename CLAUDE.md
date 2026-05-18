@@ -152,7 +152,7 @@ This project is a fork maintained on the `ruoli` branch. Upstream (`QuantumNous/
 |-------|-------|
 | Backend | `controller/invoice.go`, `service/invoice.go`, `model/invoice.go`, `dto/invoice.go`, `router/invoice-router.go`, `setting/operation_setting/invoice_setting.go`, `controller/usedata_custom.go`, `model/usedata_custom.go`, `controller/subscription_payment_wallet.go`, `controller/subscription_order_custom.go`, `model/subscription_deduction_order_custom.go` |
 | Frontend pages | `pages/Invoice/`, `pages/InvoiceAdmin/`, `pages/Billing/` |
-| Frontend components | `components/billing/InvoiceApplicationModal.jsx`, `components/invoice/InvoiceHeaderManager.jsx`, `components/settings/InvoiceSetting.jsx`, `components/topup/SubscriptionDeductionOrderActions.jsx` |
+| Frontend components | `components/billing/InvoiceApplicationModal.jsx`, `components/invoice/InvoiceHeaderManager.jsx`, `components/settings/InvoiceSetting.jsx`, `components/topup/SubscriptionDeductionOrderActions.jsx`, `components/topup/SubscriptionDeductionOrderList.jsx` |
 | Helpers & constants | `helpers/brand.js`, `helpers/invoice.js`, `helpers/headerNavModules.js`, `constants/invoice.constants.js`, `constants/dashboard.constants.js` |
 | CI/Deploy | `deploy.sh`, `DEPLOY.md` |
 | Assets | `web/public/fonts/`, `web/public/logo_day.ico`, `web/public/logo_night.ico` |
@@ -225,7 +225,7 @@ When modifying upstream files is unavoidable, follow these rules:
 | `model/subscription.go::upsertSubscriptionTopUpTx` | +6 lines (PaymentProvider 同步, 修补 upstream v0.13.1 helper 缺口) | Low |
 | `web/src/components/topup/modals/SubscriptionPurchaseModal.jsx` | +35 lines (wallet payment button) | Medium |
 | `web/src/components/topup/SubscriptionPlansCard.jsx` | +30 lines (payWallet handler) | Medium |
-| `web/src/components/topup/SubscriptionPlansCard.jsx` | active subscription order controls + save action (custom deduction order) | Medium |
+| `web/src/components/topup/SubscriptionPlansCard.jsx` | active subscription order controls + save/cancel action; UI delegates to custom order list (custom deduction order) | Medium |
 | `web/src/components/topup/RechargeCard.jsx` | +1 line (pass userQuota prop) | Low |
 | `web/src/components/table/subscriptions/SubscriptionsColumnDefs.jsx` | plan sort_order label changed to display-only wording | Low |
 | `web/src/components/table/subscriptions/modals/AddEditSubscriptionModal.jsx` | plan sort_order label/extraText clarified as display-only | Low |
