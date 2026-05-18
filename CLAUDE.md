@@ -150,9 +150,9 @@ This project is a fork maintained on the `ruoli` branch. Upstream (`QuantumNous/
 
 | Layer | Files |
 |-------|-------|
-| Backend | `controller/invoice.go`, `service/invoice.go`, `model/invoice.go`, `dto/invoice.go`, `router/invoice-router.go`, `setting/operation_setting/invoice_setting.go`, `controller/usedata_custom.go`, `model/usedata_custom.go`, `controller/subscription_payment_wallet.go` |
+| Backend | `controller/invoice.go`, `service/invoice.go`, `model/invoice.go`, `dto/invoice.go`, `router/invoice-router.go`, `setting/operation_setting/invoice_setting.go`, `controller/usedata_custom.go`, `model/usedata_custom.go`, `controller/subscription_payment_wallet.go`, `controller/subscription_order_custom.go`, `model/subscription_deduction_order_custom.go` |
 | Frontend pages | `pages/Invoice/`, `pages/InvoiceAdmin/`, `pages/Billing/` |
-| Frontend components | `components/billing/InvoiceApplicationModal.jsx`, `components/invoice/InvoiceHeaderManager.jsx`, `components/settings/InvoiceSetting.jsx` |
+| Frontend components | `components/billing/InvoiceApplicationModal.jsx`, `components/invoice/InvoiceHeaderManager.jsx`, `components/settings/InvoiceSetting.jsx`, `components/topup/SubscriptionDeductionOrderActions.jsx` |
 | Helpers & constants | `helpers/brand.js`, `helpers/invoice.js`, `helpers/headerNavModules.js`, `constants/invoice.constants.js`, `constants/dashboard.constants.js` |
 | CI/Deploy | `deploy.sh`, `DEPLOY.md` |
 | Assets | `web/public/fonts/`, `web/public/logo_day.ico`, `web/public/logo_night.ico` |
@@ -187,6 +187,7 @@ When modifying upstream files is unavoidable, follow these rules:
 | `custom: affinity evict` | 渠道亲和性缓存：禁用渠道时自动清除并 fallback |
 | `custom: wallet subscription` | 订阅支持钱包余额支付 |
 | `custom: subscription cycle purchase limit` | 订阅周期限购（窗口计数替代终身计数） |
+| `custom: subscription deduction order` | 用户自定义多个生效订阅之间的扣费顺序 |
 | `custom: claude code only` | 渠道级"仅 Claude Code 客户端"白名单（严格 403） |
 | `custom: shop link` | 顶栏"商城"按钮（外链，URL 与 docs_link 同样在通用设置中配置） |
 | `custom: invoice ui` | 充值/账单/发票表格统一双模式（紧凑/自适应），列宽自适应、时间不换行 |
@@ -205,7 +206,7 @@ When modifying upstream files is unavoidable, follow these rules:
 | `model/option.go` | +8 lines (invoice settings + invite rebate) | Low |
 | `common/constants.go` | +3 lines | Low |
 | `controller/misc.go` | +6 lines (brand + invite rebate + anti-abuse) | Low |
-| `model/subscription.go` | 3-line behavioral change (JOIN + ORDER BY) | **Medium** |
+| `model/subscription.go` | UserSubscription.deduction_order + deduction order helper call; admin sort_order no longer affects deduction | **Medium** |
 | `web/src/i18n/locales/en.json` | Added translation keys | **High** |
 | `web/src/App.jsx` | Custom routes + brand | Medium |
 | `web/src/components/layout/*` | Navigation + brand | Medium |
@@ -224,7 +225,10 @@ When modifying upstream files is unavoidable, follow these rules:
 | `model/subscription.go::upsertSubscriptionTopUpTx` | +6 lines (PaymentProvider 同步, 修补 upstream v0.13.1 helper 缺口) | Low |
 | `web/src/components/topup/modals/SubscriptionPurchaseModal.jsx` | +35 lines (wallet payment button) | Medium |
 | `web/src/components/topup/SubscriptionPlansCard.jsx` | +30 lines (payWallet handler) | Medium |
+| `web/src/components/topup/SubscriptionPlansCard.jsx` | active subscription order controls + save action (custom deduction order) | Medium |
 | `web/src/components/topup/RechargeCard.jsx` | +1 line (pass userQuota prop) | Low |
+| `web/src/components/table/subscriptions/SubscriptionsColumnDefs.jsx` | plan sort_order label changed to display-only wording | Low |
+| `web/src/components/table/subscriptions/modals/AddEditSubscriptionModal.jsx` | plan sort_order label/extraText clarified as display-only | Low |
 | `model/subscription.go::CountUserSubscriptionsByPlan` 之后 | +75 lines (`calcPurchaseWindowStart` + `CountPurchasesInWindow` + `countPurchasesInWindowTx` helpers) | Low |
 | `model/subscription.go::CreateUserSubscriptionFromPlanTx` | -5/+8 lines (cycle purchase limit, behavioral change with block comment) | Low |
 | `model/subscription.go::PurchaseSubscriptionWithWallet` | -5/+3 lines (cycle purchase limit) | Low |

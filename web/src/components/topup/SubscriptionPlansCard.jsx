@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Badge,
   Button,
@@ -32,8 +32,9 @@ import {
 } from '@douyinfe/semi-ui';
 import { API, showError, showSuccess, renderQuota } from '../../helpers';
 import { getCurrencyConfig } from '../../helpers/render';
-import { RefreshCw, Sparkles } from 'lucide-react';
+import { RefreshCw, Save, Sparkles } from 'lucide-react';
 import SubscriptionPurchaseModal from './modals/SubscriptionPurchaseModal';
+import SubscriptionDeductionOrderActions from './SubscriptionDeductionOrderActions';
 import {
   formatSubscriptionDuration,
   formatSubscriptionResetPeriod,
@@ -92,8 +93,20 @@ const SubscriptionPlansCard = ({
   const [paying, setPaying] = useState(false);
   const [selectedEpayMethod, setSelectedEpayMethod] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  // custom: subscription deduction order
+  const [orderedActiveSubscriptions, setOrderedActiveSubscriptions] = useState(
+    activeSubscriptions || [],
+  );
+  const [orderDirty, setOrderDirty] = useState(false);
+  const [savingOrder, setSavingOrder] = useState(false);
 
   const epayMethods = useMemo(() => getEpayMethods(payMethods), [payMethods]);
+
+  // custom: subscription deduction order
+  useEffect(() => {
+    setOrderedActiveSubscriptions(activeSubscriptions || []);
+    setOrderDirty(false);
+  }, [activeSubscriptions]);
 
   // custom: wallet subscription — add wallet as first option in the epay dropdown
   const allPayMethods = useMemo(() => {
@@ -122,6 +135,58 @@ const SubscriptionPlansCard = ({
       await reloadSubscriptionSelf?.();
     } finally {
       setRefreshing(false);
+    }
+  };
+
+  // custom: subscription deduction order
+  const moveSubscriptionOrder = (index, direction) => {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= orderedActiveSubscriptions.length) {
+      return;
+    }
+    setOrderedActiveSubscriptions((prev) => {
+      if (targetIndex < 0 || targetIndex >= prev.length) {
+        return prev;
+      }
+      const next = [...prev];
+      [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
+      return next;
+    });
+    setOrderDirty(true);
+  };
+
+  // custom: subscription deduction order
+  const refreshSubscriptionSelfSilently = async () => {
+    try {
+      await reloadSubscriptionSelf?.();
+    } catch {
+      // custom: subscription deduction order; save result has already been shown
+    }
+  };
+
+  // custom: subscription deduction order
+  const saveSubscriptionOrder = async () => {
+    const subscriptionIds = orderedActiveSubscriptions
+      .map((sub) => sub?.subscription?.id)
+      .filter(Boolean);
+    setSavingOrder(true);
+    try {
+      const res = await API.put('/api/subscription/self/order', {
+        subscription_ids: subscriptionIds,
+      });
+      if (res.data?.success) {
+        showSuccess(t('排序已保存'));
+        setOrderDirty(false);
+        await refreshSubscriptionSelfSilently();
+      } else {
+        showError(res.data?.message || t('保存失败，请刷新后重试'));
+        await refreshSubscriptionSelfSilently();
+      }
+    } catch (e) {
+      showError(t('保存失败，请刷新后重试'));
+      await refreshSubscriptionSelfSilently();
+    } finally {
+      setSavingOrder(false);
     }
   };
 
@@ -240,7 +305,10 @@ const SubscriptionPlansCard = ({
 
   // 当前订阅信息 - 支持多个订阅
   const hasActiveSubscription = activeSubscriptions.length > 0;
-  const hasAnySubscription = allSubscriptions.length > 0;
+  const hasAnySubscription =
+    allSubscriptions.length > 0 || orderedActiveSubscriptions.length > 0;
+  // custom: subscription deduction order
+  const showSubscriptionOrderControls = orderedActiveSubscriptions.length > 1;
   const disableSubscriptionPreference = !hasActiveSubscription;
   const isSubscriptionPreference =
     billingPreference === 'subscription_first' ||
@@ -287,6 +355,30 @@ const SubscriptionPlansCard = ({
     });
     return map;
   }, [plans]);
+
+  // custom: subscription deduction order
+  const activeSubscriptionIdSet = useMemo(() => {
+    const ids = new Set();
+    (activeSubscriptions || []).forEach((sub) => {
+      const id = sub?.subscription?.id;
+      if (id) ids.add(id);
+    });
+    return ids;
+  }, [activeSubscriptions]);
+
+  // custom: subscription deduction order
+  const inactiveSubscriptions = useMemo(() => {
+    return (allSubscriptions || []).filter((sub) => {
+      const id = sub?.subscription?.id;
+      return !id || !activeSubscriptionIdSet.has(id);
+    });
+  }, [allSubscriptions, activeSubscriptionIdSet]);
+
+  // custom: subscription deduction order
+  const displaySubscriptions = useMemo(
+    () => [...orderedActiveSubscriptions, ...inactiveSubscriptions],
+    [orderedActiveSubscriptions, inactiveSubscriptions],
+  );
 
   const getPlanPurchaseCount = (planId) =>
     planPurchaseCountMap.get(planId) || 0;
@@ -383,7 +475,7 @@ const SubscriptionPlansCard = ({
                   </Tag>
                 )}
               </div>
-              <div className='flex items-center gap-2'>
+              <div className='flex items-center justify-end gap-2 flex-wrap'>
                 <Select
                   value={displayBillingPreference}
                   onChange={onChangeBillingPreference}
@@ -407,6 +499,18 @@ const SubscriptionPlansCard = ({
                     { value: 'wallet_only', label: t('仅用钱包') },
                   ]}
                 />
+                {orderDirty && (
+                  <Button
+                    size='small'
+                    theme='solid'
+                    type='primary'
+                    icon={<Save size={12} />}
+                    onClick={saveSubscriptionOrder}
+                    loading={savingOrder}
+                  >
+                    {t('保存排序')}
+                  </Button>
+                )}
                 <Button
                   size='small'
                   theme='light'
@@ -433,9 +537,14 @@ const SubscriptionPlansCard = ({
             {hasAnySubscription ? (
               <>
                 <Divider margin={8} />
+                {showSubscriptionOrderControls && (
+                  <Text type='tertiary' size='small'>
+                    {t('扣费顺序：上面的订阅会先扣费')}
+                  </Text>
+                )}
                 <div className='max-h-64 overflow-y-auto pr-1 semi-table-body'>
-                  {allSubscriptions.map((sub, subIndex) => {
-                    const isLast = subIndex === allSubscriptions.length - 1;
+                  {displaySubscriptions.map((sub, subIndex) => {
+                    const isLast = subIndex === displaySubscriptions.length - 1;
                     const subscription = sub.subscription;
                     const totalAmount = Number(subscription?.amount_total || 0);
                     const usedAmount = Number(subscription?.amount_used || 0);
@@ -452,13 +561,25 @@ const SubscriptionPlansCard = ({
                     const isCancelled = subscription?.status === 'cancelled';
                     const isActive =
                       subscription?.status === 'active' && !isExpired;
+                    const activeOrderNumber = isActive ? subIndex + 1 : 0;
+                    const canMoveUp =
+                      showSubscriptionOrderControls && isActive && subIndex > 0;
+                    const canMoveDown =
+                      showSubscriptionOrderControls &&
+                      isActive &&
+                      subIndex < orderedActiveSubscriptions.length - 1;
 
                     return (
                       <div key={subscription?.id || subIndex}>
                         {/* 订阅概要 */}
                         <div className='flex items-center justify-between text-xs mb-2'>
-                          <div className='flex items-center gap-2'>
-                            <span className='font-medium'>
+                          <div className='flex items-center gap-2 min-w-0'>
+                            {isActive && showSubscriptionOrderControls && (
+                              <Tag color='blue' size='small' shape='circle'>
+                                {activeOrderNumber}
+                              </Tag>
+                            )}
+                            <span className='font-medium truncate'>
                               {planTitle
                                 ? `${planTitle} · ${t('订阅')} #${subscription?.id}`
                                 : `${t('订阅')} #${subscription?.id}`}
@@ -482,11 +603,25 @@ const SubscriptionPlansCard = ({
                               </Tag>
                             )}
                           </div>
-                          {isActive && (
+                          {isActive && showSubscriptionOrderControls ? (
+                            <SubscriptionDeductionOrderActions
+                              t={t}
+                              remainDays={remainDays}
+                              canMoveUp={canMoveUp}
+                              canMoveDown={canMoveDown}
+                              savingOrder={savingOrder}
+                              onMoveUp={() =>
+                                moveSubscriptionOrder(subIndex, -1)
+                              }
+                              onMoveDown={() =>
+                                moveSubscriptionOrder(subIndex, 1)
+                              }
+                            />
+                          ) : isActive ? (
                             <span className='text-gray-500'>
                               {t('剩余')} {remainDays} {t('天')}
                             </span>
-                          )}
+                          ) : null}
                         </div>
                         <div className='text-xs text-gray-500 mb-2'>
                           {isActive

@@ -4186,6 +4186,14 @@
     "开票服务费率": "Tỷ lệ phí dịch vụ hóa đơn",
     "0–1 之间的小数。0 表示不收取服务费；例如 0.06 表示 6%（开 1000 元发票将额外从用户余额扣 60 元）": "Số thập phân từ 0 đến 1. 0 nghĩa là không tính phí dịch vụ; ví dụ 0.06 nghĩa là 6% (xuất hóa đơn 1000 CNY sẽ trừ thêm 60 CNY từ số dư người dùng)",
     "开票服务费已退还": "Đã hoàn",
-    "开票服务费已扣除": "Đã trừ"
+    "开票服务费已扣除": "Đã trừ",
+    "排序已保存": "Đã lưu thứ tự",
+    "保存失败，请刷新后重试": "Lưu thất bại, vui lòng làm mới rồi thử lại",
+    "保存排序": "Lưu thứ tự",
+    "扣费顺序：上面的订阅会先扣费": "Thứ tự khấu trừ: gói đăng ký ở phía trên sẽ được trừ trước",
+    "展示排序": "Thứ tự hiển thị",
+    "仅影响套餐展示顺序，不影响用户订阅扣费顺序": "Chỉ ảnh hưởng đến thứ tự hiển thị gói, không ảnh hưởng đến thứ tự khấu trừ đăng ký của người dùng",
+    "上移": "Di chuyển lên",
+    "下移": "Di chuyển xuống"
   }
 }

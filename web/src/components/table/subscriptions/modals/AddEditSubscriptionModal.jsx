@@ -351,11 +351,15 @@ const AddEditSubscriptionModal = ({
                       />
                     </Col>
 
+                    {/* custom: subscription deduction order */}
                     <Col span={12}>
                       <Form.InputNumber
                         field='sort_order'
-                        label={t('排序')}
+                        label={t('展示排序')}
                         precision={0}
+                        extraText={t(
+                          '仅影响套餐展示顺序，不影响用户订阅扣费顺序',
+                        )}
                         style={{ width: '100%' }}
                       />
                     </Col>
@@ -367,7 +371,9 @@ const AddEditSubscriptionModal = ({
                         min={0}
                         precision={0}
                         // custom: subscription cycle purchase limit — extraText now reflects rolling window semantic
-                        extraText={t('0 表示不限；按订阅周期作为时间窗口（如月度套餐统计过去 30 天）')}
+                        extraText={t(
+                          '0 表示不限；按订阅周期作为时间窗口（如月度套餐统计过去 30 天）',
+                        )}
                         style={{ width: '100%' }}
                       />
                     </Col>

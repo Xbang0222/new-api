@@ -3914,6 +3914,14 @@
     "0–1 之间的小数。0 表示不收取服务费；例如 0.06 表示 6%（开 1000 元发票将额外从用户余额扣 60 元）": "A decimal between 0 and 1. 0 means no service fee; for example, 0.06 means 6% (a 1000 yuan invoice deducts an additional 60 yuan from the user's balance)",
     "开票服务费已退还": "Refunded",
     "开票服务费已扣除": "Deducted",
+    "排序已保存": "Order saved",
+    "保存失败，请刷新后重试": "Save failed, please refresh and try again",
+    "保存排序": "Save order",
+    "扣费顺序：上面的订阅会先扣费": "Deduction order: subscriptions higher in the list are charged first",
+    "展示排序": "Display order",
+    "仅影响套餐展示顺序，不影响用户订阅扣费顺序": "Only affects plan display order; it does not affect users' subscription deduction order",
+    "上移": "Move up",
+    "下移": "Move down",
     "最低开票金额提示": "Minimum invoice amount is {{amount}}, current selected amount is insufficient"
   }
 }

@@ -308,7 +308,8 @@ export const getSubscriptionsColumns = ({
       render: (text, record) => renderPurchaseLimit(text, record, t),
     },
     {
-      title: t('优先级'),
+      // custom: subscription deduction order
+      title: t('展示排序'),
       dataIndex: ['plan', 'sort_order'],
       width: 80,
       render: (text) => <Text type='tertiary'>{Number(text || 0)}</Text>,
