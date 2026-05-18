@@ -84,12 +84,16 @@ export function computePurchaseWindowStart(nowSec, plan) {
 }
 
 // custom: subscription deduction order
+// 周期 reset 的订阅 (next_reset_time > 0) 永不视为"已用完",
+// 它会自动回血,留在生效区参与扣费顺序;只有不 reset 的订阅 (never)
+// 用光才进历史区显示"已用完"
 export function isSubscriptionNearExhausted(
   subscription,
   threshold = SUBSCRIPTION_NEAR_EXHAUSTED_THRESHOLD,
 ) {
   const total = Number(subscription?.amount_total || 0);
   if (total <= 0) return false;
+  if (Number(subscription?.next_reset_time || 0) > 0) return false;
   const used = Number(subscription?.amount_used || 0);
   return used / total >= threshold;
 }
