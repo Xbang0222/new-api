@@ -246,6 +246,9 @@ type UserSubscription struct {
 
 	Source string `json:"source" gorm:"type:varchar(32);default:'order'"` // order/admin
 
+	// custom: subscription deduction order
+	DeductionOrder int `json:"deduction_order" gorm:"type:int;default:0"` // 0 = use default deduction order
+
 	LastResetTime int64 `json:"last_reset_time" gorm:"type:bigint;default:0"`
 	NextResetTime int64 `json:"next_reset_time" gorm:"type:bigint;default:0;index"`
 
@@ -750,9 +753,9 @@ func GetAllActiveUserSubscriptions(userId int) ([]SubscriptionSummary, error) {
 	}
 	now := common.GetTimestamp()
 	var subs []UserSubscription
-	err := DB.Where("user_id = ? AND status = ? AND end_time > ?", userId, "active", now).
-		Order("end_time desc, id desc").
-		Find(&subs).Error
+	query := DB.Where("user_id = ? AND status = ? AND end_time > ?", userId, "active", now)
+	// custom: subscription deduction order
+	err := orderUserSubscriptionsForDeduction(query).Find(&subs).Error
 	if err != nil {
 		return nil, err
 	}
@@ -1083,16 +1086,14 @@ func PreConsumeUserSubscription(requestId string, userId int, modelName string, 
 		}
 
 		var subs []UserSubscription
-		// custom: subscription priority
-		// Original: Where("user_id = ? AND status = ? AND end_time > ?", ...).Order("end_time asc, id asc")
-		// Modified: JOIN subscription_plans, Order by sort_order desc first, then end_time asc
-		// Purpose: consume high-priority plans first (higher sort_order = higher priority)
-		// Revert: remove Joins(), restore original Where() and Order() — see upstream/main
-		if err := tx.Set("gorm:query_option", "FOR UPDATE").
-			Joins("LEFT JOIN subscription_plans ON subscription_plans.id = user_subscriptions.plan_id").
-			Where("user_subscriptions.user_id = ? AND user_subscriptions.status = ? AND user_subscriptions.end_time > ?", userId, "active", now).
-			Order("subscription_plans.sort_order desc, user_subscriptions.end_time asc, user_subscriptions.id asc").
-			Find(&subs).Error; err != nil {
+		// custom: subscription deduction order
+		// Original: active subscriptions were selected by plan sort_order desc,
+		// then end_time asc and id asc. Now user-defined deduction_order wins;
+		// subscriptions with deduction_order=0 keep the expiry/id fallback.
+		// To revert: restore the subscription_plans JOIN and sort_order ORDER BY.
+		subQuery := tx.Set("gorm:query_option", "FOR UPDATE").
+			Where("user_id = ? AND status = ? AND end_time > ?", userId, "active", now)
+		if err := orderUserSubscriptionsForDeduction(subQuery).Find(&subs).Error; err != nil {
 			return errors.New("no active subscription")
 		}
 		if len(subs) == 0 {
