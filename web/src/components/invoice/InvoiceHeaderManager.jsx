@@ -14,8 +14,6 @@ import { InvoiceAPI } from '../../helpers/invoice';
 import { showError } from '../../helpers';
 import { applyCompactColumns } from '../../helpers/customTable';
 import CardTable from '../common/ui/CardTable';
-import CompactModeToggle from '../common/ui/CompactModeToggle';
-import { useTableCompactMode } from '../../hooks/common/useTableCompactMode';
 
 const InvoiceHeaderManager = () => {
   const { t } = useTranslation();
@@ -24,8 +22,8 @@ const InvoiceHeaderManager = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingHeader, setEditingHeader] = useState(null);
   const formRef = React.useRef();
-  // custom: invoice ui — usage-logs 同款双模式
-  const [compactMode, setCompactMode] = useTableCompactMode('invoice-headers');
+  // custom: invoice ui — 固定自适应模式，不再切换
+  const compactMode = false;
 
   const fetchHeaders = useCallback(async () => {
     setLoading(true);
@@ -155,11 +153,6 @@ const InvoiceHeaderManager = () => {
         >
           {t('新建抬头')}
         </Button>
-        <CompactModeToggle
-          compactMode={compactMode}
-          setCompactMode={setCompactMode}
-          t={t}
-        />
       </div>
 
       <CardTable

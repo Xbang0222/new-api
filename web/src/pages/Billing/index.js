@@ -19,9 +19,7 @@ import {
 } from '../../helpers/customTable';
 import CardPro from '../../components/common/ui/CardPro';
 import CardTable from '../../components/common/ui/CardTable';
-import CompactModeToggle from '../../components/common/ui/CompactModeToggle';
 import { useIsMobile } from '../../hooks/common/useIsMobile';
-import { useTableCompactMode } from '../../hooks/common/useTableCompactMode';
 import InvoiceApplicationModal from '../../components/billing/InvoiceApplicationModal';
 
 const STATUS_MAP = {
@@ -50,8 +48,8 @@ const Billing = () => {
   const [availableTotal, setAvailableTotal] = useState(0);
   const [availableLoading, setAvailableLoading] = useState(false);
 
-  // custom: invoice ui — usage-logs 同款双模式
-  const [compactMode, setCompactMode] = useTableCompactMode('billing');
+  // custom: invoice ui — 固定自适应模式（max-content），不再提供切换
+  const compactMode = false;
 
   const fetchTopUps = useCallback(async () => {
     setLoading(true);
@@ -253,11 +251,6 @@ const Billing = () => {
           >
             <Typography.Title heading={5}>{t('充值账单')}</Typography.Title>
             <Space>
-              <CompactModeToggle
-                compactMode={compactMode}
-                setCompactMode={setCompactMode}
-                t={t}
-              />
               {isEnabled && (
                 <Button
                   theme='solid'

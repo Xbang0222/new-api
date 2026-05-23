@@ -24,8 +24,6 @@ import {
   renderTimestampNoWrap,
 } from '../../helpers/customTable';
 import { StatusContext } from '../../context/Status';
-import { useTableCompactMode } from '../../hooks/common/useTableCompactMode';
-import CompactModeToggle from '../common/ui/CompactModeToggle';
 
 // custom: invoice fee — small rounding tolerance (1 fen) when comparing the
 // fee against the user's wallet balance, to absorb float drift from the
@@ -49,10 +47,8 @@ const InvoiceApplicationModal = ({
   const [userEmail, setUserEmail] = useState('');
   const [userQuota, setUserQuota] = useState(0);
   const formRef = React.useRef();
-  // custom: invoice ui — usage-logs 同款双模式
-  const [compactMode, setCompactMode] = useTableCompactMode(
-    'invoice-application',
-  );
+  // custom: invoice ui — 固定自适应模式，不再切换
+  const compactMode = false;
 
   // custom: invoice fee — approximate user's wallet balance in RMB so we can
   // show a "balance insufficient" warning before they submit. Authoritative
@@ -315,11 +311,6 @@ const InvoiceApplicationModal = ({
         <Typography.Title heading={6} style={{ margin: 0 }}>
           1. {t('选择充值账单')}
         </Typography.Title>
-        <CompactModeToggle
-          compactMode={compactMode}
-          setCompactMode={setCompactMode}
-          t={t}
-        />
       </div>
 
       <Spin spinning={topUpLoading}>

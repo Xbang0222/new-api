@@ -24,9 +24,7 @@ import {
 } from '../../constants/invoice.constants';
 import CardPro from '../../components/common/ui/CardPro';
 import CardTable from '../../components/common/ui/CardTable';
-import CompactModeToggle from '../../components/common/ui/CompactModeToggle';
 import { useIsMobile } from '../../hooks/common/useIsMobile';
-import { useTableCompactMode } from '../../hooks/common/useTableCompactMode';
 import InvoiceHeaderManager from '../../components/invoice/InvoiceHeaderManager';
 
 const Invoice = () => {
@@ -40,7 +38,7 @@ const Invoice = () => {
   const [activeTab, setActiveTab] = useState('invoices');
 
   // custom: invoice ui — usage-logs 同款双模式
-  const [compactMode, setCompactMode] = useTableCompactMode('invoices');
+  const compactMode = false; // custom: invoice ui — 固定自适应模式，不再切换
 
   const fetchInvoices = useCallback(async () => {
     setLoading(true);
@@ -176,13 +174,6 @@ const Invoice = () => {
             }}
           >
             <Typography.Title heading={5}>{t('发票管理')}</Typography.Title>
-            {activeTab === 'invoices' && (
-              <CompactModeToggle
-                compactMode={compactMode}
-                setCompactMode={setCompactMode}
-                t={t}
-              />
-            )}
           </div>
         }
         tabsArea={

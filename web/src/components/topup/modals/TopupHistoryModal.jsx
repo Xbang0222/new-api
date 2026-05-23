@@ -41,8 +41,6 @@ import {
   renderTimestampNoWrap,
 } from '../../../helpers/customTable';
 import { useIsMobile } from '../../../hooks/common/useIsMobile';
-import { useTableCompactMode } from '../../../hooks/common/useTableCompactMode';
-import CompactModeToggle from '../../common/ui/CompactModeToggle';
 const { Text } = Typography;
 
 // 状态映射配置
@@ -70,8 +68,8 @@ const TopupHistoryModal = ({ visible, onCancel, t }) => {
   const [pageSize, setPageSize] = useState(10);
   const [keyword, setKeyword] = useState('');
   const isMobile = useIsMobile();
-  // custom: invoice ui — usage-logs 同款双模式：默认自适应 + max-content,紧凑模式按容器宽度分配
-  const [compactMode, setCompactMode] = useTableCompactMode('topup-history');
+  // custom: invoice ui — 固定自适应模式（max-content），不再提供切换
+  const compactMode = false;
 
   const loadTopups = async (currentPage, currentPageSize) => {
     setLoading(true);
@@ -283,12 +281,6 @@ const TopupHistoryModal = ({ visible, onCancel, t }) => {
           onChange={handleKeywordChange}
           showClear
           style={{ flex: 1 }}
-        />
-        <CompactModeToggle
-          compactMode={compactMode}
-          setCompactMode={setCompactMode}
-          t={t}
-          size='default'
         />
       </div>
       <Table
