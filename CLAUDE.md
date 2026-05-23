@@ -146,16 +146,7 @@ This project is a fork maintained on the `ruoli` branch. Upstream (`QuantumNous/
 - Frontend: shared custom utilities go in dedicated helpers, e.g. `web/src/helpers/brand.js`, `web/src/helpers/invoice.js`
 - Custom constants go in separate files, e.g. `web/src/constants/invoice.constants.js`
 
-**Current custom-only files (zero merge conflict risk):**
-
-| Layer | Files |
-|-------|-------|
-| Backend | `controller/invoice.go`, `service/invoice.go`, `model/invoice.go`, `dto/invoice.go`, `router/invoice-router.go`, `setting/operation_setting/invoice_setting.go`, `controller/usedata_custom.go`, `model/usedata_custom.go`, `controller/subscription_payment_wallet.go`, `controller/subscription_order_custom.go`, `model/subscription_deduction_order_custom.go` |
-| Frontend pages | `pages/Invoice/`, `pages/InvoiceAdmin/`, `pages/Billing/` |
-| Frontend components | `components/billing/InvoiceApplicationModal.jsx`, `components/invoice/InvoiceHeaderManager.jsx`, `components/settings/InvoiceSetting.jsx`, `components/topup/SubscriptionDeductionOrderList.jsx`, `components/topup/SubscriptionHistoryList.jsx`, `components/topup/SubscriptionCompactRow.jsx` |
-| Helpers & constants | `helpers/brand.js`, `helpers/invoice.js`, `helpers/subscription.js`, `helpers/headerNavModules.js`, `constants/invoice.constants.js`, `constants/dashboard.constants.js` |
-| CI/Deploy | `deploy.sh`, `DEPLOY.md` |
-| Assets | `web/public/fonts/`, `web/public/logo_day.ico`, `web/public/logo_night.ico` |
+> **Current custom-only files** — 最新清单见 `CLAUDE.local.md` 中「自定义文件清单」章节（运维记录，随 custom 功能增减而更新，不污染本规约文件）。
 
 #### 7.2 Upstream File Changes — Keep Minimal and Documented
 
@@ -191,75 +182,14 @@ When modifying upstream files is unavoidable, follow these rules:
 | `custom: claude code only` | 渠道级"仅 Claude Code 客户端"白名单（严格 403） |
 | `custom: shop link` | 顶栏"商城"按钮（外链，URL 与 docs_link 同样在通用设置中配置） |
 | `custom: invoice ui` | 充值/账单/发票表格统一双模式（紧凑/自适应），列宽自适应、时间不换行 |
+| `custom: invite reward log` | 邀请返利明细表 + 历史补录 + 用户可查的两个视图（按人/流水） |
 
 **Behavioral changes** (modifying existing upstream logic, not just adding new code) MUST include a block comment explaining:
 - What the original logic was
 - What was changed and why
 - How to revert if needed
 
-**Current upstream file modifications (merge conflict risk):**
-
-| File | Change | Risk |
-|------|--------|------|
-| `router/api-router.go` | +5 lines (custom routes) | Low |
-| `model/main.go` | +8 lines (invoice migration) | Low |
-| `model/option.go` | +8 lines (invoice settings + invite rebate) | Low |
-| `common/constants.go` | +3 lines | Low |
-| `controller/misc.go` | +6 lines (brand + invite rebate + anti-abuse) | Low |
-| `model/subscription.go` | UserSubscription.deduction_order + deduction order helper call; admin sort_order no longer affects deduction | **Medium** |
-| `web/src/i18n/locales/en.json` | Added translation keys | **High** |
-| `web/src/App.jsx` | Custom routes + brand | Medium |
-| `web/src/components/layout/*` | Navigation + brand | Medium |
-| `controller/option.go` | +46 lines (invite rebate validation) | Low |
-| `controller/topup.go` | +16 lines (invite rebate + ManualCompleteTopUp) | Medium |
-| `controller/topup_stripe.go` | +9 lines (invite rebate) | Low |
-| `controller/topup_creem.go` | +6 lines (invite rebate) | Low |
-| `controller/topup_waffo.go` | +13 lines (invite rebate) | Low |
-| `controller/user.go` | +6 lines (invite rebate) | Low |
-| `model/topup.go` | TopUp struct (InviterRewardSent) + ManualCompleteTopUp signature change + PaymentProviderWallet constant | **Medium** |
-| `model/user.go` | +70 lines ProcessInviterReward + configurable transfer threshold | Low |
-| `web/src/pages/Setting/Operation/SettingsCreditLimit.jsx` | +115 lines (invite rebate settings UI) | Medium |
-| `middleware/distributor.go` | 4-line behavioral change (affinity evict on disabled channel) | Low |
-| `service/channel_affinity.go` | +21 lines (EvictChannelAffinityCache function) | Low |
-| `model/subscription.go` | +85 lines (PurchaseSubscriptionWithWallet function) | Low |
-| `model/subscription.go::upsertSubscriptionTopUpTx` | +6 lines (PaymentProvider 同步, 修补 upstream v0.13.1 helper 缺口) | Low |
-| `web/src/components/topup/modals/SubscriptionPurchaseModal.jsx` | +35 lines (wallet payment button) | Medium |
-| `web/src/components/topup/SubscriptionPlansCard.jsx` | +30 lines (payWallet handler) | Medium |
-| `web/src/components/topup/SubscriptionPlansCard.jsx` | active subscription drag/drop order + auto-save + history collapse (custom deduction order) | Medium |
-| `web/src/components/topup/SubscriptionHistoryList.jsx` | compact collapsed history list for expired/cancelled/exhausted subscriptions | Low |
-| `web/src/components/topup/SubscriptionCompactRow.jsx` | shared compact row renderer for active/history subscription lists | Low |
-| `web/src/components/topup/RechargeCard.jsx` | +1 line (pass userQuota prop) | Low |
-| `web/src/components/table/subscriptions/SubscriptionsColumnDefs.jsx` | plan sort_order label changed to display-only wording | Low |
-| `web/src/components/table/subscriptions/modals/AddEditSubscriptionModal.jsx` | plan sort_order label/extraText clarified as display-only | Low |
-| `model/subscription.go::CountUserSubscriptionsByPlan` 之后 | +75 lines (`calcPurchaseWindowStart` + `CountPurchasesInWindow` + `countPurchasesInWindowTx` helpers) | Low |
-| `model/subscription.go::CreateUserSubscriptionFromPlanTx` | -5/+8 lines (cycle purchase limit, behavioral change with block comment) | Low |
-| `model/subscription.go::PurchaseSubscriptionWithWallet` | -5/+3 lines (cycle purchase limit) | Low |
-| `controller/subscription_payment_stripe.go` | -1/+2 lines (cycle purchase limit, swap helper call) | Low |
-| `controller/subscription_payment_creem.go` | -1/+2 lines (cycle purchase limit) | Low |
-| `controller/subscription_payment_epay.go` | -1/+2 lines (cycle purchase limit) | Low |
-| `controller/subscription_payment_wallet.go` | -1/+2 lines (cycle purchase limit) | Low |
-| `web/src/components/topup/SubscriptionPlansCard.jsx::planPurchaseCountMap` | +18 lines (cycle window filter, behavioral change with comment) | Low |
-| `web/src/components/table/subscriptions/modals/AddEditSubscriptionModal.jsx` | +1 extraText i18n key (cycle purchase limit) | Low |
-| `dto/channel_settings.go` | +1 line `ClaudeCodeOnly bool` field | Low |
-| `i18n/keys.go` | +2 lines `MsgDistributorChannelClaudeCodeOnly` constant | Low |
-| `i18n/locales/{en,zh-CN,zh-TW}.yaml` | +2 lines per file (`distributor.channel_claude_code_only`) | Low |
-| `middleware/distributor.go` | +15 lines guard (claude code only: path whitelist + fingerprint, two-layer) | Low |
-| `web/src/components/table/channels/modals/EditChannelModal.jsx` | +9 lines (state + load/save/cleanup + Form.Switch) | Medium |
-| `setting/operation_setting/general_setting.go` | +2 lines `ShopLink` field | Low |
-| `controller/misc.go` | +1 line (`shop_link` exposed in /api/status) | Low |
-| `web/src/helpers/data.js` | +5 lines (localStorage shop_link) | Low |
-| `web/src/hooks/common/useHeaderBar.js` | +2 lines (read & expose shopLink) | Low |
-| `web/src/components/layout/headerbar/index.jsx` | +2 lines (destructure & pass shopLink) | Low |
-| `web/src/hooks/common/useNavigation.js` | refactor: ORDER_BY_PAGE lookup + `isSafeExternalUrl` guard + shop link injection | **Medium** |
-| `web/src/components/layout/headerbar/Navigation.jsx` | +5 lines (ShoppingBag icon for shop link) | Low |
-| `web/src/pages/Setting/Operation/SettingsGeneral.jsx` | +12 lines (Form.Input shop_link) | Low |
-| `web/src/components/settings/OperationSetting.jsx` | +1 line (default value) | Low |
-| `web/src/i18n/locales/{fr,ja,ru,vi}.json` | +3 keys per file (商城 / 商城地址 / placeholder) | Low |
-| `controller/option.go::UpdateOption` | +19 lines (invoice fee_rate validation: NaN/Inf reject + clamp [0,1], custom: invoice fee) | Low |
-| `service/task_billing_test.go` | +4 lines (shared TestMain: Invoice/InvoiceItem migration + truncate cleanup, custom: invoice fee) | Low |
-| `web/src/i18n/locales/{en,fr,ja,ru,vi,zh,zh-CN,zh-TW}.json` | +7 invoice fee keys per file (开票服务费 / 提交时将从余额扣除 / 余额不足以支付开票服务费，请先充值 / 开票服务费率 / "0–1 之间的小数..." / 开票服务费已退还 / 开票服务费已扣除) | Low |
-| `web/src/components/table/subscriptions/SubscriptionsTable.jsx` | 1-char change (`overflow-hidden` → `rounded-xl overflow-hidden`, custom: subscription ui — 上游漏了 `rounded-xl`,跟 usage-logs 保持一致) | Low |
-| `web/src/components/topup/modals/TopupHistoryModal.jsx` | +20 lines (useTableCompactMode + CompactModeToggle + 时间列 fixed:'right'/renderTimestampNoWrap + Input/Toggle flex 布局, custom: invoice ui — 充值账单弹窗接入双模式) | Medium |
+> **Current upstream file modifications** — 最新清单见 `CLAUDE.local.md` 中「上游文件修改清单」章节（运维记录，每加一个 custom 功能就追加一行，不在本规约文件中维护）。
 
 #### 7.3 i18n — Avoid Key Collisions
 
