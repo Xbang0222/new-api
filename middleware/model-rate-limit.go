@@ -178,16 +178,47 @@ func ModelRequestRateLimit() func(c *gin.Context) {
 		successMaxCount := setting.ModelRequestRateLimitSuccessCount
 
 		// 获取分组
-		group := common.GetContextKeyString(c, constant.ContextKeyTokenGroup)
-		if group == "" {
-			group = common.GetContextKeyString(c, constant.ContextKeyUserGroup)
+		// custom: token multi-group — 多分组 token 实际命中哪个分组要等
+		// distributor 决定，rate-limit 阶段还不知道。为避免被列表里最严格的
+		// 分组卡死、又不能直接全局放行，取"列表中各分组限流的最大值"作为本次
+		// 请求的上限——保证用户在任一可用分组下都不会被多分组 token 误限。
+		var group string
+		if listVal, ok := common.GetContextKey(c, constant.ContextKeyTokenGroupList); ok {
+			if groups, ok2 := listVal.([]string); ok2 && len(groups) > 0 {
+				bestTotal := totalMaxCount
+				bestSuccess := successMaxCount
+				bestFound := false
+				for _, g := range groups {
+					if g == "auto" {
+						// auto 占位由后续展开决定，此处跳过避免误用全局默认
+						continue
+					}
+					if gt, gs, gFound := setting.GetGroupRateLimit(g); gFound {
+						if !bestFound || gt > bestTotal {
+							bestTotal = gt
+							bestSuccess = gs
+							bestFound = true
+						}
+					}
+				}
+				if bestFound {
+					totalMaxCount = bestTotal
+					successMaxCount = bestSuccess
+				}
+				group = groups[0] // 仅用于后续可能的 group key，限额已覆盖
+			}
 		}
-
-		//获取分组的限流配置
-		groupTotalCount, groupSuccessCount, found := setting.GetGroupRateLimit(group)
-		if found {
-			totalMaxCount = groupTotalCount
-			successMaxCount = groupSuccessCount
+		if group == "" {
+			group = common.GetContextKeyString(c, constant.ContextKeyTokenGroup)
+			if group == "" {
+				group = common.GetContextKeyString(c, constant.ContextKeyUserGroup)
+			}
+			//获取分组的限流配置
+			groupTotalCount, groupSuccessCount, found := setting.GetGroupRateLimit(group)
+			if found {
+				totalMaxCount = groupTotalCount
+				successMaxCount = groupSuccessCount
+			}
 		}
 
 		// 根据存储类型选择并执行限流处理器

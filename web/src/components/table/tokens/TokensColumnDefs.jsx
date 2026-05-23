@@ -89,6 +89,30 @@ const renderStatus = (text, record, t) => {
 
 // Render group column
 const renderGroupColumn = (text, record, t, groupRatios = {}) => {
+  // custom: token multi-group — 多分组优先渲染（数组形式），否则走单分组渲染
+  const groups = Array.isArray(record?.groups) ? record.groups : [];
+  if (groups.length > 1) {
+    return (
+      <Space wrap spacing={4}>
+        {groups.map((g, idx) => {
+          if (g === 'auto') {
+            return (
+              <Tag key={idx} color='white' shape='circle' size='small'>
+                {t('智能熔断')}
+              </Tag>
+            );
+          }
+          const r = groupRatios[g];
+          return (
+            <Tag key={idx} color='blue' shape='circle' size='small'>
+              {g}
+              {r !== undefined ? ` · ${r}x` : ''}
+            </Tag>
+          );
+        })}
+      </Space>
+    );
+  }
   if (text === 'auto') {
     return (
       <Tooltip

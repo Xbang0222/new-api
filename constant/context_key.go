@@ -15,6 +15,9 @@ const (
 	ContextKeyTokenKey               ContextKey = "token_key"
 	ContextKeyTokenId                ContextKey = "token_id"
 	ContextKeyTokenGroup             ContextKey = "token_group"
+	// custom: token multi-group — 多分组令牌在鉴权时写入该 ctx key，
+	// 后续 channel_select / distributor 据此使用 token 自定义列表替代用户全局 auto 列表。
+	ContextKeyTokenGroupList         ContextKey = "token_group_list" // value type: []string
 	ContextKeyTokenSpecificChannelId ContextKey = "specific_channel_id"
 	ContextKeyTokenModelLimitEnabled ContextKey = "token_model_limit_enabled"
 	ContextKeyTokenModelLimit        ContextKey = "token_model_limit"

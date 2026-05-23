@@ -220,7 +220,14 @@ func AddToken(c *gin.Context) {
 		ModelLimits:        token.ModelLimits,
 		AllowIps:           token.AllowIps,
 		Group:              token.Group,
+		Groups:             token.Groups, // custom: token multi-group
 		CrossGroupRetry:    token.CrossGroupRetry,
+	}
+	// custom: token multi-group — 桥接 nil Groups + 归一化
+	cleanToken.BridgeNilGroupsFromLegacy()
+	if err := cleanToken.NormalizeGroups(); err != nil {
+		common.ApiError(c, err)
+		return
 	}
 	err = cleanToken.Insert()
 	if err != nil {
@@ -297,8 +304,23 @@ func UpdateToken(c *gin.Context) {
 		cleanToken.ModelLimitsEnabled = token.ModelLimitsEnabled
 		cleanToken.ModelLimits = token.ModelLimits
 		cleanToken.AllowIps = token.AllowIps
-		cleanToken.Group = token.Group
-		cleanToken.CrossGroupRetry = token.CrossGroupRetry
+		// custom: token multi-group — 仅在客户端显式提供 groups 字段时才覆盖现有
+		// 多分组配置，避免老 API / 第三方脚本只 PUT {id,name} 静默清空多分组。
+		// 判定：token.Groups == nil 表示请求体没出现 groups 字段，保留 cleanToken 现状；
+		// token.Groups == []string{} (显式空数组) 才进入清空分支。
+		if token.Groups != nil {
+			cleanToken.Group = token.Group
+			cleanToken.Groups = token.Groups
+			cleanToken.CrossGroupRetry = token.CrossGroupRetry
+		}
+	}
+	// custom: token multi-group — 桥接 nil Groups + 归一化（仅在字段更新分支，statusOnly 不动）
+	if statusOnly == "" {
+		cleanToken.BridgeNilGroupsFromLegacy()
+		if err := cleanToken.NormalizeGroups(); err != nil {
+			common.ApiError(c, err)
+			return
+		}
 	}
 	err = cleanToken.Update()
 	if err != nil {

@@ -178,8 +178,10 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	}()
 
 	retryParam := &service.RetryParam{
-		Ctx:        c,
-		TokenGroup: relayInfo.TokenGroup,
+		Ctx: c,
+		// custom: token multi-group — 重试必须用 UsingGroup（auto 走多分组分支），
+		// 不是 TokenGroup（多分组场景下被设为 first item，会丢失跨分组 fallback）。
+		TokenGroup: relayInfo.UsingGroup,
 		ModelName:  relayInfo.OriginModelName,
 		Retry:      common.GetPointer(0),
 	}
@@ -501,8 +503,9 @@ func RelayTask(c *gin.Context) {
 	}()
 
 	retryParam := &service.RetryParam{
-		Ctx:        c,
-		TokenGroup: relayInfo.TokenGroup,
+		Ctx: c,
+		// custom: token multi-group — 同步路径一致用 UsingGroup。
+		TokenGroup: relayInfo.UsingGroup,
 		ModelName:  relayInfo.OriginModelName,
 		Retry:      common.GetPointer(0),
 	}

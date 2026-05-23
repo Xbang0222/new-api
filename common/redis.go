@@ -139,6 +139,21 @@ func RedisHSetObj(key string, obj interface{}, expiration time.Duration) error {
 			continue
 		}
 
+		// 处理切片/映射类型：必须 JSON 序列化，否则 HGet 端 reflect.Slice/Map
+		// 落入 default 分支返回 "unsupported field type" → 整条记录无法解码。
+		if value.Kind() == reflect.Slice || value.Kind() == reflect.Map {
+			if value.IsNil() {
+				data[field.Name] = ""
+				continue
+			}
+			encoded, err := Marshal(value.Interface())
+			if err != nil {
+				return fmt.Errorf("failed to marshal field %s: %w", field.Name, err)
+			}
+			data[field.Name] = string(encoded)
+			continue
+		}
+
 		// 其他类型直接转换为字符串
 		data[field.Name] = fmt.Sprintf("%v", value.Interface())
 	}
@@ -229,6 +244,16 @@ func RedisHGetObj(key string, obj interface{}) error {
 						fieldValue.Set(reflect.ValueOf(gorm.DeletedAt{Time: timeValue, Valid: true}))
 					}
 				}
+			case reflect.Slice, reflect.Map:
+				// 与 HSetObj 对称：空串视为 nil；否则 JSON 反序列化回原结构。
+				if value == "" {
+					continue
+				}
+				target := reflect.New(fieldValue.Type()).Interface()
+				if err := UnmarshalJsonStr(value, target); err != nil {
+					return fmt.Errorf("failed to unmarshal field %s: %w", fieldName, err)
+				}
+				fieldValue.Set(reflect.ValueOf(target).Elem())
 			default:
 				return fmt.Errorf("unsupported field type: %s for field %s", fieldValue.Kind(), fieldName)
 			}

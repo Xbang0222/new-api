@@ -27,8 +27,11 @@ type Token struct {
 	AllowIps           *string        `json:"allow_ips" gorm:"default:''"`
 	UsedQuota          int            `json:"used_quota" gorm:"default:0"` // used quota
 	Group              string         `json:"group" gorm:"default:''"`
-	CrossGroupRetry    bool           `json:"cross_group_retry"` // 跨分组重试，仅auto分组有效
-	DeletedAt          gorm.DeletedAt `gorm:"index"`
+	// custom: token multi-group — 多分组支持
+	GroupsJSON      string         `json:"-" gorm:"column:groups;type:text"`
+	Groups          []string       `json:"groups,omitempty" gorm:"-"`
+	CrossGroupRetry bool           `json:"cross_group_retry"` // 跨分组重试，仅auto分组有效
+	DeletedAt       gorm.DeletedAt `gorm:"index"`
 }
 
 func (token *Token) Clean() {
@@ -295,7 +298,8 @@ func (token *Token) Update() (err error) {
 		}
 	}()
 	err = DB.Model(token).Select("name", "status", "expired_time", "remain_quota", "unlimited_quota",
-		"model_limits_enabled", "model_limits", "allow_ips", "group", "cross_group_retry").Updates(token).Error
+		"model_limits_enabled", "model_limits", "allow_ips", "group", "groups", "cross_group_retry").Updates(token).Error
+	// custom: token multi-group — 上面 Select 加了 "groups"（数据库列名，对应 GroupsJSON 字段）
 	return err
 }
 

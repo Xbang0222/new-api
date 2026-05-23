@@ -46,6 +46,7 @@ import {
   Col,
   Row,
   InputNumber,
+  Select,
 } from '@douyinfe/semi-ui';
 import {
   IconCreditCard,
@@ -53,6 +54,7 @@ import {
   IconSave,
   IconClose,
   IconKey,
+  IconPlus,
 } from '@douyinfe/semi-icons';
 import { useTranslation } from 'react-i18next';
 import { StatusContext } from '../../../../context/Status';
@@ -80,6 +82,8 @@ const EditTokenModal = (props) => {
     model_limits: [],
     allow_ips: '',
     group: '',
+    // custom: token multi-group — 多分组列表，第一行不可删除，空字符串代表"使用用户默认分组"
+    groups_list: [''],
     cross_group_retry: false,
     tokenCount: 1,
   });
@@ -169,11 +173,25 @@ const EditTokenModal = (props) => {
       } else {
         data.model_limits = [];
       }
+      // custom: token multi-group — 后端返回 groups (array) 或仅 group (string)
+      if (Array.isArray(data.groups) && data.groups.length > 0) {
+        data.groups_list = data.groups;
+      } else if (data.group) {
+        data.groups_list = [data.group];
+      } else {
+        data.groups_list = [''];
+      }
       data.remain_amount = Number(
         quotaToDisplayAmount(data.remain_quota || 0).toFixed(6),
       );
       if (formApiRef.current) {
         formApiRef.current.setValues({ ...getInitValues(), ...data });
+        // custom: token multi-group — `groups_list` / `group` 都是非注册字段
+        // (Form.Slot 内 raw Select + 用户的 setValue 维护)，Semi Form 的 setValues
+        // 只会回填已注册字段，所以这里必须显式 setValue 一遍。否则编辑模式打开后
+        // 多分组下拉是空的，逼用户重新选一遍。
+        formApiRef.current.setValue('groups_list', data.groups_list);
+        formApiRef.current.setValue('group', data.group || '');
       }
     } else {
       showError(message);
@@ -218,7 +236,11 @@ const EditTokenModal = (props) => {
   const submit = async (values) => {
     setLoading(true);
     if (isEdit) {
-      let { tokenCount: _tc, ...localInputs } = values;
+      let { tokenCount: _tc, groups_list: gl, ...localInputs } = values;
+      // custom: token multi-group — 收集 groups_list 并提交为 groups
+      localInputs.groups = (gl || [])
+        .map((s) => (s || '').trim())
+        .filter((s) => s !== '');
       localInputs.remain_quota = localInputs.unlimited_quota
         ? 0
         : displayAmountToQuota(localInputs.remain_amount);
@@ -254,7 +276,11 @@ const EditTokenModal = (props) => {
       const count = parseInt(values.tokenCount, 10) || 1;
       let successCount = 0;
       for (let i = 0; i < count; i++) {
-        let { tokenCount: _tc, ...localInputs } = values;
+        let { tokenCount: _tc, groups_list: gl, ...localInputs } = values;
+        // custom: token multi-group — 收集 groups_list 并提交为 groups
+        localInputs.groups = (gl || [])
+          .map((s) => (s || '').trim())
+          .filter((s) => s !== '');
         const baseName =
           values.name.trim() === '' ? 'default' : values.name.trim();
         if (i !== 0 || values.name.trim() === '') {
@@ -383,24 +409,87 @@ const EditTokenModal = (props) => {
                     />
                   </Col>
                   <Col span={24}>
+                    {/* custom: token multi-group — 多分组列表 UI */}
                     {groups.length > 0 ? (
-                      <Form.Select
-                        field='group'
-                        label={t('令牌分组')}
-                        placeholder={t('令牌分组，默认为用户的分组')}
-                        optionList={groups}
-                        renderOptionItem={renderGroupOption}
-                        filter={(input, option) => {
-                          const q = input.toLowerCase();
-                          return (
-                            option.value?.toLowerCase().includes(q) ||
-                            (typeof option.label === 'string' &&
-                              option.label.toLowerCase().includes(q))
+                      <Form.Slot label={t('令牌分组')}>
+                        {(values.groups_list || ['']).map((val, idx) => {
+                          // 客户端已选项过滤（防止同一个 group 被选两次）
+                          const otherSelected = new Set(
+                            (values.groups_list || [])
+                              .filter((g, i) => i !== idx && g)
+                              .map((g) => g),
                           );
-                        }}
-                        showClear
-                        style={{ width: '100%' }}
-                      />
+                          const filteredOptions = groups.filter(
+                            (opt) => !otherSelected.has(opt.value),
+                          );
+                          const onChange = (next) => {
+                            const list = [...(values.groups_list || [''])];
+                            list[idx] = next || '';
+                            formApiRef.current?.setValue('groups_list', list);
+                          };
+                          const onRemove = () => {
+                            const list = [...(values.groups_list || [''])];
+                            list.splice(idx, 1);
+                            formApiRef.current?.setValue(
+                              'groups_list',
+                              list.length > 0 ? list : [''],
+                            );
+                          };
+                          return (
+                            <div
+                              key={idx}
+                              className='flex items-center gap-2 mb-2'
+                            >
+                              <div className='flex-1'>
+                                {/* custom: token multi-group — 使用原生 Select 而非 Form.Select，
+                                    避免 withField HOC 截获 value 属性导致编辑模式回显为空 */}
+                                <Select
+                                  value={val || undefined}
+                                  onChange={onChange}
+                                  placeholder={t(
+                                    '令牌分组，默认为用户的分组',
+                                  )}
+                                  optionList={filteredOptions}
+                                  renderOptionItem={renderGroupOption}
+                                  filter={(input, option) => {
+                                    const q = input.toLowerCase();
+                                    return (
+                                      option.value
+                                        ?.toLowerCase()
+                                        .includes(q) ||
+                                      (typeof option.label === 'string' &&
+                                        option.label.toLowerCase().includes(q))
+                                    );
+                                  }}
+                                  showClear
+                                  style={{ width: '100%' }}
+                                />
+                              </div>
+                              {(values.groups_list || []).length > 1 && (
+                                <Button
+                                  theme='borderless'
+                                  type='tertiary'
+                                  icon={<IconClose />}
+                                  onClick={onRemove}
+                                  aria-label={t('删除分组')}
+                                />
+                              )}
+                            </div>
+                          );
+                        })}
+                        <Button
+                          theme='light'
+                          type='primary'
+                          onClick={() => {
+                            const list = [...(values.groups_list || ['']), ''];
+                            formApiRef.current?.setValue('groups_list', list);
+                          }}
+                          icon={<IconPlus />}
+                          style={{ marginTop: 4 }}
+                        >
+                          {t('添加分组')}
+                        </Button>
+                      </Form.Slot>
                     ) : (
                       <Form.Select
                         placeholder={t('管理员未设置用户可选分组')}
@@ -413,7 +502,13 @@ const EditTokenModal = (props) => {
                   <Col
                     span={24}
                     style={{
-                      display: values.group === 'auto' ? 'block' : 'none',
+                      // custom: token multi-group — 仅当列表长度=1 且值为 auto 时显示开关，
+                      // 其它情况下多分组天然就是跨分组语义，后端 NormalizeGroups 会强制 true。
+                      display:
+                        (values.groups_list || []).length === 1 &&
+                        (values.groups_list || [])[0] === 'auto'
+                          ? 'block'
+                          : 'none',
                     }}
                   >
                     <Form.Switch

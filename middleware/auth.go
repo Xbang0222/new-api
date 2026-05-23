@@ -379,24 +379,50 @@ func TokenAuth() func(c *gin.Context) {
 
 		userCache.WriteContext(c)
 
+		// custom: token multi-group
+		// Original: if token.Group != "" { 单分组校验 } else { userGroup unchanged }
+		// Changed: 改为三分支：多分组 token (len > 1) 走 auto 路径并写入 ContextKeyTokenGroupList，
+		//   单分组保持原行为，空分组沿用用户默认 group。
+		// Revert: 删除 case len(tokenGroups) > 1 整段 + 把 len(tokenGroups) == 1 还原为
+		//   if token.Group != "" 即可恢复 upstream 行为。
 		userGroup := userCache.Group
-		tokenGroup := token.Group
-		if tokenGroup != "" {
-			// check common.UserUsableGroups[userGroup]
+		tokenGroups := token.EffectiveGroups()
+		switch {
+		case len(tokenGroups) > 1:
+			// 多分组：先逐项校验（用户可访问 + 分组未弃用，auto 例外）
+			for _, g := range tokenGroups {
+				// auto 是占位项，channel_select 会展开成用户全局 auto 列表，
+				// 不要求 admin 把 auto 加进 user_usable_groups。
+				if g == "auto" {
+					continue
+				}
+				if _, ok := service.GetUserUsableGroups(userGroup)[g]; !ok {
+					abortWithOpenAiMessage(c, http.StatusForbidden, fmt.Sprintf("无权访问 %s 分组", g))
+					return
+				}
+				if !ratio_setting.ContainsGroupRatio(g) {
+					abortWithOpenAiMessage(c, http.StatusForbidden, fmt.Sprintf("分组 %s 已被弃用", g))
+					return
+				}
+			}
+			common.SetContextKey(c, constant.ContextKeyTokenGroupList, tokenGroups)
+			common.SetContextKey(c, constant.ContextKeyUsingGroup, "auto") // 复用 auto 分支
+		case len(tokenGroups) == 1:
+			tokenGroup := tokenGroups[0]
 			if _, ok := service.GetUserUsableGroups(userGroup)[tokenGroup]; !ok {
 				abortWithOpenAiMessage(c, http.StatusForbidden, fmt.Sprintf("无权访问 %s 分组", tokenGroup))
 				return
 			}
-			// check group in common.GroupRatio
 			if !ratio_setting.ContainsGroupRatio(tokenGroup) {
 				if tokenGroup != "auto" {
 					abortWithOpenAiMessage(c, http.StatusForbidden, fmt.Sprintf("分组 %s 已被弃用", tokenGroup))
 					return
 				}
 			}
-			userGroup = tokenGroup
+			common.SetContextKey(c, constant.ContextKeyUsingGroup, tokenGroup)
+		default:
+			common.SetContextKey(c, constant.ContextKeyUsingGroup, userGroup)
 		}
-		common.SetContextKey(c, constant.ContextKeyUsingGroup, userGroup)
 
 		err = SetupContextForToken(c, token, parts...)
 		if err != nil {

@@ -167,7 +167,21 @@ func ListModels(c *gin.Context, modelType int) {
 			group = tokenGroup
 		}
 		var models []string
-		if tokenGroup == "auto" {
+		// custom: token multi-group — 多分组 token 列出列表中所有分组的模型并集（auto 占位项会展开）
+		// Original: if tokenGroup == "auto" { iterate GetUserAutoGroup } else { models = GetGroupEnabledModels(group) }
+		// Changed: 增加 ContextKeyTokenGroupList 分支：有多分组列表则按列表展开（含 auto），其余 auto 行为不变。
+		// Revert: 删除 multiGroupList 判断，恢复原 if tokenGroup == "auto" ... else ... 结构。
+		multiGroupList, _ := common.GetContextKey(c, constant.ContextKeyTokenGroupList)
+		if list, ok := multiGroupList.([]string); ok && len(list) > 1 {
+			for _, g := range service.GetTokenEffectiveAutoGroups(c, userGroup) {
+				groupModels := model.GetGroupEnabledModels(g)
+				for _, m := range groupModels {
+					if !common.StringsContains(models, m) {
+						models = append(models, m)
+					}
+				}
+			}
+		} else if tokenGroup == "auto" {
 			for _, autoGroup := range service.GetUserAutoGroup(userGroup) {
 				groupModels := model.GetGroupEnabledModels(autoGroup)
 				for _, g := range groupModels {
