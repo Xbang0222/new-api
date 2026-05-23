@@ -284,6 +284,7 @@ func migrateDB() error {
 		&Invoice{},
 		&InvoiceItem{},
 		&InvoiceHeader{},
+		&InviteRewardLog{}, // custom: invite reward log
 	)
 	if err != nil {
 		return err
@@ -336,6 +337,7 @@ func migrateDBFast() error {
 		{&Invoice{}, "Invoice"},
 		{&InvoiceItem{}, "InvoiceItem"},
 		{&InvoiceHeader{}, "InvoiceHeader"},
+		{&InviteRewardLog{}, "InviteRewardLog"}, // custom: invite reward log
 	}
 	// 动态计算migration数量，确保errChan缓冲区足够大
 	errChan := make(chan error, len(migrations))

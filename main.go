@@ -273,6 +273,11 @@ func InitResources() error {
 	// Initialize options, should after model.InitDB()
 	model.InitOptionMap()
 
+	// custom: invite reward log — one-shot historical backfill, idempotent via
+	// Option["InviteRewardLogBackfilled"]. Async + recover so 10w+ TopUp 表
+	// 启动不会阻塞、单点 panic 不会让 server 进入 crashloop.
+	model.LaunchBackfillInviteRewardLogs()
+
 	// 清理旧的磁盘缓存文件
 	common.CleanupOldCacheFiles()
 

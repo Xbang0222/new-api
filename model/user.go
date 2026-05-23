@@ -343,6 +343,9 @@ func inviteUser(inviterId int) (err error) {
 }
 
 // custom: invite rebate (PR #3495)
+// custom: invite reward log — wraps the rebate flow in a transaction and writes
+// an InviteRewardLog snapshot in the same tx, so the three steps (CAS topup /
+// add aff_quota / write log) can no longer drift into a partial-success state.
 // ProcessInviterReward processes inviter rebate when an invitee recharges.
 // topUpId: associated top-up order ID for idempotency check (pass 0 to skip, e.g. redemption code)
 func ProcessInviterReward(userId int, rechargeQuota int, topUpId int) error {
@@ -361,26 +364,21 @@ func ProcessInviterReward(userId int, rechargeQuota int, topUpId int) error {
 	if user.InviterId == 0 {
 		return nil
 	}
-
-	// Idempotency check: if topUpId provided, atomically mark as processed
-	if topUpId > 0 {
-		result := DB.Model(&TopUp{}).
-			Where("id = ? AND inviter_reward_sent = ?", topUpId, false).
-			Update("inviter_reward_sent", true)
-		if result.Error != nil {
-			return fmt.Errorf("检查返利幂等性失败: %w", result.Error)
-		}
-		if result.RowsAffected == 0 {
-			// Already processed, skip
-			return nil
-		}
+	// Defensive: skip self-invite dirty data
+	if user.InviterId == user.Id {
+		return nil
 	}
 
 	var rewardQuota int
 	var logMessage string
 
+	// Compute rewardQuota BEFORE entering the transaction, so we can bail out
+	// without flipping inviter_reward_sent. Previously this lived after the CAS,
+	// meaning percentage rules that truncate to 0 (e.g. 1% of a tiny recharge)
+	// would mark the TopUp as "reward sent" with no credit and no log — and the
+	// TopUp could never be retried even after admin tuned the rule. By gating
+	// upfront we keep the CAS available for a future genuine credit.
 	if common.InviterRewardType == "percentage" {
-		// Percentage rebate — use decimal for financial precision
 		dRecharge := decimal.NewFromInt(int64(rechargeQuota))
 		dPercent := decimal.NewFromInt(int64(common.InviterRewardValue))
 		rewardQuota = int(dRecharge.Mul(dPercent).Div(decimal.NewFromInt(100)).IntPart())
@@ -394,21 +392,50 @@ func ProcessInviterReward(userId int, rechargeQuota int, topUpId int) error {
 		logMessage = fmt.Sprintf("邀请用户充值返利 %s（固定奖励）",
 			logger.LogQuota(rewardQuota))
 	}
-
 	if rewardQuota <= 0 {
 		return nil
 	}
 
-	// Atomic update: update aff_quota and aff_history in one DB operation
-	err = DB.Model(&User{}).Where("id = ?", user.InviterId).Updates(map[string]interface{}{
-		"aff_quota":   gorm.Expr("aff_quota + ?", rewardQuota),
-		"aff_history": gorm.Expr("aff_history + ?", rewardQuota),
-	}).Error
+	err = DB.Transaction(func(tx *gorm.DB) error {
+		// 1) CAS idempotency: only proceed if inviter_reward_sent flips from false to true
+		if topUpId > 0 {
+			result := tx.Model(&TopUp{}).
+				Where("id = ? AND inviter_reward_sent = ?", topUpId, false).
+				Update("inviter_reward_sent", true)
+			if result.Error != nil {
+				return fmt.Errorf("检查返利幂等性失败: %w", result.Error)
+			}
+			if result.RowsAffected == 0 {
+				// Already processed by another concurrent call, skip silently
+				return nil
+			}
+		}
+
+		// 2) Atomic update: aff_quota and aff_history in one DB operation, inside tx
+		if err := tx.Model(&User{}).Where("id = ?", user.InviterId).Updates(map[string]interface{}{
+			"aff_quota":   gorm.Expr("aff_quota + ?", rewardQuota),
+			"aff_history": gorm.Expr("aff_history + ?", rewardQuota),
+		}).Error; err != nil {
+			return fmt.Errorf("更新邀请人返利额度失败: %w", err)
+		}
+
+		// 3) Insert invite_reward_log snapshot
+		return tx.Create(&InviteRewardLog{
+			InviterId:     user.InviterId,
+			InviteeId:     userId,
+			TopUpId:       topUpId,
+			RechargeQuota: rechargeQuota,
+			RewardQuota:   rewardQuota,
+			RewardType:    common.InviterRewardType,
+			RewardValue:   common.InviterRewardValue,
+		}).Error
+	})
 	if err != nil {
-		return fmt.Errorf("更新邀请人返利额度失败: %w", err)
+		return err
 	}
 
-	// Log
+	// 4) Log outside transaction (matches prior behavior — a system-log failure
+	// must not roll back a successful reward credit).
 	RecordLog(user.InviterId, LogTypeSystem, logMessage)
 
 	return nil

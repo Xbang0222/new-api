@@ -141,6 +141,7 @@ func InitOptionMap() {
 	common.OptionMap["InviterRewardType"] = common.InviterRewardType
 	common.OptionMap["InviterRewardValue"] = strconv.Itoa(common.InviterRewardValue)
 	common.OptionMap["MinAffTransferQuota"] = strconv.Itoa(common.MinAffTransferQuota) // custom: invite rebate anti-abuse
+	common.OptionMap["InviteRewardLogBackfilled"] = ""                                 // custom: invite reward log
 	common.OptionMap["QuotaRemindThreshold"] = strconv.Itoa(common.QuotaRemindThreshold)
 	common.OptionMap["PreConsumedQuota"] = strconv.Itoa(common.PreConsumedQuota)
 	common.OptionMap["ModelRequestRateLimitCount"] = strconv.Itoa(setting.ModelRequestRateLimitCount)
