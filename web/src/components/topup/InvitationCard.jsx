@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useState } from 'react';
+import React from 'react';
 import {
   Avatar,
   Typography,
@@ -27,9 +27,9 @@ import {
   Badge,
   Space,
 } from '@douyinfe/semi-ui';
-import { Copy, Users, BarChart2, TrendingUp, Gift, Zap, Eye } from 'lucide-react';
+import { Copy, Users, BarChart2, TrendingUp, Gift, Zap } from 'lucide-react';
 // custom: invite reward log
-import InvitationDetailModal from '../billing/InvitationDetailModal';
+import InvitationDetailPanel from '../billing/InvitationDetailPanel';
 
 const { Text } = Typography;
 
@@ -52,9 +52,6 @@ const InvitationCard = ({
     !affQuota ||
     affQuota <= 0 ||
     (minAffTransferQuota > 0 && affQuota < minAffTransferQuota);
-
-  // custom: invite reward log
-  const [detailModalOpen, setDetailModalOpen] = useState(false);
 
   const renderRewardRule = () => {
     if (rewardType === 'percentage' && rewardValue > 0) {
@@ -86,8 +83,7 @@ const InvitationCard = ({
     );
   };
   return (
-    <>
-      <Card className='!rounded-2xl shadow-sm border-0'>
+    <Card className='!rounded-2xl shadow-sm border-0'>
       {/* 卡片头部 */}
       <div className='flex items-center mb-4'>
         <Avatar size='small' color='green' className='mr-3 shadow-md'>
@@ -123,36 +119,23 @@ const InvitationCard = ({
                   <Text strong style={{ color: 'white', fontSize: '16px' }}>
                     {t('收益统计')}
                   </Text>
-                  <Space>
-                    <Button
-                      type='primary'
-                      theme='solid'
-                      size='small'
-                      disabled={transferDisabled}
-                      onClick={() => setOpenTransfer(true)}
-                      className='!rounded-lg'
-                      title={
-                        minAffTransferQuota > 0 &&
-                        affQuota < minAffTransferQuota
-                          ? t('返利余额未达到最低划转门槛')
-                          : undefined
-                      }
-                    >
-                      <Zap size={12} className='mr-1' />
-                      {t('划转到余额')}
-                    </Button>
-                    {/* custom: invite reward log */}
-                    <Button
-                      type='tertiary'
-                      theme='solid'
-                      size='small'
-                      onClick={() => setDetailModalOpen(true)}
-                      className='!rounded-lg'
-                    >
-                      <Eye size={12} className='mr-1' />
-                      {t('查看邀请明细')}
-                    </Button>
-                  </Space>
+                  <Button
+                    type='primary'
+                    theme='solid'
+                    size='small'
+                    disabled={transferDisabled}
+                    onClick={() => setOpenTransfer(true)}
+                    className='!rounded-lg'
+                    title={
+                      minAffTransferQuota > 0 &&
+                      affQuota < minAffTransferQuota
+                        ? t('返利余额未达到最低划转门槛')
+                        : undefined
+                    }
+                  >
+                    <Zap size={12} className='mr-1' />
+                    {t('划转到余额')}
+                  </Button>
                 </div>
 
                 {/* 统计数据 */}
@@ -283,14 +266,11 @@ const InvitationCard = ({
             </div>
           </div>
         </Card>
+
+        {/* custom: invite reward log — 用 CardPro 跟使用日志同款圆角整体容器 */}
+        <InvitationDetailPanel t={t} />
       </Space>
     </Card>
-      {/* custom: invite reward log */}
-      <InvitationDetailModal
-        visible={detailModalOpen}
-        onClose={() => setDetailModalOpen(false)}
-      />
-    </>
   );
 };
 
