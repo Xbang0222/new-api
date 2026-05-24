@@ -235,7 +235,14 @@ func BackfillInviteRewardLogs() error {
 				continue
 			}
 
-			// 4) 插入，CreatedAt 取 TopUp.CompleteTime（保留历史时间）
+			// 4) 插入，CreatedAt 用 TopUp 真实时间；优先 CompleteTime，否则 CreateTime。
+			//    `CreatedAt` 字段带 GORM `autoCreateTime`（ProcessInviterReward 路径需要它
+			//    自动填当前时间），所以传 0 会被 GORM 当零值用 NOW() 覆盖——历史 TopUp 大量
+			//    complete_time=0 时会让 backfill 全部写成"跑批那一秒"。给个非零值即可绕过。
+			backfillCreatedAt := t.CompleteTime
+			if backfillCreatedAt == 0 {
+				backfillCreatedAt = t.CreateTime
+			}
 			log := InviteRewardLog{
 				InviterId:     user.InviterId,
 				InviteeId:     t.UserId,
@@ -244,7 +251,7 @@ func BackfillInviteRewardLogs() error {
 				RewardQuota:   rewardQuota,
 				RewardType:    rewardType,
 				RewardValue:   rewardValue,
-				CreatedAt:     t.CompleteTime,
+				CreatedAt:     backfillCreatedAt,
 			}
 			if err := DB.Create(&log).Error; err != nil {
 				failed++
