@@ -26,18 +26,20 @@ import { normalizeHeaderNavModules } from '../../helpers/headerNavModules';
 const isSafeExternalUrl = (url) =>
   typeof url === 'string' && /^https?:\/\//i.test(url.trim());
 
-// custom: shop link — 桌面端 nav link 排序表
+// custom: shop link / status link — 桌面端 nav link 排序表
 // Original (upstream): 仅 console / docs / pricing 三档，按当前页面动态决定 0/1/2 优先级。
-// Changed:  插入 'shop' 在 console 之后、docs 之前，所有分支都补成 4 档；查表替换嵌套 ternary。
-// Revert:   删除 ORDER_BY_PAGE.shop 字段及表里的 shop 槽位，把 console/pricing 分支恢复成 3 档；
-//           同时移除 allLinks 中的 shop spread、filter 中的 'shop' 分支、依赖数组里的 shopLink。
+// Changed:  插入 'shop' 在 console 之后、docs 之前，再插入 'status' 在 docs 之后、pricing 之前；
+//           所有分支补成完整 N 档；查表替换嵌套 ternary。
+// Revert:   删除 ORDER_BY_PAGE.shop / status 字段以及表里相应的槽位，把 console/pricing 分支
+//           恢复成 3 档；同时移除 allLinks 中的 shop / status spread、filter 中的两个 itemKey
+//           分支、依赖数组里的 shopLink / statusLink。
 const ORDER_BY_PAGE = {
-  // 控制台路径下：console 自身被 showOnDesktop=false 隐藏，剩余三个按此顺序展示
-  console: { shop: 0, docs: 1, pricing: 2 },
-  // 模型广场路径下：pricing 隐藏，剩余三个按此顺序展示
-  pricing: { shop: 0, docs: 1, console: 2 },
-  // 默认页（首页等）：四个全显，按此顺序排
-  default: { console: 0, shop: 1, docs: 2, pricing: 3 },
+  // 控制台路径下：console 自身被 showOnDesktop=false 隐藏，剩余四个按此顺序展示
+  console: { shop: 0, docs: 1, status: 2, pricing: 3 },
+  // 模型广场路径下：pricing 隐藏，剩余四个按此顺序展示
+  pricing: { shop: 0, docs: 1, status: 2, console: 3 },
+  // 默认页（首页等）：五个全显，按此顺序排
+  default: { console: 0, shop: 1, docs: 2, status: 3, pricing: 4 },
 };
 
 // custom: brand — context-aware nav
@@ -47,6 +49,7 @@ export const useNavigation = (
   headerNavModules,
   pathname = '/',
   shopLink = '', // custom: shop link
+  statusLink = '', // custom: status link
 ) => {
   const mainNavLinks = useMemo(() => {
     const modules = normalizeHeaderNavModules(headerNavModules);
@@ -54,6 +57,7 @@ export const useNavigation = (
     const isPricingPage = pathname === '/pricing';
     const safeDocsLink = isSafeExternalUrl(docsLink) ? docsLink : ''; // custom: shop link
     const safeShopLink = isSafeExternalUrl(shopLink) ? shopLink : ''; // custom: shop link
+    const safeStatusLink = isSafeExternalUrl(statusLink) ? statusLink : ''; // custom: status link
 
     const orderTable = isConsoleArea
       ? ORDER_BY_PAGE.console
@@ -89,6 +93,17 @@ export const useNavigation = (
             },
           ]
         : []),
+      // custom: status link — 服务状态外链按钮，仅在配置 URL 后显示
+      ...(safeStatusLink
+        ? [
+            {
+              text: t('服务状态'),
+              itemKey: 'status',
+              isExternal: true,
+              externalLink: safeStatusLink,
+            },
+          ]
+        : []),
       {
         text: t('模型广场'),
         itemKey: 'pricing',
@@ -102,6 +117,9 @@ export const useNavigation = (
       }
       if (link.itemKey === 'shop') {
         return Boolean(safeShopLink); // custom: shop link — URL 配置即显示，不走模块开关
+      }
+      if (link.itemKey === 'status') {
+        return Boolean(safeStatusLink); // custom: status link — URL 配置即显示，不走模块开关
       }
       if (link.itemKey === 'pricing') {
         return modules.pricing.enabled;
@@ -124,7 +142,7 @@ export const useNavigation = (
         showOnDesktop,
       };
     });
-  }, [t, docsLink, headerNavModules, pathname, shopLink]); // custom: shop link
+  }, [t, docsLink, headerNavModules, pathname, shopLink, statusLink]); // custom: shop link / status link
 
   return {
     mainNavLinks,

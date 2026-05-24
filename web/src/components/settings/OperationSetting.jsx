@@ -42,6 +42,7 @@ const OperationSetting = () => {
     TopUpLink: '',
     'general_setting.docs_link': '',
     'general_setting.shop_link': '', // custom: shop link
+    'general_setting.status_link': '', // custom: status link
     QuotaPerUnit: 0,
     USDExchangeRate: 0,
     RetryTimes: 0,

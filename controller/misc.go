@@ -73,7 +73,8 @@ func GetStatus(c *gin.Context) {
 		"turnstile_site_key":          common.TurnstileSiteKey,
 		"top_up_link":                 common.TopUpLink,
 		"docs_link":                   operation_setting.GetGeneralSetting().DocsLink,
-		"shop_link":                   operation_setting.GetGeneralSetting().ShopLink, // custom: shop link
+		"shop_link":                   operation_setting.GetGeneralSetting().ShopLink,   // custom: shop link
+		"status_link":                 operation_setting.GetGeneralSetting().StatusLink, // custom: status link
 		"quota_per_unit":              common.QuotaPerUnit,
 		// 兼容旧前端：保留 display_in_currency，同时提供新的 quota_display_type
 		"display_in_currency":           operation_setting.IsCurrencyDisplay(),

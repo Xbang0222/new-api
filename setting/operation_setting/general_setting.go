@@ -12,7 +12,8 @@ const (
 
 type GeneralSetting struct {
 	DocsLink            string `json:"docs_link"`
-	ShopLink            string `json:"shop_link"` // custom: shop link — 商城外链地址（顶栏显示"商城"按钮）
+	ShopLink            string `json:"shop_link"`   // custom: shop link — 商城外链地址（顶栏显示"商城"按钮）
+	StatusLink          string `json:"status_link"` // custom: status link — 服务状态外链地址（顶栏显示"服务状态"按钮）
 	PingIntervalEnabled bool   `json:"ping_interval_enabled"`
 	PingIntervalSeconds int    `json:"ping_interval_seconds"`
 	// 当前站点额度展示类型：USD / CNY / TOKENS
@@ -27,6 +28,7 @@ type GeneralSetting struct {
 var generalSetting = GeneralSetting{
 	DocsLink:                   "https://docs.newapi.pro",
 	ShopLink:                   "", // custom: shop link
+	StatusLink:                 "", // custom: status link
 	PingIntervalEnabled:        false,
 	PingIntervalSeconds:        60,
 	QuotaDisplayType:           QuotaDisplayTypeUSD,

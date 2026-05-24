@@ -43,6 +43,7 @@ const HeaderBar = ({ onMobileMenuToggle, drawerOpen }) => {
     isSelfUseMode,
     docsLink,
     shopLink, // custom: shop link
+    statusLink, // custom: status link
     isDemoSiteMode,
     isConsoleRoute,
     theme,
@@ -70,6 +71,7 @@ const HeaderBar = ({ onMobileMenuToggle, drawerOpen }) => {
     headerNavModules,
     location.pathname,
     shopLink, // custom: shop link
+    statusLink, // custom: status link
   );
 
   return (
