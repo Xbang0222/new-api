@@ -24,6 +24,7 @@ import User from './pages/User';
 import { AuthRedirect, PrivateRoute, AdminRoute } from './helpers';
 import RegisterForm from './components/auth/RegisterForm';
 import LoginForm from './components/auth/LoginForm';
+import CliLogin from './components/auth/CliLogin';
 import NotFound from './pages/NotFound';
 import Forbidden from './pages/Forbidden';
 import Setting from './pages/Setting';
@@ -183,6 +184,7 @@ function App() {
             </Suspense>
           }
         />
+        <Route path='/cli-login' element={<CliLogin />} />
         <Route
           path='/register'
           element={
