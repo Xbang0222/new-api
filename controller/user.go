@@ -287,37 +287,67 @@ func GetUser(c *gin.Context) {
 	return
 }
 
-func GenerateAccessToken(c *gin.Context) {
-	id := c.GetInt("id")
-	user, err := model.GetUserById(id, true)
+// Sentinel errors returned by issueAccessTokenForUser so that callers
+// can map them to the appropriate i18n response without the helper
+// depending on the gin context.
+var (
+	errIssueAccessTokenGenerateFailed = errors.New("failed to generate access token key")
+	errIssueAccessTokenDuplicate      = errors.New("generated access token duplicates an existing one")
+)
+
+// issueAccessTokenForUser issues a fresh access token for the given
+// user and returns the bare token string. Used by both
+// GenerateAccessToken (GET /api/user/token) and CliLoginExchange
+// (POST /api/user/cli-login/exchange, added in a follow-up commit).
+//
+// Errors are returned as-is from model.GetUserById / user.Update, or
+// as one of the sentinel errors above when key generation fails or
+// the freshly minted key collides with an existing one. Callers are
+// responsible for translating these into HTTP responses.
+func issueAccessTokenForUser(userID int) (string, error) {
+	user, err := model.GetUserById(userID, true)
 	if err != nil {
-		common.ApiError(c, err)
-		return
+		return "", err
 	}
 	// get rand int 28-32
 	randI := common.GetRandomInt(4)
 	key, err := common.GenerateRandomKey(29 + randI)
 	if err != nil {
-		common.ApiErrorI18n(c, i18n.MsgGenerateFailed)
 		common.SysLog("failed to generate key: " + err.Error())
-		return
+		return "", errIssueAccessTokenGenerateFailed
 	}
 	user.SetAccessToken(key)
 
 	if model.DB.Where("access_token = ?", user.AccessToken).First(user).RowsAffected != 0 {
-		common.ApiErrorI18n(c, i18n.MsgUuidDuplicate)
-		return
+		return "", errIssueAccessTokenDuplicate
 	}
 
 	if err := user.Update(false); err != nil {
-		common.ApiError(c, err)
+		return "", err
+	}
+
+	return user.GetAccessToken(), nil
+}
+
+func GenerateAccessToken(c *gin.Context) {
+	id := c.GetInt("id")
+	token, err := issueAccessTokenForUser(id)
+	if err != nil {
+		switch {
+		case errors.Is(err, errIssueAccessTokenGenerateFailed):
+			common.ApiErrorI18n(c, i18n.MsgGenerateFailed)
+		case errors.Is(err, errIssueAccessTokenDuplicate):
+			common.ApiErrorI18n(c, i18n.MsgUuidDuplicate)
+		default:
+			common.ApiError(c, err)
+		}
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
-		"data":    user.AccessToken,
+		"data":    token,
 	})
 	return
 }
