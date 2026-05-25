@@ -22,15 +22,12 @@ func CliLoginExchange(c *gin.Context) {
 	if id == 0 {
 		// session missing — defensive: session-auth middleware on the
 		// /api/user group should have already rejected this.
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"success": false,
-			"message": "not logged in",
-		})
+		common.ApiErrorI18n(c, i18n.MsgAuthNotLoggedIn)
 		return
 	}
 
 	var req struct {
-		State string `json:"state"`
+		State string `json:"state" binding:"required,max=128"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		common.ApiError(c, err)
