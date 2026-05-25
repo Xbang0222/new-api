@@ -76,6 +76,7 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.PUT("/self", controller.UpdateSelf)
 				selfRoute.DELETE("/self", controller.DeleteSelf)
 				selfRoute.GET("/token", controller.GenerateAccessToken)
+				selfRoute.POST("/cli-login/exchange", controller.CliLoginExchange)
 				selfRoute.GET("/passkey", controller.PasskeyStatus)
 				selfRoute.POST("/passkey/register/begin", controller.PasskeyRegisterBegin)
 				selfRoute.POST("/passkey/register/finish", controller.PasskeyRegisterFinish)
