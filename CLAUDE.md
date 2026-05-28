@@ -139,12 +139,8 @@ This project is a fork maintained on the `ruoli` branch. Upstream (`QuantumNous/
 
 **Always prefer creating new files over modifying upstream files.**
 
-- Backend: use `_custom.go` suffix for custom controllers, e.g. `controller/usedata_custom.go`
-- Backend: custom modules get their own full vertical slice (model + dto + service + controller + router), e.g. the invoice module
-- Frontend: custom pages go in their own directories, e.g. `web/src/pages/Invoice/`
-- Frontend: custom components go in their own files, e.g. `web/src/components/billing/InvoiceApplicationModal.jsx`
-- Frontend: shared custom utilities go in dedicated helpers, e.g. `web/src/helpers/brand.js`, `web/src/helpers/invoice.js`
-- Custom constants go in separate files, e.g. `web/src/constants/invoice.constants.js`
+- Backend: `_custom.go` suffix (e.g. `controller/usedata_custom.go`), or a full vertical slice (model+dto+service+controller+router, e.g. the invoice module).
+- Frontend: custom pages/components in their own dirs/files (e.g. `pages/Invoice/`, `components/billing/InvoiceApplicationModal.jsx`); shared logic in helpers (`helpers/brand.js`); constants in separate files (`constants/invoice.constants.js`).
 
 > **Current custom-only files** — 最新清单见 `CLAUDE.local.md` 中「自定义文件清单」章节（运维记录，随 custom 功能增减而更新，不污染本规约文件）。
 
@@ -199,27 +195,10 @@ When modifying upstream files is unavoidable, follow these rules:
 
 #### 7.4 Adding New Custom Features — Checklist
 
-Before implementing a new custom feature:
-
-**Isolation:**
-- [ ] Can the entire feature live in new files? (strongly preferred)
-- [ ] If upstream files must change, is it limited to imports / 1-line calls?
-- [ ] Is the new route registered in `router/api-router.go` or a custom `router/*-router.go`?
-- [ ] Are custom DB models migrated in `model/main.go` with `db.AutoMigrate()`?
-
-**Engineering quality:**
-- [ ] Every line added to upstream files has a `// custom: <feature>` marker
-- [ ] Behavioral changes to upstream logic include a block comment (original → modified → why)
-- [ ] Custom Go files use `_custom.go` suffix or live in a dedicated module directory
-- [ ] Custom frontend logic is extracted to helper/hook files, upstream files only import and call
-- [ ] No duplicated logic — reuse existing custom helpers (`brand.js`, `invoice.js`, etc.)
-
-**Maintainability:**
-- [ ] Does the feature degrade gracefully if custom tables/data don't exist?
-- [ ] Are i18n keys unlikely to collide with upstream?
-- [ ] Has `VERSION` been bumped with `-ruoli-` suffix?
-- [ ] Can `grep -rn "custom: <feature>"` find all touchpoints for this feature?
-- [ ] Is the feature documented in the custom-only files table (§7.1) or upstream modifications table (§7.2)?
+Before implementing, self-check (grouped, not literal checkboxes):
+- **Isolation**: Can it live entirely in new files? If upstream must change, is it limited to imports / 1-line calls? New route registered in `router/api-router.go` (or custom router)? Custom DB models migrated via `model/main.go` `AutoMigrate`?
+- **Engineering**: every upstream line carries a `// custom: <feature>` marker; behavioral changes carry an original→modified→why block comment; custom Go uses `_custom.go` / dedicated module; frontend logic extracted to helper/hook (upstream only imports); no duplicated logic — reuse existing helpers.
+- **Maintainability**: degrades gracefully if custom tables/data absent; i18n keys won't collide; `VERSION` bumped with `-ruoli-`; `grep -rn "custom: <feature>"` finds all touchpoints; feature logged in `CLAUDE.local.md` tables (§7.1/§7.2).
 
 #### 7.5 Version Numbering
 
