@@ -932,23 +932,30 @@ html.dark .with-pastel-balls::before {
 }
 
 /* ==================== 模型定价页面布局 ==================== */
+/*
+ * custom: header offset fix
+ * 顶栏(headerbar)高 64px,但上游模型广场只让了 60px → 内容顶部 4px 被半透明毛玻璃
+ * 顶栏盖住压暗(右侧亮色 banner 顶边尤其明显)。统一 60→64 对齐顶栏高度,消除重叠。
+ * Original: 60px;  Changed: 64px(margin-top + 下方 sidebar/content 的 height calc 同步)。
+ * Revert: 把本段及 .pricing-sidebar/.pricing-content 的 64px 改回 60px 即可。
+ */
 .pricing-layout {
-  height: calc(100vh - 60px);
+  height: calc(100vh - 64px);
   overflow: hidden;
-  margin-top: 60px;
+  margin-top: 64px;
 }
 
 .pricing-sidebar {
   width: clamp(280px, 24vw, 520px) !important;
   min-width: clamp(280px, 24vw, 520px) !important;
   max-width: clamp(280px, 24vw, 520px) !important;
-  height: calc(100vh - 60px);
+  height: calc(100vh - 64px);
   background-color: var(--semi-color-bg-0);
   overflow: auto;
 }
 
 .pricing-content {
-  height: calc(100vh - 60px);
+  height: calc(100vh - 64px);
   background-color: var(--semi-color-bg-0);
   display: flex;
   flex-direction: column;
