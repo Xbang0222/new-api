@@ -891,29 +891,31 @@ export const getModelPriceItems = (
       );
     }
 
-    const unitSuffix = ` / 1${priceData.unitLabel} Tokens`;
+    // custom: pricing label — 价格后缀精简为 /M（参考竞品紧凑格式），upstream 原为 " / 1M Tokens"
+    const unitSuffix = `/${priceData.unitLabel}`;
     return [
       {
+        // custom: pricing label — 精简价格标签（输入/输出/缓存读取/缓存创建），upstream 原为带"价格"后缀；图片/音频项缺短名翻译故保留原样
         key: 'input',
-        label: t('输入价格'),
+        label: t('输入'),
         value: priceData.inputPrice,
         suffix: unitSuffix,
       },
       {
         key: 'completion',
-        label: t('补全价格'),
+        label: t('输出'),
         value: priceData.completionPrice,
         suffix: unitSuffix,
       },
       {
         key: 'cache',
-        label: t('缓存读取价格'),
+        label: t('缓存读取'),
         value: priceData.cachePrice,
         suffix: unitSuffix,
       },
       {
         key: 'create-cache',
-        label: t('缓存创建价格'),
+        label: t('缓存创建'),
         value: priceData.createCachePrice,
         suffix: unitSuffix,
       },
@@ -995,7 +997,8 @@ export const formatDynamicPriceSummary = (billingExpr, t, groupRatio = 1) => {
   if (hasTimeCondition) tags.push(t('含时间条件'));
   if (hasRequestCondition) tags.push(t('含请求条件'));
 
-  const unitSuffix = ' / 1M Tokens';
+  // custom: pricing label — 动态计费摘要后缀同样精简为 /M，与按量计费卡片保持一致
+  const unitSuffix = '/M';
   const lineStyle = { color: 'var(--semi-color-text-1)' };
 
   return (
