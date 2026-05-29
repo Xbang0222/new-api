@@ -42,6 +42,23 @@ body.sidebar-collapsed {
   font-display: swap;
 }
 
+/* custom: pricing font — 模型广场卡片：模型名用 Author Semibold，价格数字用 Gambarino */
+@font-face {
+  font-family: 'Author';
+  src: url('/fonts/Author-Semibold.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Gambarino';
+  src: url('/fonts/Gambarino-Regular.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
 body {
   font-family: Lato, 'Helvetica Neue', Arial, Helvetica, 'Microsoft YaHei',
     sans-serif;
@@ -74,6 +91,18 @@ body {
 .numeric-price-text {
   font-family: 'BrandNumeric', 'SFMono-Regular', 'JetBrains Mono', Consolas,
     'Liberation Mono', Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* custom: pricing font — 卡片视图模型名(Author Semibold 600) */
+.pricing-card-model-name {
+  font-family: 'Author', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-weight: 600;
+}
+
+/* custom: pricing font — 卡片视图价格(Gambarino，中文 label 自动回退苹方) */
+.pricing-card-price {
+  font-family: 'Gambarino', 'PingFang SC', 'Microsoft YaHei', serif;
   font-variant-numeric: tabular-nums;
 }
 

@@ -264,10 +264,12 @@ const PricingCardView = ({
                   <div className='flex items-start space-x-3 flex-1 min-w-0'>
                     {getModelIcon(model)}
                     <div className='flex-1 min-w-0'>
-                      <h3 className='text-lg font-bold text-gray-900 truncate'>
+                      {/* custom: pricing font — 模型名用 Author Semibold(600) */}
+                      <h3 className='text-2xl text-gray-900 truncate pricing-card-model-name'>
                         {model.model_name}
                       </h3>
-                      <div className='flex flex-col gap-1 text-xs mt-1'>
+                      {/* custom: pricing font — 价格数字用 Gambarino，中文 label 回退苹方 */}
+                      <div className='flex flex-col gap-1 text-xs mt-1 pricing-card-price'>
                         {priceData.isDynamicPricing ? (
                           formatDynamicPriceSummary(priceData.billingExpr, t, priceData.usedGroupRatio)
                         ) : (
