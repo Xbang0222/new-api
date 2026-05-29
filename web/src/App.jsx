@@ -59,8 +59,6 @@ const Dashboard = lazy(() => import('./pages/Dashboard'));
 const About = lazy(() => import('./pages/About'));
 const UserAgreement = lazy(() => import('./pages/UserAgreement'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
-// custom: invitation sidebar — standalone 邀请奖励 page
-const Invitation = lazy(() => import('./pages/Invitation'));
 // custom: invoice — lazy imports
 const Billing = lazy(() => import('./pages/Billing'));
 const InvoicePage = lazy(() => import('./pages/Invoice'));
@@ -269,17 +267,6 @@ function App() {
             <PrivateRoute>
               <Suspense fallback={<Loading></Loading>} key={location.pathname}>
                 <TopUp />
-              </Suspense>
-            </PrivateRoute>
-          }
-        />
-        {/* custom: invitation sidebar */}
-        <Route
-          path='/console/invitation'
-          element={
-            <PrivateRoute>
-              <Suspense fallback={<Loading></Loading>} key={location.pathname}>
-                <Invitation />
               </Suspense>
             </PrivateRoute>
           }

@@ -82,17 +82,6 @@ const InvitationCard = ({
       </Text>
     );
   };
-
-  // custom: invitation sidebar — banner 第 4 列展示返佣比例/固定返利（用现有规则数据，使全宽 banner 四列饱满，不引入对端后端功能）
-  const rewardStat =
-    rewardType === 'percentage' && rewardValue > 0
-      ? `${rewardValue}%`
-      : rewardType === 'fixed' && rewardValue > 0
-        ? renderQuota(rewardValue)
-        : '—';
-  const rewardStatLabel =
-    rewardType === 'fixed' ? t('固定返利') : t('返佣比例');
-
   return (
     <Card className='!rounded-2xl shadow-sm border-0'>
       {/* 卡片头部 */}
@@ -115,7 +104,7 @@ const InvitationCard = ({
           className='!rounded-xl w-full'
           cover={
             <div
-              className='relative min-h-[7.5rem]'
+              className='relative h-30'
               style={{
                 '--palette-primary-darkerChannel': '0 75 80',
                 backgroundImage: `linear-gradient(0deg, rgba(var(--palette-primary-darkerChannel) / 80%), rgba(var(--palette-primary-darkerChannel) / 80%)), url('/cover-4.webp')`,
@@ -150,8 +139,7 @@ const InvitationCard = ({
                 </div>
 
                 {/* 统计数据 */}
-                {/* custom: invitation sidebar — 手机 2 列 / 桌面 4 列，铺满全宽 banner */}
-                <div className='grid grid-cols-2 sm:grid-cols-4 gap-6 mt-4'>
+                <div className='grid grid-cols-3 gap-6 mt-4'>
                   {/* 待使用收益 */}
                   <div className='text-center'>
                     <div
@@ -226,31 +214,6 @@ const InvitationCard = ({
                       </Text>
                     </div>
                   </div>
-
-                  {/* custom: invitation sidebar — 返佣比例（第 4 列） */}
-                  <div className='text-center'>
-                    <div
-                      className='text-base sm:text-2xl font-bold mb-2'
-                      style={{ color: 'white' }}
-                    >
-                      {rewardStat}
-                    </div>
-                    <div className='flex items-center justify-center text-sm'>
-                      <Gift
-                        size={14}
-                        className='mr-1'
-                        style={{ color: 'rgba(255,255,255,0.8)' }}
-                      />
-                      <Text
-                        style={{
-                          color: 'rgba(255,255,255,0.8)',
-                          fontSize: '12px',
-                        }}
-                      >
-                        {rewardStatLabel}
-                      </Text>
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
@@ -276,42 +239,36 @@ const InvitationCard = ({
           />
         </Card>
 
-        {/* custom: invitation sidebar — 参考主流站点排版：邀请明细(左,占 2/3) + 奖励说明(右,占 1/3) 两列并排 */}
-        <div className='grid grid-cols-1 lg:grid-cols-3 gap-4 w-full lg:items-start'>
-          {/* 左列：邀请明细表 */}
-          {/* custom: invite reward log — 用 CardPro 跟使用日志同款圆角整体容器 */}
-          <div className='lg:col-span-2 min-w-0'>
-            <InvitationDetailPanel t={t} />
-          </div>
-
-          {/* 右列：奖励说明 */}
-          {/* custom: invite rebate (PR #3495) — dynamic reward rules */}
-          <Card
-            className='!rounded-xl w-full lg:col-span-1'
-            title={<Text type='tertiary'>{t('奖励说明')}</Text>}
-          >
-            <div className='space-y-3'>
-              <div className='flex items-start gap-2'>
-                <Badge dot type='success' />
-                {renderRewardRule()}
-              </div>
-
-              <div className='flex items-start gap-2'>
-                <Badge dot type='success' />
-                <Text type='tertiary' className='text-sm'>
-                  {t('通过划转功能将奖励额度转入到您的账户余额中')}
-                </Text>
-              </div>
-
-              <div className='flex items-start gap-2'>
-                <Badge dot type='success' />
-                <Text type='tertiary' className='text-sm'>
-                  {t('邀请的好友越多，获得的奖励越多')}
-                </Text>
-              </div>
+        {/* 奖励说明 */}
+        {/* custom: invite rebate (PR #3495) — dynamic reward rules */}
+        <Card
+          className='!rounded-xl w-full'
+          title={<Text type='tertiary'>{t('奖励说明')}</Text>}
+        >
+          <div className='space-y-3'>
+            <div className='flex items-start gap-2'>
+              <Badge dot type='success' />
+              {renderRewardRule()}
             </div>
-          </Card>
-        </div>
+
+            <div className='flex items-start gap-2'>
+              <Badge dot type='success' />
+              <Text type='tertiary' className='text-sm'>
+                {t('通过划转功能将奖励额度转入到您的账户余额中')}
+              </Text>
+            </div>
+
+            <div className='flex items-start gap-2'>
+              <Badge dot type='success' />
+              <Text type='tertiary' className='text-sm'>
+                {t('邀请的好友越多，获得的奖励越多')}
+              </Text>
+            </div>
+          </div>
+        </Card>
+
+        {/* custom: invite reward log — 用 CardPro 跟使用日志同款圆角整体容器 */}
+        <InvitationDetailPanel t={t} />
       </Space>
     </Card>
   );
