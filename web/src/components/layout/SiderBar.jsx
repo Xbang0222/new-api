@@ -49,6 +49,7 @@ const routerMap = {
   deployment: '/console/deployment',
   playground: '/console/playground',
   personal: '/console/personal',
+  invitation: '/console/invitation', // custom: invitation sidebar
   billing: '/console/billing', // custom: invoice sidebar
   invoice: '/console/invoice', // custom: invoice sidebar
   invoiceAdmin: '/console/invoice-admin', // custom: invoice sidebar
@@ -131,6 +132,12 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         text: t('钱包管理'),
         itemKey: 'topup',
         to: '/topup',
+      },
+      // custom: invitation sidebar — 邀请奖励独立菜单，紧跟钱包管理之后
+      {
+        text: t('邀请奖励'),
+        itemKey: 'invitation',
+        to: '/invitation',
       },
       // custom: invoice sidebar
       {

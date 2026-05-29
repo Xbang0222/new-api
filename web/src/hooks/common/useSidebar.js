@@ -43,6 +43,7 @@ export const DEFAULT_ADMIN_CONFIG = {
   personal: {
     enabled: true,
     topup: true,
+    invitation: true, // custom: invitation sidebar
     billing: true,
     invoice: true,
     personal: true,

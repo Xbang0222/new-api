@@ -14,6 +14,8 @@ import {
   IllustrationNoResult,
   IllustrationNoResultDark,
 } from '@douyinfe/semi-illustrations';
+// custom: invite reward log — tab 图标
+import { Users, BarChart2 } from 'lucide-react';
 import CardTable from '../common/ui/CardTable';
 import { useIsMobile } from '../../hooks/common/useIsMobile';
 import {
@@ -236,7 +238,15 @@ const InvitationDetailPanel = ({ t }) => {
         onChange={setActiveTab}
         tabBarStyle={{ marginBottom: 16 }}
       >
-        <TabPane tab={t('邀请人员')} itemKey='summary'>
+        <TabPane
+          tab={
+            <span className='flex items-center gap-2'>
+              <Users size={16} />
+              {t('邀请人员')}
+            </span>
+          }
+          itemKey='summary'
+        >
           <CardTable
             columns={summaryTableColumns}
             dataSource={summaryItems}
@@ -263,7 +273,15 @@ const InvitationDetailPanel = ({ t }) => {
             },
           )}
         </TabPane>
-        <TabPane tab={t('返利明细')} itemKey='logs'>
+        <TabPane
+          tab={
+            <span className='flex items-center gap-2'>
+              <BarChart2 size={16} />
+              {t('返利明细')}
+            </span>
+          }
+          itemKey='logs'
+        >
           <CardTable
             columns={logsTableColumns}
             dataSource={logItems}

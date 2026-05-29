@@ -110,7 +110,12 @@ const RechargeCard = ({
   useEffect(() => {
     if (initialTabSetRef.current) return;
     if (subscriptionLoading) return;
-    setActiveTab(shouldShowSubscription ? 'subscription' : 'topup');
+    // custom: subscription order
+    // Original: setActiveTab(shouldShowSubscription ? 'subscription' : 'topup')
+    //   → 当存在订阅套餐时默认打开「订阅套餐」标签。
+    // Changed: 始终默认打开「额度充值」标签（产品要求先展示充值，再展示订阅）。
+    // Revert: 恢复上面的三元表达式即可。
+    setActiveTab('topup');
     initialTabSetRef.current = true;
   }, [shouldShowSubscription, subscriptionLoading]);
 
@@ -645,8 +650,20 @@ const RechargeCard = ({
         </Button>
       </div>
 
+      {/* custom: subscription order — 额度充值标签排在订阅套餐之前（先充值后订阅） */}
       {shouldShowSubscription ? (
         <Tabs type='card' activeKey={activeTab} onChange={setActiveTab}>
+          <TabPane
+            tab={
+              <div className='flex items-center gap-2'>
+                <Wallet size={16} />
+                {t('额度充值')}
+              </div>
+            }
+            itemKey='topup'
+          >
+            <div className='py-2'>{topupContent}</div>
+          </TabPane>
           <TabPane
             tab={
               <div className='flex items-center gap-2'>
@@ -674,17 +691,6 @@ const RechargeCard = ({
                 onRefreshUserQuota={onRefreshUserQuota}
               />
             </div>
-          </TabPane>
-          <TabPane
-            tab={
-              <div className='flex items-center gap-2'>
-                <Wallet size={16} />
-                {t('额度充值')}
-              </div>
-            }
-            itemKey='topup'
-          >
-            <div className='py-2'>{topupContent}</div>
           </TabPane>
         </Tabs>
       ) : (
