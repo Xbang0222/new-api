@@ -115,10 +115,15 @@ func Distribute() func(c *gin.Context) {
 						} else if usingGroup == "auto" {
 							userGroup := common.GetContextKeyString(c, constant.ContextKeyUserGroup)
 							autoGroups := service.GetTokenEffectiveAutoGroups(c, userGroup) // custom: token multi-group
-							for _, g := range autoGroups {
+							for idx, g := range autoGroups {
 								if model.IsChannelEnabledForGroupModel(g, modelRequest.Model, preferred.Id) {
 									selectGroup = g
 									common.SetContextKey(c, constant.ContextKeyAutoGroup, g)
+									// custom: retry failover — record the affinity-hit group index so a
+									// retry resumes from this group instead of restarting at group 0 (which
+									// could be a model-absent group and would wrongly stop plain-auto
+									// failover via the excluded-empty check in CacheGetRandomSatisfiedChannel).
+									common.SetContextKey(c, constant.ContextKeyAutoGroupIndex, idx)
 									channel = preferred
 									service.MarkChannelAffinityUsed(c, g, preferred.Id)
 									break

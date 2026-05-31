@@ -193,7 +193,18 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		channel, channelErr := getChannel(c, relayInfo, retryParam)
 		if channelErr != nil {
 			logger.LogError(c, channelErr.Error())
-			newAPIError = channelErr
+			// custom: retry failover
+			// Original: newAPIError = channelErr (always the generic "no available channel").
+			// Changed: when channels are exhausted mid-retry (every channel already tried and
+			//   excluded), surface the real upstream error from the previous attempt instead of
+			//   masking it with "no available channel". First-attempt failure (no prior error)
+			//   still returns channelErr.
+			// Revert: drop the LastError check, keep `newAPIError = channelErr`.
+			if relayInfo.LastError != nil {
+				newAPIError = relayInfo.LastError
+			} else {
+				newAPIError = channelErr
+			}
 			break
 		}
 
@@ -513,6 +524,9 @@ func RelayTask(c *gin.Context) {
 	for ; retryParam.GetRetry() <= common.RetryTimes; retryParam.IncreaseRetry() {
 		var channel *model.Channel
 
+		// custom: retry failover — a LockedChannel is bound to the task (e.g. an async
+		// fetch must return to the submitting channel), so it intentionally does NOT take
+		// part in excluded-set failover: retries reuse the same locked channel by design.
 		if lockedCh, ok := relayInfo.LockedChannel.(*model.Channel); ok && lockedCh != nil {
 			channel = lockedCh
 			if retryParam.GetRetry() > 0 {
@@ -526,7 +540,12 @@ func RelayTask(c *gin.Context) {
 			channel, channelErr = getChannel(c, relayInfo, retryParam)
 			if channelErr != nil {
 				logger.LogError(c, channelErr.Error())
-				taskErr = service.TaskErrorWrapperLocal(channelErr.Err, "get_channel_failed", http.StatusInternalServerError)
+				// custom: retry failover — keep the real upstream task error from a prior
+				// attempt when channels are exhausted mid-retry; only report
+				// get_channel_failed when there is no prior error (first-attempt failure).
+				if taskErr == nil {
+					taskErr = service.TaskErrorWrapperLocal(channelErr.Err, "get_channel_failed", http.StatusInternalServerError)
+				}
 				break
 			}
 		}

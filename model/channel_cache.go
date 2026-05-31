@@ -1,7 +1,6 @@
 package model
 
 import (
-	"errors"
 	"fmt"
 	"math/rand"
 	"sort"
@@ -93,10 +92,19 @@ func SyncChannelCache(frequency int) {
 	}
 }
 
-func GetRandomSatisfiedChannel(group string, model string, retry int) (*Channel, error) {
+// custom: retry failover
+// Original: retry int was used as a priority-tier index (sortedUniquePriorities[retry]),
+//   so each retry dropped exactly one tier and already-failed channels were never filtered.
+// Changed: the tier is derived from the excluded set — pick the highest priority tier that
+//   still has a non-excluded channel, then weighted-random among that tier's non-excluded
+//   channels. This yields same-tier failover -> drop a tier when exhausted -> nil when all gone.
+// Why: user wants same-tier swap, never retry a failed channel, drop a tier only when used up.
+//   retry is now a pure budget counter in the relay loop, decoupled from tier selection.
+// Revert: restore the `retry int` parameter and the sortedUniquePriorities[retry] selection.
+func GetRandomSatisfiedChannel(group string, model string, excluded map[int]bool) (*Channel, error) {
 	// if memory cache is disabled, get channel directly from database
 	if !common.MemoryCacheEnabled {
-		return GetChannel(group, model, retry)
+		return GetChannel(group, model, excluded)
 	}
 
 	channelSyncLock.RLock()
@@ -116,12 +124,17 @@ func GetRandomSatisfiedChannel(group string, model string, retry int) (*Channel,
 	}
 
 	if len(channels) == 1 {
+		if excluded[channels[0]] { // custom: retry failover — the only channel was already tried
+			return nil, nil
+		}
 		if channel, ok := channelsIDM[channels[0]]; ok {
 			return channel, nil
 		}
 		return nil, fmt.Errorf("数据库一致性错误，渠道# %d 不存在，请联系管理员修复", channels[0])
 	}
 
+	// custom: retry failover — collect unique priorities (desc), then pick the
+	// highest tier that still has at least one non-excluded channel.
 	uniquePriorities := make(map[int]bool)
 	for _, channelId := range channels {
 		if channel, ok := channelsIDM[channelId]; ok {
@@ -136,58 +149,55 @@ func GetRandomSatisfiedChannel(group string, model string, retry int) (*Channel,
 	}
 	sort.Sort(sort.Reverse(sort.IntSlice(sortedUniquePriorities)))
 
-	if retry >= len(uniquePriorities) {
-		retry = len(uniquePriorities) - 1
-	}
-	targetPriority := int64(sortedUniquePriorities[retry])
-
-	// get the priority for the given retry number
-	var sumWeight = 0
-	var targetChannels []*Channel
-	for _, channelId := range channels {
-		if channel, ok := channelsIDM[channelId]; ok {
+	for _, p := range sortedUniquePriorities {
+		targetPriority := int64(p)
+		var sumWeight = 0
+		var targetChannels []*Channel
+		for _, channelId := range channels {
+			if excluded[channelId] { // skip already-tried channels
+				continue
+			}
+			channel, ok := channelsIDM[channelId]
+			if !ok {
+				return nil, fmt.Errorf("数据库一致性错误，渠道# %d 不存在，请联系管理员修复", channelId)
+			}
 			if channel.GetPriority() == targetPriority {
 				sumWeight += channel.GetWeight()
 				targetChannels = append(targetChannels, channel)
 			}
-		} else {
-			return nil, fmt.Errorf("数据库一致性错误，渠道# %d 不存在，请联系管理员修复", channelId)
 		}
+		if len(targetChannels) == 0 {
+			// this tier is fully excluded (or empty after filtering); drop to the next lower tier
+			continue
+		}
+		return weightedRandomChannel(targetChannels, sumWeight), nil
 	}
+	// every tier's channels are excluded — no channel available
+	return nil, nil
+}
 
-	if len(targetChannels) == 0 {
-		return nil, errors.New(fmt.Sprintf("no channel found, group: %s, model: %s, priority: %d", group, model, targetPriority))
-	}
-
-	// smoothing factor and adjustment
+// custom: retry failover — weighted-random pick within one priority tier,
+// reusing the original smoothing logic (all weight 0 -> base 100 each;
+// average weight < 10 -> scale by 100). Extracted so the tier-scan loop above
+// stays readable. Falls back to the last channel as an unreachable safety net.
+func weightedRandomChannel(targetChannels []*Channel, sumWeight int) *Channel {
 	smoothingFactor := 1
 	smoothingAdjustment := 0
-
 	if sumWeight == 0 {
-		// when all channels have weight 0, set sumWeight to the number of channels and set smoothing adjustment to 100
-		// each channel's effective weight = 100
 		sumWeight = len(targetChannels) * 100
 		smoothingAdjustment = 100
 	} else if sumWeight/len(targetChannels) < 10 {
-		// when the average weight is less than 10, set smoothing factor to 100
 		smoothingFactor = 100
 	}
-
-	// Calculate the total weight of all channels up to endIdx
 	totalWeight := sumWeight * smoothingFactor
-
-	// Generate a random value in the range [0, totalWeight)
 	randomWeight := rand.Intn(totalWeight)
-
-	// Find a channel based on its weight
 	for _, channel := range targetChannels {
 		randomWeight -= channel.GetWeight()*smoothingFactor + smoothingAdjustment
 		if randomWeight < 0 {
-			return channel, nil
+			return channel
 		}
 	}
-	// return null if no channel is not found
-	return nil, errors.New("channel not found")
+	return targetChannels[len(targetChannels)-1]
 }
 
 func CacheGetChannel(id int) (*Channel, error) {
