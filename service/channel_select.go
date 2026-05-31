@@ -25,6 +25,11 @@ func (p *RetryParam) GetRetry() int {
 	return *p.Retry
 }
 
+// SetRetry / ResetRetryNextTry are upstream RetryParam helpers. custom: retry failover
+// removed their only callers (the per-group budget reset in the multi-group auto path),
+// so they are currently unused here, but are kept intact — and NOT deleted — to minimize
+// the upstream merge diff. Retry is now a pure global budget counter driven solely by
+// IncreaseRetry; the excluded set drives tier/group progression instead of resetting retry.
 func (p *RetryParam) SetRetry(retry int) {
 	p.Retry = &retry
 }

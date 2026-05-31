@@ -179,6 +179,7 @@ When modifying upstream files is unavoidable, follow these rules:
 | `custom: shop link` | 顶栏"商城"按钮（外链，URL 与 docs_link 同样在通用设置中配置） |
 | `custom: invoice ui` | 充值/账单/发票表格统一双模式（紧凑/自适应），列宽自适应、时间不换行 |
 | `custom: invite reward log` | 邀请返利明细表 + 历史补录 + 用户可查的两个视图（按人/流水） |
+| `custom: retry failover` | 渠道失败重试：同档故障转移 + 按 key 配额排除已用尽渠道 + 预算用尽降档（绝不重试已死渠道） |
 
 **Behavioral changes** (modifying existing upstream logic, not just adding new code) MUST include a block comment explaining:
 - What the original logic was

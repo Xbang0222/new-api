@@ -193,18 +193,11 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		channel, channelErr := getChannel(c, relayInfo, retryParam)
 		if channelErr != nil {
 			logger.LogError(c, channelErr.Error())
-			// custom: retry failover
-			// Original: newAPIError = channelErr (always the generic "no available channel").
-			// Changed: when channels are exhausted mid-retry (every channel already tried and
-			//   excluded), surface the real upstream error from the previous attempt instead of
-			//   masking it with "no available channel". First-attempt failure (no prior error)
-			//   still returns channelErr.
-			// Revert: drop the LastError check, keep `newAPIError = channelErr`.
-			if relayInfo.LastError != nil {
-				newAPIError = relayInfo.LastError
-			} else {
-				newAPIError = channelErr
-			}
+			// custom: retry failover — getChannel substitutes the real upstream LastError
+			// ONLY for the channels-exhausted case; a genuine selection error or a config
+			// error on a freshly-selected channel (e.g. no available key) comes through
+			// unmasked. Just propagate whatever getChannel returned.
+			newAPIError = channelErr
 			break
 		}
 
@@ -318,6 +311,20 @@ func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service
 		return nil, types.NewError(fmt.Errorf("获取分组 %s 下模型 %s 的可用渠道失败（retry）: %s", selectGroup, info.OriginModelName, err.Error()), types.ErrorCodeGetChannelFailed, types.ErrOptionWithSkipRetry())
 	}
 	if channel == nil {
+		// custom: retry failover
+		// Channels exhausted this request: every candidate has reached its attempt budget
+		// and been excluded. Surface the real upstream error from the previous attempt
+		// (info.LastError) instead of masking it with a generic "no available channel".
+		// ONLY this exhausted path substitutes LastError — a genuine selection error
+		// (err != nil above) or a config error on a freshly-selected channel
+		// (SetupContextForSelectedChannel below, e.g. ErrorCodeChannelNoAvailableKey) is
+		// returned as-is so it is never hidden behind a stale upstream error.
+		// info.LastError is only populated on the sync relay path; the async task path
+		// keeps it nil and preserves its own real taskErr at the call site.
+		// Revert: return the "可用渠道不存在" error unconditionally.
+		if info.LastError != nil {
+			return nil, info.LastError
+		}
 		return nil, types.NewError(fmt.Errorf("分组 %s 下模型 %s 的可用渠道不存在（retry）", selectGroup, info.OriginModelName), types.ErrorCodeGetChannelFailed, types.ErrOptionWithSkipRetry())
 	}
 
