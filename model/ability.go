@@ -58,90 +58,89 @@ func GetAllEnableAbilities() []Ability {
 	return abilities
 }
 
-// custom: retry failover
-// Original: getPriority/getChannelQuery indexed into the DISTINCT priority list by
-//   retry int, so each retry dropped exactly one tier and already-failed channels
-//   were never excluded (the MAX(priority) subquery could even return a tier whose
-//   channels had all just failed).
-// Changed: the excluded set drives the tier — find the highest priority that still
-//   has a non-excluded enabled channel (NOT IN guarded by len>0 for SQL / 3-DB safety),
-//   then weighted-random among that tier's non-excluded rows (existing +10 logic).
-//   Mirrors the memory-cache GetRandomSatisfiedChannel: same-tier failover -> drop a
-//   tier when exhausted -> (nil,nil) when every tier is excluded.
-// Why: user wants same-tier swap, never retry a failed channel, drop a tier only when
-//   used up. retry is now a pure budget counter in the relay loop, decoupled from tiers.
-// Revert: restore getPriority + getChannelQuery(group, model, retry) and the
-//   retry-indexed GetChannel.
-func GetChannel(group string, model string, excluded map[int]bool) (*Channel, error) {
-	excludedIds := excludedChannelKeys(excluded)
+func getPriority(group string, model string, retry int) (int, error) {
 
-	// Highest priority tier that still has a non-excluded enabled channel for this group/model.
-	priorityQuery := DB.Model(&Ability{}).
-		Where(commonGroupCol+" = ? and model = ? and enabled = ?", group, model, true)
-	if len(excludedIds) > 0 { // guard: empty NOT IN () behaves differently across SQLite/MySQL/PostgreSQL
-		priorityQuery = priorityQuery.Where("channel_id NOT IN ?", excludedIds)
-	}
-	var topPriorities []int64
-	if err := priorityQuery.Order("priority DESC").Limit(1).Pluck("priority", &topPriorities).Error; err != nil {
-		return nil, err
-	}
-	if len(topPriorities) == 0 {
-		// No enabled, non-excluded channel for this group/model — caller treats nil as "no available".
-		return nil, nil
-	}
-	topPriority := topPriorities[0]
+	var priorities []int
+	err := DB.Model(&Ability{}).
+		Select("DISTINCT(priority)").
+		Where(commonGroupCol+" = ? and model = ? and enabled = ?", group, model, true).
+		Order("priority DESC").              // 按优先级降序排序
+		Pluck("priority", &priorities).Error // Pluck用于将查询的结果直接扫描到一个切片中
 
-	// All non-excluded channels in that tier, heaviest weight first.
-	abilityQuery := DB.Where(commonGroupCol+" = ? and model = ? and enabled = ? and priority = ?", group, model, true, topPriority)
-	if len(excludedIds) > 0 { // guard: empty NOT IN () behaves differently across SQLite/MySQL/PostgreSQL
-		abilityQuery = abilityQuery.Where("channel_id NOT IN ?", excludedIds)
-	}
-	var abilities []Ability
-	if err := abilityQuery.Order("weight DESC").Find(&abilities).Error; err != nil {
-		return nil, err
-	}
-	if len(abilities) == 0 {
-		// Race: the tier emptied between the two queries. Treat as no available.
-		return nil, nil
+	if err != nil {
+		// 处理错误
+		return 0, err
 	}
 
-	// Weighted random pick within the tier (unchanged +10 smoothing).
-	channel := Channel{}
-	weightSum := uint(0)
-	for _, ability_ := range abilities {
-		weightSum += ability_.Weight + 10
+	if len(priorities) == 0 {
+		// 如果没有查询到优先级，则返回错误
+		return 0, errors.New("数据库一致性被破坏")
 	}
-	weight := common.GetRandomInt(int(weightSum))
-	for _, ability_ := range abilities {
-		weight -= int(ability_.Weight) + 10
-		if weight <= 0 {
-			channel.Id = ability_.ChannelId
-			break
-		}
+
+	// 确定要使用的优先级
+	var priorityToUse int
+	if retry >= len(priorities) {
+		// 如果重试次数大于优先级数，则使用最小的优先级
+		priorityToUse = priorities[len(priorities)-1]
+	} else {
+		priorityToUse = priorities[retry]
 	}
-	if channel.Id == 0 {
-		// custom: retry failover — unreachable safety net (sumWeight >= len*10 > 0 guarantees
-		// a pick); mirror the memory-mode weightedRandomChannel fallback to the last candidate.
-		channel.Id = abilities[len(abilities)-1].ChannelId
-	}
-	if err := DB.First(&channel, "id = ?", channel.Id).Error; err != nil {
-		return nil, err
-	}
-	return &channel, nil
+	return priorityToUse, nil
 }
 
-// custom: retry failover — flatten the excluded-channel set to a slice for the SQL
-// `channel_id NOT IN ?` clause. Returns nil for an empty set so callers can guard the
-// clause (avoid `NOT IN ()`, whose behavior differs across SQLite/MySQL/PostgreSQL).
-func excludedChannelKeys(excluded map[int]bool) []int {
-	if len(excluded) == 0 {
-		return nil
+func getChannelQuery(group string, model string, retry int) (*gorm.DB, error) {
+	maxPrioritySubQuery := DB.Model(&Ability{}).Select("MAX(priority)").Where(commonGroupCol+" = ? and model = ? and enabled = ?", group, model, true)
+	channelQuery := DB.Where(commonGroupCol+" = ? and model = ? and enabled = ? and priority = (?)", group, model, true, maxPrioritySubQuery)
+	if retry != 0 {
+		priority, err := getPriority(group, model, retry)
+		if err != nil {
+			return nil, err
+		} else {
+			channelQuery = DB.Where(commonGroupCol+" = ? and model = ? and enabled = ? and priority = ?", group, model, true, priority)
+		}
 	}
-	ids := make([]int, 0, len(excluded))
-	for id := range excluded {
-		ids = append(ids, id)
+
+	return channelQuery, nil
+}
+
+func GetChannel(group string, model string, retry int) (*Channel, error) {
+	var abilities []Ability
+
+	var err error = nil
+	channelQuery, err := getChannelQuery(group, model, retry)
+	if err != nil {
+		return nil, err
 	}
-	return ids
+	if common.UsingSQLite || common.UsingPostgreSQL {
+		err = channelQuery.Order("weight DESC").Find(&abilities).Error
+	} else {
+		err = channelQuery.Order("weight DESC").Find(&abilities).Error
+	}
+	if err != nil {
+		return nil, err
+	}
+	channel := Channel{}
+	if len(abilities) > 0 {
+		// Randomly choose one
+		weightSum := uint(0)
+		for _, ability_ := range abilities {
+			weightSum += ability_.Weight + 10
+		}
+		// Randomly choose one
+		weight := common.GetRandomInt(int(weightSum))
+		for _, ability_ := range abilities {
+			weight -= int(ability_.Weight) + 10
+			//log.Printf("weight: %d, ability weight: %d", weight, *ability_.Weight)
+			if weight <= 0 {
+				channel.Id = ability_.ChannelId
+				break
+			}
+		}
+	} else {
+		return nil, nil
+	}
+	err = DB.First(&channel, "id = ?", channel.Id).Error
+	return &channel, err
 }
 
 func (channel *Channel) AddAbilities(tx *gorm.DB) error {

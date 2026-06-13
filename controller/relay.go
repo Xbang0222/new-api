@@ -193,10 +193,6 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		channel, channelErr := getChannel(c, relayInfo, retryParam)
 		if channelErr != nil {
 			logger.LogError(c, channelErr.Error())
-			// custom: retry failover — getChannel substitutes the real upstream LastError
-			// ONLY for the channels-exhausted case; a genuine selection error or a config
-			// error on a freshly-selected channel (e.g. no available key) comes through
-			// unmasked. Just propagate whatever getChannel returned.
 			newAPIError = channelErr
 			break
 		}
@@ -311,20 +307,6 @@ func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service
 		return nil, types.NewError(fmt.Errorf("获取分组 %s 下模型 %s 的可用渠道失败（retry）: %s", selectGroup, info.OriginModelName, err.Error()), types.ErrorCodeGetChannelFailed, types.ErrOptionWithSkipRetry())
 	}
 	if channel == nil {
-		// custom: retry failover
-		// Channels exhausted this request: every candidate has reached its attempt budget
-		// and been excluded. Surface the real upstream error from the previous attempt
-		// (info.LastError) instead of masking it with a generic "no available channel".
-		// ONLY this exhausted path substitutes LastError — a genuine selection error
-		// (err != nil above) or a config error on a freshly-selected channel
-		// (SetupContextForSelectedChannel below, e.g. ErrorCodeChannelNoAvailableKey) is
-		// returned as-is so it is never hidden behind a stale upstream error.
-		// info.LastError is only populated on the sync relay path; the async task path
-		// keeps it nil and preserves its own real taskErr at the call site.
-		// Revert: return the "可用渠道不存在" error unconditionally.
-		if info.LastError != nil {
-			return nil, info.LastError
-		}
 		return nil, types.NewError(fmt.Errorf("分组 %s 下模型 %s 的可用渠道不存在（retry）", selectGroup, info.OriginModelName), types.ErrorCodeGetChannelFailed, types.ErrOptionWithSkipRetry())
 	}
 
@@ -531,9 +513,6 @@ func RelayTask(c *gin.Context) {
 	for ; retryParam.GetRetry() <= common.RetryTimes; retryParam.IncreaseRetry() {
 		var channel *model.Channel
 
-		// custom: retry failover — a LockedChannel is bound to the task (e.g. an async
-		// fetch must return to the submitting channel), so it intentionally does NOT take
-		// part in excluded-set failover: retries reuse the same locked channel by design.
 		if lockedCh, ok := relayInfo.LockedChannel.(*model.Channel); ok && lockedCh != nil {
 			channel = lockedCh
 			if retryParam.GetRetry() > 0 {
@@ -547,12 +526,7 @@ func RelayTask(c *gin.Context) {
 			channel, channelErr = getChannel(c, relayInfo, retryParam)
 			if channelErr != nil {
 				logger.LogError(c, channelErr.Error())
-				// custom: retry failover — keep the real upstream task error from a prior
-				// attempt when channels are exhausted mid-retry; only report
-				// get_channel_failed when there is no prior error (first-attempt failure).
-				if taskErr == nil {
-					taskErr = service.TaskErrorWrapperLocal(channelErr.Err, "get_channel_failed", http.StatusInternalServerError)
-				}
+				taskErr = service.TaskErrorWrapperLocal(channelErr.Err, "get_channel_failed", http.StatusInternalServerError)
 				break
 			}
 		}
