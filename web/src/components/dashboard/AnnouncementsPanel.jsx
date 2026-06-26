@@ -37,18 +37,17 @@ const AnnouncementsPanel = ({
   return (
     <Card
       {...CARD_PROPS}
-      className='shadow-sm !rounded-2xl lg:col-span-2'
+      className='dashboard-card dashboard-announcement-card'
       title={
-        <div className='flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2 w-full'>
-          <div className='flex items-center gap-2'>
+        <div className='dashboard-card-heading'>
+          <div className='dashboard-card-title'>
             <Bell size={16} />
             {t('系统公告')}
-            <Tag color='white' shape='circle'>
+            <Tag className='dashboard-chip' color='white' shape='circle'>
               {t('显示最新20条')}
             </Tag>
           </div>
-          {/* 图例 */}
-          <div className='flex flex-wrap gap-3 text-xs'>
+          <div className='dashboard-legend'>
             {announcementLegendData.map((legend, index) => (
               <div key={index} className='flex items-center gap-1'>
                 <div
@@ -76,7 +75,7 @@ const AnnouncementsPanel = ({
       }
       bodyStyle={{ padding: 0 }}
     >
-      <ScrollableContainer maxHeight='24rem'>
+      <ScrollableContainer maxHeight='21rem'>
         {announcementData.length > 0 ? (
           <Timeline mode='left'>
             {announcementData.map((item, idx) => {

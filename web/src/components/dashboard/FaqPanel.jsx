@@ -38,16 +38,16 @@ const FaqPanel = ({
   return (
     <Card
       {...CARD_PROPS}
-      className='shadow-sm !rounded-2xl lg:col-span-1'
+      className='dashboard-card dashboard-faq-card'
       title={
-        <div className={FLEX_CENTER_GAP2}>
+        <div className='dashboard-card-title'>
           <HelpCircle size={16} />
           {t('常见问答')}
         </div>
       }
       bodyStyle={{ padding: 0 }}
     >
-      <ScrollableContainer maxHeight='24rem'>
+      <ScrollableContainer maxHeight='21rem'>
         {faqData.length > 0 ? (
           <Collapse
             accordion

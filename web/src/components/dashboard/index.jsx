@@ -176,7 +176,10 @@ const Dashboard = () => {
   }, []);
 
   return (
-    <div className='h-full'>
+    <div
+      className='dashboard-workbench h-full'
+      data-testid='dashboard-workbench'
+    >
       <DashboardHeader
         getGreeting={dashboardData.getGreeting}
         greetingVisible={dashboardData.greetingVisible}
@@ -187,6 +190,9 @@ const Dashboard = () => {
         showSearchModal={dashboardData.showSearchModal}
         refresh={handleRefresh}
         loading={dashboardData.loading}
+        hasApiInfoPanel={dashboardData.hasApiInfoPanel}
+        hasInfoPanels={dashboardData.hasInfoPanels}
+        t={dashboardData.t}
       />
 
       <SearchModal
@@ -202,18 +208,23 @@ const Dashboard = () => {
         t={dashboardData.t}
       />
 
-      <StatsCards
-        groupedStatsData={groupedStatsData}
-        loading={dashboardData.loading}
-        getTrendSpec={getTrendSpec}
-        CARD_PROPS={CARD_PROPS}
-        CHART_CONFIG={CHART_CONFIG}
-      />
+      <div
+        className='dashboard-summary-grid'
+        data-testid='dashboard-summary-grid'
+      >
+        <StatsCards
+          groupedStatsData={groupedStatsData}
+          loading={dashboardData.loading}
+          getTrendSpec={getTrendSpec}
+          CARD_PROPS={CARD_PROPS}
+          CHART_CONFIG={CHART_CONFIG}
+        />
+      </div>
 
-      {/* API信息和图表面板 */}
-      <div className='mb-4'>
+      <div className='dashboard-content-grid'>
         <div
-          className={`grid grid-cols-1 gap-4 ${dashboardData.hasApiInfoPanel ? 'lg:grid-cols-4' : ''}`}
+          className='dashboard-analytics-area'
+          data-testid='dashboard-analytics-card'
         >
           <ChartsPanel
             activeChartTab={dashboardData.activeChartTab}
@@ -232,7 +243,9 @@ const Dashboard = () => {
             hasApiInfoPanel={dashboardData.hasApiInfoPanel}
             t={dashboardData.t}
           />
+        </div>
 
+        <div className='dashboard-side-rail'>
           {dashboardData.hasApiInfoPanel && (
             <ApiInfoPanel
               apiInfoData={apiInfoData}
@@ -244,68 +257,62 @@ const Dashboard = () => {
               t={dashboardData.t}
             />
           )}
+
+          {dashboardData.uptimeEnabled && (
+            <UptimePanel
+              uptimeData={dashboardData.uptimeData}
+              uptimeLoading={dashboardData.uptimeLoading}
+              activeUptimeTab={dashboardData.activeUptimeTab}
+              setActiveUptimeTab={dashboardData.setActiveUptimeTab}
+              loadUptimeData={dashboardData.loadUptimeData}
+              uptimeLegendData={uptimeLegendData}
+              renderMonitorList={(monitors) =>
+                renderMonitorList(
+                  monitors,
+                  (status) => getUptimeStatusColor(status, UPTIME_STATUS_MAP),
+                  (status) =>
+                    getUptimeStatusText(
+                      status,
+                      UPTIME_STATUS_MAP,
+                      dashboardData.t,
+                    ),
+                  dashboardData.t,
+                )
+              }
+              CARD_PROPS={CARD_PROPS}
+              ILLUSTRATION_SIZE={ILLUSTRATION_SIZE}
+              t={dashboardData.t}
+            />
+          )}
         </div>
       </div>
 
-      {/* 系统公告和常见问答卡片 */}
       {dashboardData.hasInfoPanels && (
-        <div className='mb-4'>
-          <div className='grid grid-cols-1 lg:grid-cols-4 gap-4'>
-            {/* 公告卡片 */}
-            {dashboardData.announcementsEnabled && (
-              <AnnouncementsPanel
-                announcementData={announcementData}
-                announcementLegendData={ANNOUNCEMENT_LEGEND_DATA.map(
-                  (item) => ({
-                    ...item,
-                    label: dashboardData.t(item.label),
-                  }),
-                )}
-                CARD_PROPS={CARD_PROPS}
-                ILLUSTRATION_SIZE={ILLUSTRATION_SIZE}
-                t={dashboardData.t}
-              />
-            )}
+        <div className='dashboard-info-grid'>
+          {dashboardData.announcementsEnabled && (
+            <AnnouncementsPanel
+              announcementData={announcementData}
+              announcementLegendData={ANNOUNCEMENT_LEGEND_DATA.map(
+                (item) => ({
+                  ...item,
+                  label: dashboardData.t(item.label),
+                }),
+              )}
+              CARD_PROPS={CARD_PROPS}
+              ILLUSTRATION_SIZE={ILLUSTRATION_SIZE}
+              t={dashboardData.t}
+            />
+          )}
 
-            {/* 常见问答卡片 */}
-            {dashboardData.faqEnabled && (
-              <FaqPanel
-                faqData={faqData}
-                CARD_PROPS={CARD_PROPS}
-                FLEX_CENTER_GAP2={FLEX_CENTER_GAP2}
-                ILLUSTRATION_SIZE={ILLUSTRATION_SIZE}
-                t={dashboardData.t}
-              />
-            )}
-
-            {/* 服务可用性卡片 */}
-            {dashboardData.uptimeEnabled && (
-              <UptimePanel
-                uptimeData={dashboardData.uptimeData}
-                uptimeLoading={dashboardData.uptimeLoading}
-                activeUptimeTab={dashboardData.activeUptimeTab}
-                setActiveUptimeTab={dashboardData.setActiveUptimeTab}
-                loadUptimeData={dashboardData.loadUptimeData}
-                uptimeLegendData={uptimeLegendData}
-                renderMonitorList={(monitors) =>
-                  renderMonitorList(
-                    monitors,
-                    (status) => getUptimeStatusColor(status, UPTIME_STATUS_MAP),
-                    (status) =>
-                      getUptimeStatusText(
-                        status,
-                        UPTIME_STATUS_MAP,
-                        dashboardData.t,
-                      ),
-                    dashboardData.t,
-                  )
-                }
-                CARD_PROPS={CARD_PROPS}
-                ILLUSTRATION_SIZE={ILLUSTRATION_SIZE}
-                t={dashboardData.t}
-              />
-            )}
-          </div>
+          {dashboardData.faqEnabled && (
+            <FaqPanel
+              faqData={faqData}
+              CARD_PROPS={CARD_PROPS}
+              FLEX_CENTER_GAP2={FLEX_CENTER_GAP2}
+              ILLUSTRATION_SIZE={ILLUSTRATION_SIZE}
+              t={dashboardData.t}
+            />
+          )}
         </div>
       )}
     </div>
