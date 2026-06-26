@@ -38,38 +38,38 @@ const ApiInfoPanel = ({
   return (
     <Card
       {...CARD_PROPS}
-      className='bg-gray-50 border-0 !rounded-2xl'
+      className='dashboard-card dashboard-api-card'
       title={
-        <div className={FLEX_CENTER_GAP2}>
+        <div className='dashboard-card-title'>
           <Server size={16} />
           {t('API信息')}
         </div>
       }
       bodyStyle={{ padding: 0 }}
     >
-      <ScrollableContainer maxHeight='24rem'>
+      <ScrollableContainer maxHeight='21rem'>
         {apiInfoData.length > 0 ? (
           apiInfoData.map((api) => (
             <React.Fragment key={api.id}>
-              <div className='flex p-2 hover:bg-white rounded-lg transition-colors cursor-pointer'>
-                <div className='flex-shrink-0 mr-3'>
+              <div className='dashboard-api-row'>
+                <div className='flex-shrink-0'>
                   <Avatar size='extra-small' color={api.color}>
                     {api.route.substring(0, 2)}
                   </Avatar>
                 </div>
                 <div className='flex-1'>
-                  <div className='flex flex-wrap items-center justify-between mb-1 w-full gap-2'>
-                    <span className='text-sm font-medium text-gray-900 !font-bold break-all'>
+                  <div className='dashboard-api-row-head'>
+                    <span className='dashboard-api-route'>
                       {api.route}
                     </span>
-                    <div className='flex items-center gap-1 mt-1 lg:mt-0'>
+                    <div className='dashboard-api-actions'>
                       <Tag
                         prefixIcon={<Gauge size={12} />}
                         size='small'
                         color='white'
                         shape='circle'
                         onClick={() => handleSpeedTest(api.url)}
-                        className='cursor-pointer hover:opacity-80 text-xs'
+                        className='dashboard-chip cursor-pointer'
                       >
                         {t('测速')}
                       </Tag>
@@ -81,13 +81,13 @@ const ApiInfoPanel = ({
                         onClick={() =>
                           window.open(api.url, '_blank', 'noopener,noreferrer')
                         }
-                        className='cursor-pointer hover:opacity-80 text-xs'
+                        className='dashboard-chip cursor-pointer'
                       >
                         {t('跳转')}
                       </Tag>
                     </div>
                   </div>
-                  <div className='flex items-center gap-1 mb-1'>
+                  <div className='dashboard-api-url'>
                     <span
                       className='!text-semi-color-primary break-all cursor-pointer hover:underline'
                       onClick={() => handleCopyUrl(api.url)}
@@ -100,7 +100,7 @@ const ApiInfoPanel = ({
                       onClick={() => handleCopyUrl(api.url)}
                     />
                   </div>
-                  <div className='text-gray-500'>{api.description}</div>
+                  <div className='dashboard-api-description'>{api.description}</div>
                 </div>
               </div>
               <Divider />

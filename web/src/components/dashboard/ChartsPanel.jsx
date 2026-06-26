@@ -42,10 +42,10 @@ const ChartsPanel = ({
   return (
     <Card
       {...CARD_PROPS}
-      className={`!rounded-2xl ${hasApiInfoPanel ? 'lg:col-span-3' : ''}`}
+      className='dashboard-card dashboard-chart-card'
       title={
-        <div className='flex flex-col lg:flex-row lg:items-center lg:justify-between w-full gap-3'>
-          <div className={FLEX_CENTER_GAP2}>
+        <div className='dashboard-card-heading'>
+          <div className='dashboard-card-title'>
             <PieChart size={16} />
             {t('模型数据分析')}
           </div>
@@ -53,6 +53,7 @@ const ChartsPanel = ({
             type='slash'
             activeKey={activeChartTab}
             onChange={setActiveChartTab}
+            className='dashboard-chart-tabs'
           >
             <TabPane tab={<span>{t('消耗分布')}</span>} itemKey='1' />
             <TabPane tab={<span>{t('调用趋势')}</span>} itemKey='2' />
@@ -71,7 +72,7 @@ const ChartsPanel = ({
       }
       bodyStyle={{ padding: 0 }}
     >
-      <div className='h-96 p-2'>
+      <div className='dashboard-chart-body'>
         {activeChartTab === '1' && (
           <VChart spec={spec_line} option={CHART_CONFIG} />
         )}

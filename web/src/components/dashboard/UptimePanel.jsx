@@ -49,10 +49,10 @@ const UptimePanel = ({
   return (
     <Card
       {...CARD_PROPS}
-      className='shadow-sm !rounded-2xl lg:col-span-1'
+      className='dashboard-card dashboard-uptime-card'
       title={
-        <div className='flex items-center justify-between w-full gap-2'>
-          <div className='flex items-center gap-2'>
+        <div className='dashboard-card-heading'>
+          <div className='dashboard-card-title'>
             <Gauge size={16} />
             {t('服务可用性')}
           </div>
@@ -63,7 +63,8 @@ const UptimePanel = ({
             size='small'
             theme='borderless'
             type='tertiary'
-            className='text-gray-500 hover:text-blue-500 hover:bg-blue-50 !rounded-full'
+            className='dashboard-icon-button text-gray-500 hover:text-blue-500 hover:bg-blue-50 !rounded-full'
+            aria-label={t('刷新')}
           />
         </div>
       }
@@ -74,7 +75,7 @@ const UptimePanel = ({
         <Spin spinning={uptimeLoading}>
           {uptimeData.length > 0 ? (
             uptimeData.length === 1 ? (
-              <ScrollableContainer maxHeight='24rem'>
+              <ScrollableContainer maxHeight='18rem'>
                 {renderMonitorList(uptimeData[0].monitors)}
               </ScrollableContainer>
             ) : (
@@ -107,7 +108,7 @@ const UptimePanel = ({
                     itemKey={group.categoryName}
                     key={groupIdx}
                   >
-                    <ScrollableContainer maxHeight='21.5rem'>
+                    <ScrollableContainer maxHeight='16rem'>
                       {renderMonitorList(group.monitors)}
                     </ScrollableContainer>
                   </TabPane>
@@ -131,8 +132,8 @@ const UptimePanel = ({
 
       {/* 图例 */}
       {uptimeData.length > 0 && (
-        <div className='p-3 bg-gray-50 rounded-b-2xl'>
-          <div className='flex flex-wrap gap-3 text-xs justify-center'>
+        <div className='dashboard-uptime-legend'>
+          <div className='dashboard-legend justify-center'>
             {uptimeLegendData.map((legend, index) => (
               <div key={index} className='flex items-center gap-1'>
                 <div

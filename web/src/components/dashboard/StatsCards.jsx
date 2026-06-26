@@ -32,38 +32,43 @@ const StatsCards = ({
 }) => {
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const shouldShowTrend = (trendData) =>
+    loading ||
+    (Array.isArray(trendData) &&
+      trendData.some((value) => Number(value) > 0));
+
   return (
-    <div className='mb-4'>
-      <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'>
-        {groupedStatsData.map((group, idx) => (
-          <Card
-            key={idx}
-            {...CARD_PROPS}
-            className={`${group.color} border-0 !rounded-2xl w-full`}
-            title={group.title}
-          >
-            <div className='space-y-4'>
-              {group.items.map((item, itemIdx) => (
-                <div
-                  key={itemIdx}
-                  className='flex items-center justify-between cursor-pointer'
-                  onClick={item.onClick}
-                >
-                  <div className='flex items-center'>
-                    <Avatar
-                      className='mr-3'
-                      size='small'
-                      color={item.avatarColor}
-                    >
-                      {item.icon}
-                    </Avatar>
-                    <div>
-                      <div className='text-xs text-gray-500'>{item.title}</div>
-                      <div className='text-lg font-semibold'>
-                        <Skeleton
-                          loading={loading}
-                          active
-                          placeholder={
+    <>
+      {groupedStatsData.map((group, idx) => (
+        <Card
+          key={idx}
+          {...CARD_PROPS}
+          className={`dashboard-card dashboard-summary-card dashboard-metric-card ${group.color}`}
+          title={<div className='dashboard-card-title'>{group.title}</div>}
+        >
+          <div className='dashboard-metric-list'>
+            {group.items.map((item, itemIdx) => (
+              <button
+                key={itemIdx}
+                type='button'
+                className='dashboard-metric-row'
+                onClick={item.onClick}
+              >
+                <span className='dashboard-metric-left'>
+                  <Avatar
+                    className='dashboard-metric-avatar'
+                    size='small'
+                    color={item.avatarColor}
+                  >
+                    {item.icon}
+                  </Avatar>
+                  <span className='dashboard-metric-copy'>
+                    <span className='dashboard-metric-label'>{item.title}</span>
+                    <span className='dashboard-metric-value'>
+                      <Skeleton
+                        loading={loading}
+                        active
+                        placeholder={
                             <Skeleton.Paragraph
                               active
                               rows={1}
@@ -73,43 +78,42 @@ const StatsCards = ({
                                 marginTop: '4px',
                               }}
                             />
-                          }
-                        >
-                          {item.value}
-                        </Skeleton>
-                      </div>
-                    </div>
-                  </div>
-                  {item.title === t('当前余额') ? (
-                    <Tag
-                      color='white'
-                      shape='circle'
-                      size='large'
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigate('/console/topup');
-                      }}
-                    >
-                      {t('充值')}
-                    </Tag>
-                  ) : (
-                    (loading ||
-                      (item.trendData && item.trendData.length > 0)) && (
-                      <div className='w-24 h-10'>
-                        <VChart
-                          spec={getTrendSpec(item.trendData, item.trendColor)}
-                          option={CHART_CONFIG}
-                        />
-                      </div>
-                    )
-                  )}
-                </div>
-              ))}
-            </div>
-          </Card>
-        ))}
-      </div>
-    </div>
+                        }
+                      >
+                        {item.value}
+                      </Skeleton>
+                    </span>
+                  </span>
+                </span>
+                {item.title === t('当前余额') ? (
+                  <Tag
+                    className='dashboard-chip'
+                    color='white'
+                    shape='circle'
+                    size='large'
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate('/console/topup');
+                    }}
+                  >
+                    {t('充值')}
+                  </Tag>
+                ) : (
+                  shouldShowTrend(item.trendData) && (
+                    <span className='dashboard-sparkline'>
+                      <VChart
+                        spec={getTrendSpec(item.trendData, item.trendColor)}
+                        option={CHART_CONFIG}
+                      />
+                    </span>
+                  )
+                )}
+              </button>
+            ))}
+          </div>
+        </Card>
+      ))}
+    </>
   );
 };
 
