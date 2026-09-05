@@ -353,6 +353,34 @@ type AdminBindSubscriptionRequest struct {
 	PlanId int `json:"plan_id"`
 }
 
+type adminResolveSubscriptionConflictRequest struct {
+	Action string `json:"action"`
+}
+
+func AdminListSubscriptionConflicts(c *gin.Context) {
+	orders, err := model.ListSubscriptionConflictOrders()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, orders)
+}
+
+func AdminResolveSubscriptionConflict(c *gin.Context) {
+	orderId, _ := strconv.Atoi(c.Param("id"))
+	var req adminResolveSubscriptionConflictRequest
+	if orderId <= 0 || c.ShouldBindJSON(&req) != nil {
+		common.ApiErrorMsg(c, "参数错误")
+		return
+	}
+	if err := model.ResolveSubscriptionConflict(orderId, c.GetInt("id"), req.Action); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	recordManageAudit(c, "subscription.conflict.resolve", map[string]interface{}{"order_id": orderId, "action": req.Action})
+	common.ApiSuccess(c, nil)
+}
+
 func AdminBindSubscription(c *gin.Context) {
 	if !requirePaymentCompliance(c) {
 		return

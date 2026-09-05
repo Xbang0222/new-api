@@ -15,6 +15,12 @@ export function canDeleteInvoiceApplication(
 ): boolean {
   if (!isAdmin) return false
   if (
+    (application.quota_per_unit_snapshot ?? 0) > 0 ||
+    (application.exchange_rate_snapshot ?? 0) > 0
+  ) {
+    return false
+  }
+  if (
     application.status === 'pending_review' ||
     application.status === 'rejected'
   ) {

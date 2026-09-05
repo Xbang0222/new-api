@@ -200,11 +200,10 @@ export function InvoiceManagement() {
       <InvoiceDetailsDialog
         application={detailsTarget}
         isAdmin
-        paymentMethods={[]}
         busy={busy}
         onOpenChange={(open) => !open && setDetailsTarget(null)}
         onReview={(request) => reviewMutation.mutate(request)}
-        onPay={() => undefined}
+        onCancel={() => undefined}
         onUpload={(file) => uploadMutation.mutate(file)}
         onViewFile={() => void handleViewInvoiceFile()}
         onSend={() => detailsTarget && sendMutation.mutate(detailsTarget)}

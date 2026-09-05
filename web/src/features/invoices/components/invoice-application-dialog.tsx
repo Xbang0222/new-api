@@ -179,7 +179,9 @@ export function InvoiceApplicationDialog(props: InvoiceApplicationDialogProps) {
       <Alert>
         <AlertTitle>{t('No eligible paid orders')}</AlertTitle>
         <AlertDescription>
-          {t('There are no paid orders currently available for invoicing.')}
+          {t(
+            'Only successful paid orders with a reliable snapshot in the current settlement currency are eligible. Historical or already-linked orders are excluded.'
+          )}
         </AlertDescription>
       </Alert>
     )
@@ -321,10 +323,9 @@ export function InvoiceApplicationDialog(props: InvoiceApplicationDialogProps) {
 
           {props.config ? (
             <Alert className='mt-6'>
-              <AlertTitle>{t('Policy notice')}</AlertTitle>
+              <AlertTitle>{t('Invoice fee')}</AlertTitle>
               <AlertDescription>
                 <div className='flex flex-col gap-2'>
-                  <p>{props.config.policy_notice}</p>
                   <p>
                     {t('Minimum invoice amount')}:{' '}
                     {formatInvoiceMoney(
@@ -332,18 +333,18 @@ export function InvoiceApplicationDialog(props: InvoiceApplicationDialogProps) {
                       props.config.currency
                     )}
                     {' · '}
-                    {t('VAT threshold')}:{' '}
+                    {t('Estimated invoice fee')}:{' '}
                     {formatInvoiceMoney(
-                      props.config.vat_threshold_cents,
+                      Math.round(
+                        (selectedTotal * props.config.fee_rate_basis_points) /
+                          10000
+                      ),
                       props.config.currency
                     )}
-                    {' · '}
-                    {t('Current estimated VAT rate')}:{' '}
-                    {props.config.vat_rate_basis_points / 100}%
                   </p>
                   <p>
                     {t(
-                      'The system will estimate VAT, surcharges, and individual income tax withholding after submission. An administrator must verify the estimate and confirm any final tax supplement before payment.'
+                      'The server recalculates and deducts the fee from your balance when you submit the application.'
                     )}
                   </p>
                 </div>

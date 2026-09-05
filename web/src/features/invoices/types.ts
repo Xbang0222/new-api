@@ -18,12 +18,11 @@ export type InvoicePaymentStatus = 'not_required' | 'pending' | 'paid'
 
 export type InvoiceConfig = {
   enabled: boolean
-  supplement_payment_method: 'epay' | 'balance' | string
   minimum_amount: number
   currency: string
-  vat_threshold_cents: number
-  vat_rate_basis_points: number
-  policy_notice: string
+  fee_rate_basis_points: number
+  exchange_rate: number
+  quota_per_unit: number
 }
 
 export type InvoicePaymentMethod = {
@@ -88,6 +87,12 @@ export type InvoiceApplication = {
   created_at: number
   updated_at: number
   issued_at: number
+  fee_rate_basis_points?: number
+  fee_amount_cents?: number
+  fee_quota?: number
+  quota_per_unit_snapshot?: number
+  exchange_rate_snapshot?: number
+  fee_refunded_at?: number
   orders: InvoiceOrder[]
 }
 

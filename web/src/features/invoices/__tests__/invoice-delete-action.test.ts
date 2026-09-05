@@ -44,5 +44,12 @@ describe('invoice application deletion', () => {
       false
     )
     assert.equal(canDeleteInvoiceApplication(application, false), false)
+    assert.equal(
+      canDeleteInvoiceApplication(
+        { ...application, quota_per_unit_snapshot: 500_000 },
+        true
+      ),
+      false
+    )
   })
 })

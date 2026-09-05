@@ -17,16 +17,14 @@ import { toast } from 'sonner'
 import { SectionPageLayout } from '@/components/layout'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { submitPaymentForm } from '@/features/wallet/lib'
 
 import {
+  cancelInvoiceApplication,
   createInvoiceApplication,
   getEligibleInvoiceOrders,
   getInvoiceConfig,
-  getInvoicePaymentMethods,
   getOwnInvoiceApplications,
   getOwnInvoiceFile,
-  requestInvoiceSupplementPayment,
   sendOwnInvoiceEmail,
 } from './api'
 import { InvoiceApplicationDialog } from './components/invoice-application-dialog'
@@ -36,12 +34,10 @@ import type { InvoiceApplicationFormValues } from './lib/invoice-application-for
 import type {
   EligibleInvoiceOrder,
   InvoiceApplication,
-  InvoicePaymentMethod,
   InvoiceStatus,
 } from './types'
 
 const EMPTY_ORDERS: EligibleInvoiceOrder[] = []
-const EMPTY_PAYMENT_METHODS: InvoicePaymentMethod[] = []
 
 /** Self-service invoice applications. Admins use this page as normal users. */
 export function Invoices() {
@@ -64,10 +60,6 @@ export function Invoices() {
   const eligibleOrdersQuery = useQuery({
     queryKey: ['invoices', 'eligible-orders'],
     queryFn: getEligibleInvoiceOrders,
-  })
-  const paymentMethodsQuery = useQuery({
-    queryKey: ['invoices', 'payment-methods'],
-    queryFn: getInvoicePaymentMethods,
   })
   const applicationsQuery = useQuery({
     queryKey: ['invoices', 'self', page, pageSize, status, keyword],
@@ -101,40 +93,6 @@ export function Invoices() {
     onError: () => toast.error(t('Failed to submit invoice application.')),
   })
 
-  const paymentMutation = useMutation({
-    mutationFn: async (paymentMethod: string) => {
-      if (!detailsTarget) {
-        throw new Error(t('Invoice application is unavailable.'))
-      }
-      const response = await requestInvoiceSupplementPayment(
-        detailsTarget.id,
-        paymentMethod
-      )
-      if (!response.success) {
-        throw new Error(response.message || t('Payment request failed'))
-      }
-      if (response.settled) return { settled: true as const }
-      if (!response.url || !response.data) {
-        throw new Error(response.message || t('Payment request failed'))
-      }
-      return { settled: false as const, url: response.url, data: response.data }
-    },
-    onSuccess: async (result) => {
-      if (result.settled) {
-        toast.success(t('Invoice supplement paid from balance.'))
-        setDetailsTarget(null)
-        await refreshApplications()
-        return
-      }
-      submitPaymentForm(result.url, result.data)
-      toast.success(t('Redirecting to payment page...'))
-    },
-    onError: (error) =>
-      toast.error(
-        error instanceof Error ? t(error.message) : t('Payment request failed')
-      ),
-  })
-
   const sendMutation = useMutation({
     mutationFn: async (application: InvoiceApplication) => {
       const response = await sendOwnInvoiceEmail(application.id)
@@ -147,6 +105,19 @@ export function Invoices() {
       await refreshApplications()
     },
     onError: () => toast.error(t('Failed to send invoice email.')),
+  })
+
+  const cancelMutation = useMutation({
+    mutationFn: async (applicationId: number) => {
+      const response = await cancelInvoiceApplication(applicationId)
+      if (!response.success) throw new Error(response.message)
+    },
+    onSuccess: async () => {
+      toast.success(t('Invoice application withdrawn.'))
+      setDetailsTarget(null)
+      await Promise.all([refreshApplications(), eligibleOrdersQuery.refetch()])
+    },
+    onError: () => toast.error(t('Failed to withdraw invoice application.')),
   })
 
   const handleOpenApplicationDialog = () => {
@@ -178,12 +149,10 @@ export function Invoices() {
 
   const config = configQuery.data?.data
   const applications = applicationsQuery.data?.data
-  const paymentMethods = paymentMethodsQuery.data?.data ?? EMPTY_PAYMENT_METHODS
   const eligibleOrders = eligibleOrdersQuery.data?.data ?? EMPTY_ORDERS
   const refreshing =
     configQuery.isFetching ||
     eligibleOrdersQuery.isFetching ||
-    paymentMethodsQuery.isFetching ||
     applicationsQuery.isFetching
 
   return (
@@ -242,7 +211,6 @@ export function Invoices() {
                   void Promise.all([
                     configQuery.refetch(),
                     eligibleOrdersQuery.refetch(),
-                    paymentMethodsQuery.refetch(),
                     applicationsQuery.refetch(),
                   ])
                 }
@@ -279,15 +247,16 @@ export function Invoices() {
       <InvoiceDetailsDialog
         application={detailsTarget}
         isAdmin={false}
-        paymentMethods={paymentMethods}
         busy={
-          paymentMutation.isPending ||
           sendMutation.isPending ||
+          cancelMutation.isPending ||
           fileActionPending
         }
         onOpenChange={(open) => !open && setDetailsTarget(null)}
         onReview={() => undefined}
-        onPay={(method) => paymentMutation.mutate(method)}
+        onCancel={() =>
+          detailsTarget && cancelMutation.mutate(detailsTarget.id)
+        }
         onUpload={() => undefined}
         onViewFile={() => void handleViewInvoiceFile()}
         onSend={() => detailsTarget && sendMutation.mutate(detailsTarget)}

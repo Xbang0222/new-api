@@ -374,6 +374,32 @@ func RecordInvoiceSupplementLog(userId int, applicationId int, tradeNo string, a
 	})
 }
 
+func RecordInvoiceFeeLog(application *InvoiceApplication, refunded bool) error {
+	if application == nil || application.Id <= 0 || application.FeeQuota <= 0 {
+		return nil
+	}
+	action := "charged"
+	quota := -application.FeeQuota
+	if refunded {
+		action = "refunded"
+		quota = application.FeeQuota
+	}
+	requestId := fmt.Sprintf("invoice-fee-%d-%s", application.Id, action)
+	var existing int64
+	if err := LOG_DB.Model(&Log{}).Where("type = ? AND request_id = ?", LogTypeTopup, requestId).Count(&existing).Error; err != nil || existing > 0 {
+		return err
+	}
+	username, _ := GetUsernameById(application.UserId, false)
+	other := map[string]interface{}{
+		"invoice_application_id": application.Id, "action": action,
+		"fee_amount_cents": application.FeeAmountCents, "currency": application.Currency,
+		"fee_rate_basis_points": application.FeeRateBasisPoints, "fee_quota": application.FeeQuota,
+		"exchange_rate": application.ExchangeRateSnapshot, "quota_per_unit": application.QuotaPerUnitSnapshot,
+	}
+	return createLog(&Log{UserId: application.UserId, Username: username, CreatedAt: common.GetTimestamp(), Type: LogTypeTopup,
+		Content: fmt.Sprintf("Invoice fee %s for application #%d", action, application.Id), Quota: quota, RequestId: requestId, Other: common.MapToJsonStr(other)})
+}
+
 func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string, tokenName string, content string, tokenId int, useTimeSeconds int,
 	isStream bool, group string, other *LogOther) {
 	logger.LogInfo(c, fmt.Sprintf("record error log: userId=%d, channelId=%d, modelName=%s, tokenName=%s, content=%s", userId, channelId, modelName, tokenName, common.LocalLogPreview(content)))

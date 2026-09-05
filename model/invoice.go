@@ -63,6 +63,12 @@ type InvoiceApplication struct {
 	FinalSupplementCents         int64          `json:"final_supplement_cents"`
 	TaxBreakdown                 string         `json:"-" gorm:"type:text"`
 	RuleSnapshot                 string         `json:"-" gorm:"type:text"`
+	FeeRateBasisPoints           int            `json:"fee_rate_basis_points"`
+	FeeAmountCents               int64          `json:"fee_amount_cents"`
+	FeeQuota                     int            `json:"fee_quota"`
+	QuotaPerUnitSnapshot         float64        `json:"quota_per_unit_snapshot"`
+	ExchangeRateSnapshot         float64        `json:"exchange_rate_snapshot"`
+	FeeRefundedAt                int64          `json:"fee_refunded_at"`
 	TaxAdjustmentReason          string         `json:"tax_adjustment_reason" gorm:"type:text"`
 	AdminNote                    string         `json:"admin_note" gorm:"type:text"`
 	RejectReason                 string         `json:"reject_reason" gorm:"type:text"`
@@ -275,4 +281,29 @@ func SyncUserQuotaCacheDelta(userId int, delta int) error {
 	}
 	_, err := cacheApplyUserQuotaDelta(userId, int64(delta))
 	return err
+}
+
+func RefundInvoiceFeeTx(tx *gorm.DB, application *InvoiceApplication) (int, error) {
+	if tx == nil || application == nil || application.FeeQuota <= 0 || application.FeeRefundedAt > 0 {
+		return 0, nil
+	}
+	result := tx.Model(&User{}).Where("id = ? AND quota <= ?", application.UserId, common.MaxWalletQuota-application.FeeQuota).
+		Update("quota", gorm.Expr("quota + ?", application.FeeQuota))
+	if result.Error != nil {
+		return 0, result.Error
+	}
+	if result.RowsAffected != 1 {
+		return 0, ErrWalletQuotaInsufficient
+	}
+	now := common.GetTimestamp()
+	result = tx.Model(&InvoiceApplication{}).
+		Where("id = ? AND fee_refunded_at = 0", application.Id).
+		Updates(map[string]interface{}{"fee_refunded_at": now, "updated_at": now})
+	if result.Error != nil {
+		return 0, result.Error
+	}
+	if result.RowsAffected != 1 {
+		return 0, nil
+	}
+	return application.FeeQuota, nil
 }

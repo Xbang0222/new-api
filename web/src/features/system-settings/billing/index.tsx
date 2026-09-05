@@ -119,6 +119,7 @@ const defaultBillingSettings: BillingSettings = {
   'invoice_setting.application_window_days': 365,
   'invoice_setting.currency': 'CNY',
   'invoice_setting.invoice_item_name': 'AI Agent服务',
+  'invoice_setting.fee_rate_basis_points': 0,
   'invoice_setting.vat_threshold_cents': 100000,
   'invoice_setting.vat_rate_basis_points': 100,
   'invoice_setting.vat_standard_rate_basis_points': 300,

@@ -3,6 +3,8 @@ package model
 import (
 	"errors"
 	"fmt"
+	"math"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
@@ -13,17 +15,20 @@ import (
 )
 
 type TopUp struct {
-	Id                int     `json:"id"`
-	UserId            int     `json:"user_id" gorm:"index"`
-	Amount            int64   `json:"amount"`
-	Money             float64 `json:"money"`
-	TradeNo           string  `json:"trade_no" gorm:"unique;type:varchar(255);index"`
-	PaymentMethod     string  `json:"payment_method" gorm:"type:varchar(50)"`
-	PaymentProvider   string  `json:"payment_provider" gorm:"type:varchar(50);default:''"`
-	CreateTime        int64   `json:"create_time"`
-	CompleteTime      int64   `json:"complete_time"`
-	Status            string  `json:"status"`
-	InviterRewardSent bool    `json:"inviter_reward_sent" gorm:"default:false"`
+	Id                     int     `json:"id"`
+	UserId                 int     `json:"user_id" gorm:"index"`
+	Amount                 int64   `json:"amount"`
+	Money                  float64 `json:"money"`
+	TradeNo                string  `json:"trade_no" gorm:"unique;type:varchar(255);index"`
+	PaymentMethod          string  `json:"payment_method" gorm:"type:varchar(50)"`
+	PaymentProvider        string  `json:"payment_provider" gorm:"type:varchar(50);default:''"`
+	CreateTime             int64   `json:"create_time"`
+	CompleteTime           int64   `json:"complete_time"`
+	Status                 string  `json:"status"`
+	SettlementCurrency     string  `json:"settlement_currency" gorm:"type:varchar(8);default:''"`
+	SettlementExchangeRate float64 `json:"settlement_exchange_rate"`
+	SettlementQuotaPerUnit float64 `json:"settlement_quota_per_unit"`
+	InviterRewardSent      bool    `json:"inviter_reward_sent" gorm:"default:false"`
 }
 
 const (
@@ -53,9 +58,24 @@ var (
 )
 
 func (topUp *TopUp) Insert() error {
-	var err error
-	err = DB.Create(topUp).Error
-	return err
+	return DB.Create(topUp).Error
+}
+
+func (topUp *TopUp) BeforeCreate(tx *gorm.DB) error {
+	if topUp.SettlementCurrency == "" {
+		displayType := strings.ToUpper(strings.TrimSpace(operation_setting.GetQuotaDisplayType()))
+		if displayType == operation_setting.QuotaDisplayTypeUSD || displayType == operation_setting.QuotaDisplayTypeCNY {
+			topUp.SettlementCurrency = displayType
+			topUp.SettlementQuotaPerUnit = common.QuotaPerUnit
+			topUp.SettlementExchangeRate = operation_setting.GetUsdToCurrencyRate(operation_setting.USDExchangeRate)
+		}
+	}
+	if topUp.SettlementCurrency != "" && ((topUp.SettlementCurrency != operation_setting.QuotaDisplayTypeUSD && topUp.SettlementCurrency != operation_setting.QuotaDisplayTypeCNY) ||
+		topUp.SettlementQuotaPerUnit <= 0 || math.IsNaN(topUp.SettlementQuotaPerUnit) || math.IsInf(topUp.SettlementQuotaPerUnit, 0) ||
+		topUp.SettlementExchangeRate <= 0 || math.IsNaN(topUp.SettlementExchangeRate) || math.IsInf(topUp.SettlementExchangeRate, 0)) {
+		return errors.New("invalid top-up settlement snapshot")
+	}
+	return nil
 }
 
 func topUpQuotaMaxCurrent(creditedQuota int) (int, error) {

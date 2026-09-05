@@ -179,6 +179,8 @@ func SetApiRouter(router *gin.Engine) {
 			subscriptionAdminRoute.PUT("/plans/:id", controller.AdminUpdateSubscriptionPlan)
 			subscriptionAdminRoute.PATCH("/plans/:id", controller.AdminUpdateSubscriptionPlanStatus)
 			subscriptionAdminRoute.POST("/bind", controller.AdminBindSubscription)
+			subscriptionAdminRoute.GET("/conflicts", controller.AdminListSubscriptionConflicts)
+			subscriptionAdminRoute.POST("/conflicts/:id/resolve", middleware.CriticalRateLimit(), controller.AdminResolveSubscriptionConflict)
 			subscriptionAdminRoute.POST("/plans/:id/subscriptions/reset", controller.AdminResetPlanSubscriptions)
 
 			// User subscription management (admin)
@@ -203,6 +205,7 @@ func SetApiRouter(router *gin.Engine) {
 			invoiceRoute.GET("/eligible-orders", controller.GetEligibleInvoiceOrders)
 			invoiceRoute.GET("/self", controller.ListInvoiceApplications)
 			invoiceRoute.POST("/applications", middleware.CriticalRateLimit(), controller.CreateInvoiceApplication)
+			invoiceRoute.POST("/applications/:id/cancel", middleware.CriticalRateLimit(), controller.CancelInvoiceApplication)
 			invoiceRoute.GET("/applications/:id", controller.GetInvoiceApplication)
 			invoiceRoute.GET("/applications/:id/file", middleware.DownloadRateLimit(), controller.GetOwnInvoiceFile)
 			invoiceRoute.POST("/applications/:id/pay", middleware.CriticalRateLimit(), controller.RequestInvoiceSupplementPayment)

@@ -23,6 +23,7 @@ type InvoiceSetting struct {
 	ApplicationWindowDays              int     `json:"application_window_days"`
 	Currency                           string  `json:"currency"`
 	InvoiceItemName                    string  `json:"invoice_item_name"`
+	FeeRateBasisPoints                 int     `json:"fee_rate_basis_points"`
 	VATThresholdCents                  int64   `json:"vat_threshold_cents"`
 	VATRateBasisPoints                 int     `json:"vat_rate_basis_points"`
 	VATStandardRateBasisPoints         int     `json:"vat_standard_rate_basis_points"`
@@ -44,6 +45,7 @@ var invoiceSetting = InvoiceSetting{
 	ApplicationWindowDays:              365,
 	Currency:                           "CNY",
 	InvoiceItemName:                    "AI Agent服务",
+	FeeRateBasisPoints:                 0,
 	VATThresholdCents:                  100_000,
 	VATRateBasisPoints:                 100,
 	VATStandardRateBasisPoints:         300,

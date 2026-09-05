@@ -217,43 +217,13 @@ const BILLING_SECTIONS = [
       <InvoiceManagementSection
         defaultValues={{
           enabled: settings['invoice_setting.enabled'],
-          supplementPaymentMethod:
-            settings['invoice_setting.supplement_payment_method'] === 'balance'
-              ? 'balance'
-              : 'epay',
-          taxBurdenMode: settings['invoice_setting.tax_burden_mode'],
           minimumAmount: settings['invoice_setting.minimum_amount'],
-          applicationWindowDays:
-            settings['invoice_setting.application_window_days'],
-          currency: settings['invoice_setting.currency'],
           invoiceItemName:
             settings['invoice_setting.invoice_item_name'] === '技术服务费'
               ? 'AI Agent服务'
               : settings['invoice_setting.invoice_item_name'],
-          vatThresholdAmount:
-            settings['invoice_setting.vat_threshold_cents'] / 100,
-          vatRatePercent:
-            settings['invoice_setting.vat_rate_basis_points'] / 100,
-          vatStandardRatePercent:
-            settings['invoice_setting.vat_standard_rate_basis_points'] / 100,
-          vatPreferentialEndDate:
-            settings['invoice_setting.vat_preferential_end_date'],
-          urbanMaintenanceTaxRatePercent:
-            settings[
-              'invoice_setting.urban_maintenance_tax_rate_basis_points'
-            ] / 100,
-          educationSurchargeRatePercent:
-            settings['invoice_setting.education_surcharge_rate_basis_points'] /
-            100,
-          localEducationRatePercent:
-            settings['invoice_setting.local_education_rate_basis_points'] / 100,
-          surchargeReliefPercent:
-            settings['invoice_setting.surcharge_relief_basis_points'] / 100,
-          pitWithholdingEnabled:
-            settings['invoice_setting.pit_withholding_enabled'],
-          policyEffectiveDate:
-            settings['invoice_setting.policy_effective_date'],
-          policyNotice: settings['invoice_setting.policy_notice'],
+          feeRatePercent:
+            (settings['invoice_setting.fee_rate_basis_points'] ?? 0) / 100,
         }}
       />
     ),

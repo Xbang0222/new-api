@@ -373,6 +373,7 @@ export type BillingSettings = {
   'invoice_setting.application_window_days': number
   'invoice_setting.currency': 'CNY'
   'invoice_setting.invoice_item_name': string
+  'invoice_setting.fee_rate_basis_points': number
   'invoice_setting.vat_threshold_cents': number
   'invoice_setting.vat_rate_basis_points': number
   'invoice_setting.vat_standard_rate_basis_points': number

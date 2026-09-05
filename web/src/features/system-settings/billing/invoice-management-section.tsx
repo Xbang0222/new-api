@@ -13,8 +13,6 @@ import { useForm, type Resolver } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-
 import { updateSystemOption } from '../api'
 import { SettingsPageFormActions } from '../components/settings-page-context'
 import { InvoiceRulesForm } from './invoice-rules-form'
@@ -44,56 +42,12 @@ export function InvoiceManagementSection(props: InvoiceManagementSectionProps) {
     mutationFn: async (values: InvoiceRuleFormValues) => {
       const updates = [
         ['invoice_setting.enabled', values.enabled],
-        [
-          'invoice_setting.supplement_payment_method',
-          values.supplementPaymentMethod,
-        ],
-        ['invoice_setting.tax_burden_mode', values.taxBurdenMode],
         ['invoice_setting.minimum_amount', values.minimumAmount],
-        [
-          'invoice_setting.application_window_days',
-          values.applicationWindowDays,
-        ],
-        ['invoice_setting.currency', values.currency],
         ['invoice_setting.invoice_item_name', values.invoiceItemName],
         [
-          'invoice_setting.vat_threshold_cents',
-          Math.round(values.vatThresholdAmount * 100),
+          'invoice_setting.fee_rate_basis_points',
+          Math.round(values.feeRatePercent * 100),
         ],
-        [
-          'invoice_setting.vat_rate_basis_points',
-          Math.round(values.vatRatePercent * 100),
-        ],
-        [
-          'invoice_setting.vat_standard_rate_basis_points',
-          Math.round(values.vatStandardRatePercent * 100),
-        ],
-        [
-          'invoice_setting.vat_preferential_end_date',
-          values.vatPreferentialEndDate,
-        ],
-        [
-          'invoice_setting.urban_maintenance_tax_rate_basis_points',
-          Math.round(values.urbanMaintenanceTaxRatePercent * 100),
-        ],
-        [
-          'invoice_setting.education_surcharge_rate_basis_points',
-          Math.round(values.educationSurchargeRatePercent * 100),
-        ],
-        [
-          'invoice_setting.local_education_rate_basis_points',
-          Math.round(values.localEducationRatePercent * 100),
-        ],
-        [
-          'invoice_setting.surcharge_relief_basis_points',
-          Math.round(values.surchargeReliefPercent * 100),
-        ],
-        [
-          'invoice_setting.pit_withholding_enabled',
-          values.pitWithholdingEnabled,
-        ],
-        ['invoice_setting.policy_effective_date', values.policyEffectiveDate],
-        ['invoice_setting.policy_notice', values.policyNotice],
       ] as const
       const responses = await Promise.all(
         updates.map(([key, value]) => updateSystemOption({ key, value }))
@@ -121,14 +75,6 @@ export function InvoiceManagementSection(props: InvoiceManagementSectionProps) {
         isSaving={saveRulesMutation.isPending}
         saveLabel='Save invoice rules'
       />
-      <Alert>
-        <AlertTitle>{t('Tax compliance notice')}</AlertTitle>
-        <AlertDescription>
-          {t(
-            'These settings produce an estimate for an individual providing technical services to an enterprise in mainland China. Administrators must verify every application against the competent tax authority, withholding declaration, and tax payment certificate before issuing an invoice.'
-          )}
-        </AlertDescription>
-      </Alert>
       <InvoiceRulesForm
         form={form}
         onSubmit={(values) => saveRulesMutation.mutate(values)}

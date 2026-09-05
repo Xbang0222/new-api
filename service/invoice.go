@@ -165,13 +165,12 @@ func InvoiceSupplementPaymentName(userId int, applicationId int) string {
 }
 
 type InvoicePublicConfig struct {
-	Enabled                 bool    `json:"enabled"`
-	SupplementPaymentMethod string  `json:"supplement_payment_method"`
-	MinimumAmount           float64 `json:"minimum_amount"`
-	Currency                string  `json:"currency"`
-	VATThresholdCents       int64   `json:"vat_threshold_cents"`
-	VATRateBasisPoints      int     `json:"vat_rate_basis_points"`
-	PolicyNotice            string  `json:"policy_notice"`
+	Enabled            bool    `json:"enabled"`
+	MinimumAmount      float64 `json:"minimum_amount"`
+	Currency           string  `json:"currency"`
+	FeeRateBasisPoints int     `json:"fee_rate_basis_points"`
+	ExchangeRate       float64 `json:"exchange_rate"`
+	QuotaPerUnit       float64 `json:"quota_per_unit"`
 }
 
 type CreateInvoiceApplicationInput struct {
@@ -184,14 +183,14 @@ type CreateInvoiceApplicationInput struct {
 
 func GetInvoiceConfig() InvoicePublicConfig {
 	setting := invoice_setting.GetInvoiceSetting()
+	currency := strings.ToUpper(strings.TrimSpace(operation_setting.GetQuotaDisplayType()))
 	return InvoicePublicConfig{
-		Enabled:                 setting.Enabled,
-		SupplementPaymentMethod: setting.SupplementPaymentMethod,
-		MinimumAmount:           setting.MinimumAmount,
-		Currency:                setting.Currency,
-		VATThresholdCents:       setting.VATThresholdCents,
-		VATRateBasisPoints:      setting.VATRateBasisPoints,
-		PolicyNotice:            setting.PolicyNotice,
+		Enabled:            setting.Enabled && (currency == "USD" || currency == "CNY"),
+		MinimumAmount:      setting.MinimumAmount,
+		Currency:           currency,
+		FeeRateBasisPoints: setting.FeeRateBasisPoints,
+		ExchangeRate:       operation_setting.GetUsdToCurrencyRate(operation_setting.USDExchangeRate),
+		QuotaPerUnit:       common.QuotaPerUnit,
 	}
 }
 
@@ -236,7 +235,9 @@ func ListEligibleInvoiceOrders(userId int) ([]model.TopUp, error) {
 		return []model.TopUp{}, nil
 	}
 
-	query := model.DB.Where("user_id = ? AND status = ? AND money > ?", userId, common.TopUpStatusSuccess, 0)
+	config := GetInvoiceConfig()
+	query := model.DB.Where("user_id = ? AND status = ? AND money > ? AND settlement_currency = ? AND settlement_exchange_rate > 0 AND settlement_quota_per_unit > 0",
+		userId, common.TopUpStatusSuccess, 0, config.Currency)
 	if setting.ApplicationWindowDays > 0 {
 		cutoff := time.Now().AddDate(0, 0, -setting.ApplicationWindowDays).Unix()
 		query = query.Where("CASE WHEN complete_time > 0 THEN complete_time ELSE create_time END >= ?", cutoff)
@@ -276,8 +277,12 @@ func CreateInvoiceApplication(userId int, input CreateInvoiceApplicationInput) (
 	if !setting.Enabled {
 		return nil, errors.New("invoice applications are disabled")
 	}
-	if err := validateInvoiceSetting(setting); err != nil {
-		return nil, err
+	config := GetInvoiceConfig()
+	if !config.Enabled || config.ExchangeRate <= 0 || config.QuotaPerUnit <= 0 ||
+		math.IsNaN(config.ExchangeRate) || math.IsInf(config.ExchangeRate, 0) ||
+		math.IsNaN(config.QuotaPerUnit) || math.IsInf(config.QuotaPerUnit, 0) ||
+		setting.FeeRateBasisPoints < 0 || setting.FeeRateBasisPoints > 10000 {
+		return nil, errors.New("invoice settlement settings are invalid")
 	}
 	if len(input.TopUpIds) == 0 || len(input.TopUpIds) > maxInvoiceOrdersPerApplication {
 		return nil, fmt.Errorf("select between 1 and %d paid orders", maxInvoiceOrdersPerApplication)
@@ -307,7 +312,8 @@ func CreateInvoiceApplication(userId int, input CreateInvoiceApplicationInput) (
 	var created model.InvoiceApplication
 	err = model.DB.Transaction(func(tx *gorm.DB) error {
 		var topUps []model.TopUp
-		if err := tx.Where("id IN ? AND user_id = ? AND status = ? AND money > ?", uniqueIds, userId, common.TopUpStatusSuccess, 0).
+		if err := tx.Where("id IN ? AND user_id = ? AND status = ? AND money > ? AND settlement_currency = ? AND settlement_exchange_rate = ? AND settlement_quota_per_unit = ?",
+			uniqueIds, userId, common.TopUpStatusSuccess, 0, config.Currency, config.ExchangeRate, config.QuotaPerUnit).
 			Order("id asc").Find(&topUps).Error; err != nil {
 			return err
 		}
@@ -364,42 +370,43 @@ func CreateInvoiceApplication(userId int, input CreateInvoiceApplicationInput) (
 		if totalCents < minimumCents {
 			return errors.New("selected paid orders do not meet the minimum invoice amount")
 		}
-		estimate, err := CalculateInvoiceTax(totalCents, *setting, time.Now())
-		if err != nil {
-			return err
+		feeCents := decimal.NewFromInt(totalCents).Mul(decimal.NewFromInt(int64(setting.FeeRateBasisPoints))).Div(decimal.NewFromInt(10000)).Round(0).IntPart()
+		feeQuotaDecimal := decimal.NewFromInt(feeCents).Div(decimal.NewFromInt(100)).
+			Div(decimal.NewFromFloat(config.ExchangeRate)).Mul(decimal.NewFromFloat(config.QuotaPerUnit))
+		feeQuota, err := common.WalletQuotaFromDecimalStrict(feeQuotaDecimal)
+		if err != nil || feeQuota < 0 {
+			return errors.New("invoice fee cannot be converted to wallet quota")
 		}
-		snapshotBytes, err := common.Marshal(setting)
-		if err != nil {
-			return err
+		if feeQuota > 0 {
+			if err := model.ChargeUserQuotaTx(tx, userId, feeQuota); err != nil {
+				return err
+			}
 		}
-		breakdownBytes, err := common.Marshal(estimate)
+		snapshotBytes, err := common.Marshal(config)
 		if err != nil {
 			return err
 		}
 		now := time.Now().Unix()
 		created = model.InvoiceApplication{
-			UserId:                       userId,
-			Status:                       model.InvoiceStatusPendingReview,
-			PaymentStatus:                model.InvoicePaymentNotRequired,
-			InvoiceTitle:                 strings.TrimSpace(input.InvoiceTitle),
-			TaxNumber:                    strings.TrimSpace(input.TaxNumber),
-			RecipientEmail:               recipientEmail,
-			ApplicantNote:                applicantNote,
-			InvoiceItemName:              strings.TrimSpace(setting.InvoiceItemName),
-			Currency:                     strings.ToUpper(strings.TrimSpace(setting.Currency)),
-			OrderAmountCents:             totalCents,
-			InvoiceAmountCents:           totalCents,
-			EstimatedVATCents:            estimate.EstimatedVATCents,
-			EstimatedUrbanTaxCents:       estimate.EstimatedUrbanTaxCents,
-			EstimatedEducationCents:      estimate.EstimatedEducationSurchargeCents,
-			EstimatedLocalEducationCents: estimate.EstimatedLocalEducationCents,
-			EstimatedPITCents:            estimate.EstimatedPITWithholdingCents,
-			EstimatedTotalTaxCents:       estimate.EstimatedTotalTaxCents,
-			TaxBreakdown:                 string(breakdownBytes),
-			RuleSnapshot:                 string(snapshotBytes),
-			SuggestedSupplementCents:     estimate.SuggestedSupplementCents,
-			CreatedAt:                    now,
-			UpdatedAt:                    now,
+			UserId:               userId,
+			Status:               model.InvoiceStatusPendingReview,
+			PaymentStatus:        model.InvoicePaymentPaid,
+			InvoiceTitle:         strings.TrimSpace(input.InvoiceTitle),
+			TaxNumber:            strings.TrimSpace(input.TaxNumber),
+			RecipientEmail:       recipientEmail,
+			ApplicantNote:        applicantNote,
+			InvoiceItemName:      strings.TrimSpace(setting.InvoiceItemName),
+			Currency:             config.Currency,
+			OrderAmountCents:     totalCents,
+			InvoiceAmountCents:   totalCents,
+			RuleSnapshot:         string(snapshotBytes),
+			FeeRateBasisPoints:   setting.FeeRateBasisPoints,
+			FeeAmountCents:       feeCents,
+			FeeQuota:             feeQuota,
+			QuotaPerUnitSnapshot: config.QuotaPerUnit,
+			ExchangeRateSnapshot: config.ExchangeRate,
+			CreatedAt:            now,
+			UpdatedAt:            now,
 		}
 		if err := tx.Create(&created).Error; err != nil {
 			return err
@@ -421,11 +428,21 @@ func CreateInvoiceApplication(userId int, input CreateInvoiceApplicationInput) (
 		}
 		return nil, err
 	}
+	if created.FeeQuota > 0 {
+		if err := model.SyncUserQuotaCacheDelta(userId, -created.FeeQuota); err != nil {
+			common.SysError("failed to sync invoice fee quota deduction: " + err.Error())
+		}
+		if err := model.RecordInvoiceFeeLog(&created, false); err != nil {
+			common.SysError("failed to record invoice fee charge: " + err.Error())
+		}
+	}
 	return &created, nil
 }
 
 func ReviewInvoiceApplication(applicationId int, reviewerId int, approve bool, finalSupplementCents *int64, adjustmentReason string, rejectReason string, note string) error {
-	return model.UpdateInvoiceApplication(applicationId, func(tx *gorm.DB, application *model.InvoiceApplication) error {
+	refundedQuota := 0
+	userId := 0
+	err := model.UpdateInvoiceApplication(applicationId, func(tx *gorm.DB, application *model.InvoiceApplication) error {
 		if application.Status != model.InvoiceStatusPendingReview {
 			return model.ErrInvoiceStatusInvalid
 		}
@@ -433,6 +450,14 @@ func ReviewInvoiceApplication(applicationId int, reviewerId int, approve bool, f
 		if !approve {
 			if strings.TrimSpace(rejectReason) == "" {
 				return errors.New("rejection reason is required")
+			}
+			refunded, err := model.RefundInvoiceFeeTx(tx, application)
+			if err != nil {
+				return err
+			}
+			if refunded > 0 {
+				refundedQuota = refunded
+				userId = application.UserId
 			}
 			return tx.Model(application).Updates(map[string]interface{}{
 				"status":        model.InvoiceStatusRejected,
@@ -444,28 +469,11 @@ func ReviewInvoiceApplication(applicationId int, reviewerId int, approve bool, f
 			}).Error
 		}
 
-		finalAmount := application.SuggestedSupplementCents
-		if finalSupplementCents != nil {
-			finalAmount = *finalSupplementCents
-		}
-		if finalAmount < 0 || finalAmount > maxInvoiceAmountCents || application.OrderAmountCents > maxInvoiceAmountCents-finalAmount {
-			return errors.New("final tax supplement amount is invalid")
-		}
-		if finalAmount != application.SuggestedSupplementCents && strings.TrimSpace(adjustmentReason) == "" {
-			return errors.New("tax adjustment reason is required when the final amount differs from the system estimate")
-		}
-		status := model.InvoiceStatusApproved
-		paymentStatus := model.InvoicePaymentNotRequired
-		if finalAmount > 0 {
-			status = model.InvoiceStatusPendingPayment
-			paymentStatus = model.InvoicePaymentPending
-		}
 		return tx.Model(application).Updates(map[string]interface{}{
-			"status":                 status,
-			"payment_status":         paymentStatus,
-			"final_supplement_cents": finalAmount,
-			"invoice_amount_cents":   application.OrderAmountCents + finalAmount,
-			"tax_adjustment_reason":  strings.TrimSpace(adjustmentReason),
+			"status":                 model.InvoiceStatusApproved,
+			"payment_status":         model.InvoicePaymentPaid,
+			"final_supplement_cents": 0,
+			"invoice_amount_cents":   application.OrderAmountCents,
 			"reviewer_id":            reviewerId,
 			"reviewed_at":            now,
 			"reject_reason":          "",
@@ -473,9 +481,51 @@ func ReviewInvoiceApplication(applicationId int, reviewerId int, approve bool, f
 			"updated_at":             now,
 		}).Error
 	})
+	if err == nil && refundedQuota > 0 {
+		_ = model.SyncUserQuotaCacheDelta(userId, refundedQuota)
+		if application, getErr := model.GetInvoiceApplication(applicationId, 0); getErr == nil {
+			_ = model.RecordInvoiceFeeLog(application, true)
+		}
+	}
+	return err
+}
+
+func CancelInvoiceApplication(applicationId int, userId int) error {
+	refundedQuota := 0
+	err := model.UpdateInvoiceApplication(applicationId, func(tx *gorm.DB, application *model.InvoiceApplication) error {
+		if application.UserId != userId {
+			return model.ErrInvoiceNotFound
+		}
+		if application.Status != model.InvoiceStatusPendingReview {
+			return model.ErrInvoiceStatusInvalid
+		}
+		refunded, err := model.RefundInvoiceFeeTx(tx, application)
+		if err != nil {
+			return err
+		}
+		refundedQuota = refunded
+		now := common.GetTimestamp()
+		return tx.Model(application).Updates(map[string]interface{}{
+			"status": model.InvoiceStatusRejected, "reject_reason": "cancelled_by_user", "updated_at": now,
+		}).Error
+	})
+	if err == nil && refundedQuota > 0 {
+		_ = model.SyncUserQuotaCacheDelta(userId, refundedQuota)
+		if application, getErr := model.GetInvoiceApplication(applicationId, 0); getErr == nil {
+			_ = model.RecordInvoiceFeeLog(application, true)
+		}
+	}
+	return err
 }
 
 func DeleteInvoiceApplication(applicationId int) (*model.InvoiceApplication, error) {
+	existing, err := model.GetInvoiceApplication(applicationId, 0)
+	if err != nil {
+		return nil, err
+	}
+	if existing.QuotaPerUnitSnapshot > 0 || existing.ExchangeRateSnapshot > 0 {
+		return nil, model.ErrInvoiceStatusInvalid
+	}
 	application, err := model.DeleteInvoiceApplication(applicationId)
 	if err != nil {
 		return nil, err

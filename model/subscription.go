@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"sync"
@@ -36,6 +37,12 @@ const (
 var (
 	ErrSubscriptionOrderNotFound      = errors.New("subscription order not found")
 	ErrSubscriptionOrderStatusInvalid = errors.New("subscription order status invalid")
+	ErrSubscriptionPurchaseLimit      = errors.New("已达到该套餐当前订阅周期购买上限")
+)
+
+const (
+	SubscriptionOrderStatusConflict = "conflict"
+	SubscriptionOrderHoldSeconds    = int64(15 * 60)
 )
 
 const (
@@ -225,6 +232,10 @@ type SubscriptionOrder struct {
 	CompleteTime    int64  `json:"complete_time"`
 
 	ProviderPayload string `json:"provider_payload" gorm:"type:text"`
+	ConflictReason  string `json:"conflict_reason" gorm:"type:text"`
+	Resolution      string `json:"resolution" gorm:"type:varchar(32);default:''"`
+	ResolvedAt      int64  `json:"resolved_at"`
+	ResolvedBy      int    `json:"resolved_by"`
 }
 
 func (o *SubscriptionOrder) Insert() error {
@@ -232,6 +243,33 @@ func (o *SubscriptionOrder) Insert() error {
 		o.CreateTime = common.GetTimestamp()
 	}
 	return DB.Create(o).Error
+}
+
+// ReserveSubscriptionOrder atomically applies the same active-cycle purchase
+// limit for every external payment provider. Recent pending orders reserve a
+// slot; abandoned reservations cease counting after the short hold window.
+func ReserveSubscriptionOrder(order *SubscriptionOrder) error {
+	if order == nil || order.UserId <= 0 || order.PlanId <= 0 || order.TradeNo == "" {
+		return errors.New("invalid subscription order")
+	}
+	return DB.Transaction(func(tx *gorm.DB) error {
+		var user User
+		if err := lockForUpdate(tx).Select("id").Where("id = ?", order.UserId).First(&user).Error; err != nil {
+			return err
+		}
+		plan, err := getSubscriptionPlanByIdTx(tx, order.PlanId)
+		if err != nil {
+			return err
+		}
+		if err := checkSubscriptionPurchaseLimitTx(tx, order.UserId, plan, true); err != nil {
+			return err
+		}
+		if order.CreateTime == 0 {
+			order.CreateTime = common.GetTimestamp()
+		}
+		order.Status = common.TopUpStatusPending
+		return tx.Create(order).Error
+	})
 }
 
 func (o *SubscriptionOrder) Update() error {
@@ -416,11 +454,37 @@ func CountUserSubscriptionsByPlan(userId int, planId int) (int64, error) {
 	}
 	var count int64
 	if err := DB.Model(&UserSubscription{}).
-		Where("user_id = ? AND plan_id = ?", userId, planId).
+		Where("user_id = ? AND plan_id = ? AND status = ? AND end_time > ?", userId, planId, "active", GetDBTimestamp()).
 		Count(&count).Error; err != nil {
 		return 0, err
 	}
 	return count, nil
+}
+
+func checkSubscriptionPurchaseLimitTx(tx *gorm.DB, userId int, plan *SubscriptionPlan, includePending bool) error {
+	if plan == nil || plan.MaxPurchasePerUser <= 0 {
+		return nil
+	}
+	now := common.GetTimestamp()
+	var active int64
+	if err := tx.Model(&UserSubscription{}).
+		Where("user_id = ? AND plan_id = ? AND status = ? AND end_time > ?", userId, plan.Id, "active", now).
+		Count(&active).Error; err != nil {
+		return err
+	}
+	if includePending {
+		var pending int64
+		if err := tx.Model(&SubscriptionOrder{}).
+			Where("user_id = ? AND plan_id = ? AND status = ? AND create_time > ?", userId, plan.Id, common.TopUpStatusPending, now-SubscriptionOrderHoldSeconds).
+			Count(&pending).Error; err != nil {
+			return err
+		}
+		active += pending
+	}
+	if active >= int64(plan.MaxPurchasePerUser) {
+		return ErrSubscriptionPurchaseLimit
+	}
+	return nil
 }
 
 func getUserGroupByIdTx(tx *gorm.DB, userId int) (string, error) {
@@ -491,18 +555,10 @@ func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *Subscriptio
 	if userId <= 0 {
 		return nil, errors.New("invalid user id")
 	}
-	if plan.MaxPurchasePerUser > 0 {
-		var count int64
-		if err := tx.Model(&UserSubscription{}).
-			Where("user_id = ? AND plan_id = ?", userId, plan.Id).
-			Count(&count).Error; err != nil {
-			return nil, err
-		}
-		if count >= int64(plan.MaxPurchasePerUser) {
-			return nil, errors.New("已达到该套餐购买上限")
-		}
+	if err := checkSubscriptionPurchaseLimitTx(tx, userId, plan, false); err != nil {
+		return nil, err
 	}
-	nowUnix := GetDBTimestamp()
+	nowUnix := common.GetTimestamp()
 	now := time.Unix(nowUnix, 0)
 	endUnix, err := calcPlanEndTime(now, plan)
 	if err != nil {
@@ -579,6 +635,7 @@ func CompleteSubscriptionOrder(tradeNo string, providerPayload string, expectedP
 	var logMoney float64
 	var logPaymentMethod string
 	var upgradeGroup string
+	var purchaseConflict bool
 	err := DB.Transaction(func(tx *gorm.DB) error {
 		var order SubscriptionOrder
 		if err := lockForUpdate(tx).Where(refCol+" = ?", tradeNo).First(&order).Error; err != nil {
@@ -590,10 +647,13 @@ func CompleteSubscriptionOrder(tradeNo string, providerPayload string, expectedP
 		if order.Status == common.TopUpStatusSuccess {
 			return nil
 		}
+		if order.Status == SubscriptionOrderStatusConflict {
+			return ErrSubscriptionPurchaseLimit
+		}
 		if order.Status != common.TopUpStatusPending {
 			return ErrSubscriptionOrderStatusInvalid
 		}
-		plan, err := GetSubscriptionPlanById(order.PlanId)
+		plan, err := getSubscriptionPlanByIdTx(tx, order.PlanId)
 		if err != nil {
 			return err
 		}
@@ -608,6 +668,13 @@ func CompleteSubscriptionOrder(tradeNo string, providerPayload string, expectedP
 		}
 		subscription, err := CreateUserSubscriptionFromPlanTx(tx, order.UserId, plan, "order")
 		if err != nil {
+			if errors.Is(err, ErrSubscriptionPurchaseLimit) {
+				purchaseConflict = true
+				return tx.Model(&order).Updates(map[string]interface{}{
+					"status": SubscriptionOrderStatusConflict, "conflict_reason": err.Error(),
+					"complete_time": common.GetTimestamp(), "provider_payload": providerPayload,
+				}).Error
+			}
 			return err
 		}
 		if subscription.PrevUserGroup != "" {
@@ -636,6 +703,9 @@ func CompleteSubscriptionOrder(tradeNo string, providerPayload string, expectedP
 	if err != nil {
 		return err
 	}
+	if purchaseConflict {
+		return ErrSubscriptionPurchaseLimit
+	}
 	if upgradeGroup != "" && logUserId > 0 {
 		refreshSubscriptionUserGroupCache(logUserId, "subscription payment completion")
 	}
@@ -644,6 +714,47 @@ func CompleteSubscriptionOrder(tradeNo string, providerPayload string, expectedP
 		RecordLog(logUserId, LogTypeTopup, msg)
 	}
 	return nil
+}
+
+func ListSubscriptionConflictOrders() ([]SubscriptionOrder, error) {
+	var orders []SubscriptionOrder
+	err := DB.Where("status = ?", SubscriptionOrderStatusConflict).Order("id desc").Find(&orders).Error
+	return orders, err
+}
+
+func ResolveSubscriptionConflict(orderId int, adminId int, action string) error {
+	if orderId <= 0 || adminId <= 0 || (action != "refunded" && action != "fulfill") {
+		return errors.New("invalid subscription conflict resolution")
+	}
+	return DB.Transaction(func(tx *gorm.DB) error {
+		var order SubscriptionOrder
+		if err := lockForUpdate(tx).Where("id = ?", orderId).First(&order).Error; err != nil {
+			return err
+		}
+		if order.Status != SubscriptionOrderStatusConflict || order.Resolution != "" {
+			return ErrSubscriptionOrderStatusInvalid
+		}
+		var user User
+		if err := lockForUpdate(tx).Select("id").Where("id = ?", order.UserId).First(&user).Error; err != nil {
+			return err
+		}
+		now := common.GetTimestamp()
+		updates := map[string]interface{}{"resolution": action, "resolved_at": now, "resolved_by": adminId}
+		if action == "fulfill" {
+			plan, err := getSubscriptionPlanByIdTx(tx, order.PlanId)
+			if err != nil {
+				return err
+			}
+			if _, err := CreateUserSubscriptionFromPlanTx(tx, order.UserId, plan, "admin_conflict"); err != nil {
+				return err
+			}
+			if err := upsertSubscriptionTopUpTx(tx, &order); err != nil {
+				return err
+			}
+			updates["status"] = common.TopUpStatusSuccess
+		}
+		return tx.Model(&order).Updates(updates).Error
+	})
 }
 
 func upsertSubscriptionTopUpTx(tx *gorm.DB, order *SubscriptionOrder) error {
@@ -740,7 +851,10 @@ func AdminBindSubscription(userId int, planId int, sourceNote string) (string, e
 }
 
 func calcSubscriptionBalanceQuota(priceAmount float64) (int, error) {
-	if priceAmount <= 0 {
+	if math.IsNaN(priceAmount) || math.IsInf(priceAmount, 0) || priceAmount < 0 {
+		return 0, errors.New("套餐价格无效")
+	}
+	if priceAmount == 0 {
 		return 0, nil
 	}
 	if common.QuotaPerUnit <= 0 {

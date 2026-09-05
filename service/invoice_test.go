@@ -200,7 +200,7 @@ func TestDeleteInvoiceApplicationProtectsActiveSupplementPayments(t *testing.T) 
 	assert.Nil(t, deleted)
 }
 
-func TestInvoiceReviewThenOnlinePaymentCompletesWithoutCreatingTopUp(t *testing.T) {
+func TestInvoiceReviewDoesNotCreateSupplementPayment(t *testing.T) {
 	require.NoError(t, model.DB.AutoMigrate(&model.InvoicePaymentOrder{}))
 	setting := invoice_setting.GetInvoiceSetting()
 	original := *setting
@@ -235,50 +235,20 @@ func TestInvoiceReviewThenOnlinePaymentCompletesWithoutCreatingTopUp(t *testing.
 	})
 	require.NoError(t, err)
 	assert.Equal(t, model.InvoiceStatusPendingReview, application.Status)
-	assert.Equal(t, int64(6_131), application.SuggestedSupplementCents)
-	assert.Equal(t, int64(5_016), application.EstimatedPITCents)
-	assert.Equal(t, application.SuggestedSupplementCents, application.EstimatedTotalTaxCents)
-	assert.NotEqual(t, "{}", application.TaxBreakdown)
+	assert.Zero(t, application.SuggestedSupplementCents)
+	assert.Zero(t, application.EstimatedPITCents)
 	assert.Equal(t, "AI Agent服务", application.InvoiceItemName)
 	assert.Equal(t, "Please include the project name.", application.ApplicantNote)
 
-	adjustedAmount := application.SuggestedSupplementCents + 1
-	err = ReviewInvoiceApplication(application.Id, 1, true, &adjustedAmount, "", "", "reviewed")
-	require.ErrorContains(t, err, "adjustment reason")
-
-	finalAmount := application.SuggestedSupplementCents
-	require.NoError(t, ReviewInvoiceApplication(application.Id, 1, true, &finalAmount, "", "", "reviewed"))
+	require.NoError(t, ReviewInvoiceApplication(application.Id, 1, true, nil, "", "", "reviewed"))
 	reviewed, err := model.GetInvoiceApplication(application.Id, 701)
 	require.NoError(t, err)
-	assert.Equal(t, model.InvoiceStatusPendingPayment, reviewed.Status)
-	assert.Equal(t, model.InvoicePaymentPending, reviewed.PaymentStatus)
-	assert.Equal(t, application.OrderAmountCents+finalAmount, reviewed.InvoiceAmountCents)
+	assert.Equal(t, model.InvoiceStatusApproved, reviewed.Status)
+	assert.Equal(t, model.InvoicePaymentPaid, reviewed.PaymentStatus)
+	assert.Equal(t, application.OrderAmountCents, reviewed.InvoiceAmountCents)
 
-	paymentOrder, err := CreateInvoicePaymentOrder(application.Id, 701, "invoice-payment-test", "alipay", model.PaymentProviderEpay)
-	require.NoError(t, err)
-	assert.Equal(t, finalAmount, paymentOrder.AmountCents)
-	require.NoError(t, CompleteInvoicePaymentOrder("invoice-payment-test", `{"verified":true}`, model.PaymentProviderEpay, "alipay"))
-	require.NoError(t, CompleteInvoicePaymentOrder("invoice-payment-test", `{"verified":true}`, model.PaymentProviderEpay, "alipay"))
-
-	completed, err := model.GetInvoiceApplication(application.Id, 701)
-	require.NoError(t, err)
-	assert.Equal(t, model.InvoiceStatusApproved, completed.Status)
-	assert.Equal(t, model.InvoicePaymentPaid, completed.PaymentStatus)
-	assert.Equal(t, "invoice-payment-test", completed.PaymentTradeNo)
-
-	var supplementLogs []model.Log
-	require.NoError(t, model.LOG_DB.Where("request_id = ?", "invoice-payment-test").Find(&supplementLogs).Error)
-	require.Len(t, supplementLogs, 1)
-	assert.Equal(t, model.LogTypeTopup, supplementLogs[0].Type)
-	assert.Contains(t, supplementLogs[0].Content, "发票补税支付成功")
-	var supplementLogOther map[string]interface{}
-	require.NoError(t, common.UnmarshalJsonStr(supplementLogs[0].Other, &supplementLogOther))
-	assert.Equal(t, float64(application.Id), supplementLogOther["invoice_application_id"])
-	assert.Equal(t, "invoice-payment-test", supplementLogOther["invoice_payment_trade_no"])
-
-	var topUpCount int64
-	require.NoError(t, model.DB.Model(&model.TopUp{}).Where("trade_no = ?", "invoice-payment-test").Count(&topUpCount).Error)
-	assert.Zero(t, topUpCount, "invoice supplement payment must never credit wallet quota")
+	_, err = CreateInvoicePaymentOrder(application.Id, 701, "invoice-payment-test", "alipay", model.PaymentProviderEpay)
+	require.ErrorIs(t, err, model.ErrInvoiceStatusInvalid)
 }
 
 func TestInvoiceSupplementBalancePaymentChecksAndDeductsWalletAtomically(t *testing.T) {
@@ -462,6 +432,76 @@ func TestInvoiceOrderCanOnlyBeAppliedOnce(t *testing.T) {
 	for _, order := range eligible {
 		assert.NotEqual(t, paidOrder.Id, order.Id)
 	}
+}
+
+func TestInvoiceApplicationChargesSnapshottedFeeAndRejectRefundsOnce(t *testing.T) {
+	setting := invoice_setting.GetInvoiceSetting()
+	originalSetting := *setting
+	originalQuotaPerUnit := common.QuotaPerUnit
+	originalDisplay := operation_setting.GetGeneralSetting().QuotaDisplayType
+	originalRate := operation_setting.USDExchangeRate
+	*setting = invoiceTaxTestSetting()
+	setting.FeeRateBasisPoints = 300
+	common.QuotaPerUnit = 500_000
+	operation_setting.GetGeneralSetting().QuotaDisplayType = operation_setting.QuotaDisplayTypeCNY
+	operation_setting.USDExchangeRate = 7.5
+	t.Cleanup(func() {
+		*setting = originalSetting
+		common.QuotaPerUnit = originalQuotaPerUnit
+		operation_setting.GetGeneralSetting().QuotaDisplayType = originalDisplay
+		operation_setting.USDExchangeRate = originalRate
+	})
+
+	user := model.User{Username: fmt.Sprintf("invoice-fee-%d", time.Now().UnixNano()), AffCode: fmt.Sprintf("invoice-fee-code-%d", time.Now().UnixNano()), Quota: 200_000}
+	require.NoError(t, model.DB.Create(&user).Error)
+	order := model.TopUp{UserId: user.Id, Money: 50, TradeNo: fmt.Sprintf("invoice-fee-order-%d", time.Now().UnixNano()),
+		PaymentMethod: "alipay", Status: common.TopUpStatusSuccess, CreateTime: time.Now().Unix(), CompleteTime: time.Now().Unix()}
+	require.NoError(t, model.DB.Create(&order).Error)
+	t.Cleanup(func() {
+		model.DB.Where("top_up_id = ?", order.Id).Delete(&model.InvoiceOrder{})
+		model.DB.Where("user_id = ?", user.Id).Delete(&model.InvoiceApplication{})
+		model.DB.Delete(&model.TopUp{}, order.Id)
+		model.DB.Delete(&model.User{}, user.Id)
+	})
+
+	application, err := CreateInvoiceApplication(user.Id, CreateInvoiceApplicationInput{TopUpIds: []int{order.Id}, InvoiceTitle: "测试企业", TaxNumber: "91310000FEE", RecipientEmail: "finance@example.com"})
+	require.NoError(t, err)
+	assert.Equal(t, int64(5_000), application.InvoiceAmountCents)
+	assert.Equal(t, int64(150), application.FeeAmountCents)
+	assert.Equal(t, 100_000, application.FeeQuota)
+	assert.Equal(t, 500_000.0, application.QuotaPerUnitSnapshot)
+	assert.Equal(t, 7.5, application.ExchangeRateSnapshot)
+
+	var charged model.User
+	require.NoError(t, model.DB.First(&charged, user.Id).Error)
+	assert.Equal(t, 100_000, charged.Quota)
+
+	common.QuotaPerUnit = 1
+	operation_setting.USDExchangeRate = 1
+	require.NoError(t, ReviewInvoiceApplication(application.Id, 1, false, nil, "", "invalid", ""))
+	require.ErrorIs(t, ReviewInvoiceApplication(application.Id, 1, false, nil, "", "again", ""), model.ErrInvoiceStatusInvalid)
+	require.NoError(t, model.DB.First(&charged, user.Id).Error)
+	assert.Equal(t, 200_000, charged.Quota)
+}
+
+func TestInvoiceApplicationFailsWhenFeeBalanceIsInsufficient(t *testing.T) {
+	setting := invoice_setting.GetInvoiceSetting()
+	original := *setting
+	*setting = invoiceTaxTestSetting()
+	setting.FeeRateBasisPoints = 300
+	t.Cleanup(func() { *setting = original })
+
+	user := model.User{Username: fmt.Sprintf("invoice-low-balance-%d", time.Now().UnixNano()), AffCode: fmt.Sprintf("invoice-low-code-%d", time.Now().UnixNano()), Quota: 0}
+	require.NoError(t, model.DB.Create(&user).Error)
+	config := GetInvoiceConfig()
+	order := model.TopUp{UserId: user.Id, Money: 50, TradeNo: fmt.Sprintf("invoice-low-order-%d", time.Now().UnixNano()),
+		PaymentMethod: "stripe", Status: common.TopUpStatusSuccess, CreateTime: time.Now().Unix(), CompleteTime: time.Now().Unix(),
+		SettlementCurrency: config.Currency, SettlementExchangeRate: config.ExchangeRate, SettlementQuotaPerUnit: config.QuotaPerUnit}
+	require.NoError(t, model.DB.Create(&order).Error)
+	t.Cleanup(func() { model.DB.Delete(&model.TopUp{}, order.Id); model.DB.Delete(&model.User{}, user.Id) })
+
+	_, err := CreateInvoiceApplication(user.Id, CreateInvoiceApplicationInput{TopUpIds: []int{order.Id}, InvoiceTitle: "测试企业", TaxNumber: "91310000LOW", RecipientEmail: "finance@example.com"})
+	require.ErrorIs(t, err, model.ErrWalletQuotaInsufficient)
 }
 
 func TestSendInvoiceEmailEnforcesOwnershipAndTracksResends(t *testing.T) {

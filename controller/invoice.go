@@ -3,12 +3,10 @@ package controller
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"io"
 	"mime"
 	"net/http"
 	"net/mail"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -17,8 +15,6 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
-	"github.com/QuantumNous/new-api/setting/invoice_setting"
-	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -40,10 +36,6 @@ type reviewInvoiceApplicationRequest struct {
 	Note                       string `json:"note"`
 }
 
-type invoicePaymentRequest struct {
-	PaymentMethod string `json:"payment_method"`
-}
-
 func invoiceApplicationId(c *gin.Context) (int, bool) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil || id <= 0 {
@@ -58,15 +50,19 @@ func GetInvoiceConfig(c *gin.Context) {
 }
 
 func GetInvoicePaymentMethods(c *gin.Context) {
-	if invoice_setting.GetInvoiceSetting().SupplementPaymentMethod == invoice_setting.SupplementPaymentMethodBalance {
-		common.ApiSuccess(c, []map[string]string{{"name": "Balance", "type": model.PaymentMethodBalance}})
+	common.ApiSuccess(c, []map[string]string{})
+}
+
+func CancelInvoiceApplication(c *gin.Context) {
+	id, ok := invoiceApplicationId(c)
+	if !ok {
 		return
 	}
-	methods := operation_setting.PayMethods
-	if !operation_setting.IsPaymentComplianceConfirmed() || GetEpayClient() == nil {
-		methods = []map[string]string{}
+	if err := service.CancelInvoiceApplication(id, c.GetInt("id")); err != nil {
+		common.ApiErrorMsg(c, err.Error())
+		return
 	}
-	common.ApiSuccess(c, methods)
+	common.ApiSuccess(c, nil)
 }
 
 func GetEligibleInvoiceOrders(c *gin.Context) {
@@ -284,72 +280,7 @@ func AdminDeleteInvoiceApplication(c *gin.Context) {
 }
 
 func RequestInvoiceSupplementPayment(c *gin.Context) {
-	id, ok := invoiceApplicationId(c)
-	if !ok {
-		return
-	}
-	userId := c.GetInt("id")
-	if invoice_setting.GetInvoiceSetting().SupplementPaymentMethod == invoice_setting.SupplementPaymentMethodBalance {
-		order, err := service.PayInvoiceSupplementWithBalance(id, userId)
-		if err != nil {
-			if errors.Is(err, model.ErrWalletQuotaInsufficient) {
-				common.ApiErrorMsg(c, "Insufficient balance")
-				return
-			}
-			common.ApiErrorMsg(c, err.Error())
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"success": true, "message": "success", "data": gin.H{"payment_method": model.PaymentMethodBalance}, "settled": true, "trade_no": order.TradeNo})
-		return
-	}
-	if !requirePaymentCompliance(c) {
-		return
-	}
-	var request invoicePaymentRequest
-	if err := common.DecodeJson(c.Request.Body, &request); err != nil || !operation_setting.ContainsPayMethod(request.PaymentMethod) {
-		common.ApiErrorMsg(c, "payment method is invalid")
-		return
-	}
-	client := GetEpayClient()
-	if client == nil {
-		common.ApiErrorMsg(c, "payment gateway is not configured")
-		return
-	}
-	tradeNo := fmt.Sprintf("INVUSR%dNO%s%d", userId, common.GetRandomString(6), time.Now().UnixNano())
-	order, err := service.CreateInvoicePaymentOrder(id, userId, tradeNo, request.PaymentMethod, model.PaymentProviderEpay)
-	if err != nil {
-		common.ApiErrorMsg(c, err.Error())
-		return
-	}
-	callbackAddress := service.GetCallbackAddress()
-	notifyURL, err := url.Parse(callbackAddress + "/api/invoice/epay/notify")
-	if err != nil {
-		service.FailInvoicePaymentOrder(tradeNo)
-		common.ApiErrorMsg(c, "payment callback address is invalid")
-		return
-	}
-	returnURL, err := url.Parse(callbackAddress + "/api/invoice/epay/return")
-	if err != nil {
-		service.FailInvoicePaymentOrder(tradeNo)
-		common.ApiErrorMsg(c, "payment callback address is invalid")
-		return
-	}
-	amount := decimal.NewFromInt(order.AmountCents).Shift(-2).StringFixed(2)
-	uri, params, err := client.Purchase(&epay.PurchaseArgs{
-		Type:           request.PaymentMethod,
-		ServiceTradeNo: tradeNo,
-		Name:           service.InvoiceSupplementPaymentName(userId, id),
-		Money:          amount,
-		Device:         epay.PC,
-		NotifyUrl:      notifyURL,
-		ReturnUrl:      returnURL,
-	})
-	if err != nil {
-		service.FailInvoicePaymentOrder(tradeNo)
-		common.ApiErrorMsg(c, "failed to start payment")
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "success", "data": params, "url": uri, "trade_no": tradeNo})
+	common.ApiErrorMsg(c, "invoice supplement payments are no longer available")
 }
 
 func invoiceEpayParams(c *gin.Context) (map[string]string, bool) {

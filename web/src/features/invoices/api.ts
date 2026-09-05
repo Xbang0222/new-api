@@ -81,6 +81,15 @@ export async function createInvoiceApplication(
   return response.data
 }
 
+export async function cancelInvoiceApplication(
+  applicationId: number
+): Promise<InvoiceApiResponse<null>> {
+  const response = await api.post(
+    `/api/invoice/applications/${applicationId}/cancel`
+  )
+  return response.data
+}
+
 export async function requestInvoiceSupplementPayment(
   applicationId: number,
   paymentMethod: string
