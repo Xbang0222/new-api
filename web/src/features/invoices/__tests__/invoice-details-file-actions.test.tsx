@@ -8,11 +8,9 @@ License, or (at your option) any later version.
 */
 
 import assert from 'node:assert/strict'
-import { test } from 'node:test'
 
 import { renderToStaticMarkup } from 'react-dom/server'
-
-import '@/i18n/config'
+import { test } from 'vitest'
 
 import { InvoiceFileAction } from '../components/invoice-details-dialog'
 

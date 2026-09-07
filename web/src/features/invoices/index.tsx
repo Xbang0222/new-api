@@ -14,34 +14,34 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { SectionPageLayout } from '@/components/layout'
+import { ConfirmDialog } from '@/components/confirm-dialog'
+import { SectionPageLayout } from '@/components/layout/components/section-page-layout'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { submitPaymentForm } from '@/features/wallet/lib'
+import { handleServerError } from '@/lib/handle-server-error'
 
 import {
+  cancelInvoiceApplication,
   createInvoiceApplication,
   getEligibleInvoiceOrders,
   getInvoiceConfig,
-  getInvoicePaymentMethods,
+  getInvoiceBalance,
   getOwnInvoiceApplications,
   getOwnInvoiceFile,
-  requestInvoiceSupplementPayment,
   sendOwnInvoiceEmail,
 } from './api'
 import { InvoiceApplicationDialog } from './components/invoice-application-dialog'
 import { InvoiceApplicationsList } from './components/invoice-applications-list'
 import { InvoiceDetailsDialog } from './components/invoice-details-dialog'
+import { formatInvoiceMoney } from './lib/format'
 import type { InvoiceApplicationFormValues } from './lib/invoice-application-form'
 import type {
   EligibleInvoiceOrder,
   InvoiceApplication,
-  InvoicePaymentMethod,
   InvoiceStatus,
 } from './types'
 
 const EMPTY_ORDERS: EligibleInvoiceOrder[] = []
-const EMPTY_PAYMENT_METHODS: InvoicePaymentMethod[] = []
 
 /** Self-service invoice applications. Admins use this page as normal users. */
 export function Invoices() {
@@ -56,6 +56,10 @@ export function Invoices() {
     null
   )
   const [fileActionPending, setFileActionPending] = useState(false)
+  const [cancelTarget, setCancelTarget] = useState<InvoiceApplication | null>(
+    null
+  )
+  const [submissionError, setSubmissionError] = useState('')
 
   const configQuery = useQuery({
     queryKey: ['invoices', 'config'],
@@ -65,9 +69,9 @@ export function Invoices() {
     queryKey: ['invoices', 'eligible-orders'],
     queryFn: getEligibleInvoiceOrders,
   })
-  const paymentMethodsQuery = useQuery({
-    queryKey: ['invoices', 'payment-methods'],
-    queryFn: getInvoicePaymentMethods,
+  const balanceQuery = useQuery({
+    queryKey: ['invoices', 'balance'],
+    queryFn: getInvoiceBalance,
   })
   const applicationsQuery = useQuery({
     queryKey: ['invoices', 'self', page, pageSize, status, keyword],
@@ -84,6 +88,7 @@ export function Invoices() {
 
   const createMutation = useMutation({
     mutationFn: async (request: InvoiceApplicationFormValues) => {
+      setSubmissionError('')
       const response = await createInvoiceApplication(request)
       if (!response.success) throw new Error(response.message)
       return response
@@ -96,43 +101,42 @@ export function Invoices() {
           queryKey: ['invoices', 'eligible-orders'],
         }),
         refreshApplications(),
+        queryClient.invalidateQueries({ queryKey: ['invoices', 'balance'] }),
       ])
     },
-    onError: () => toast.error(t('Failed to submit invoice application.')),
+    onError: (error) => {
+      const message =
+        error.message === '额度不足'
+          ? t('Insufficient quota')
+          : t(error.message || 'Failed to submit invoice application.')
+      setSubmissionError(message)
+      if (error.message) toast.error(message)
+      else handleServerError(error)
+    },
   })
 
-  const paymentMutation = useMutation({
-    mutationFn: async (paymentMethod: string) => {
-      if (!detailsTarget) {
-        throw new Error(t('Invoice application is unavailable.'))
-      }
-      const response = await requestInvoiceSupplementPayment(
-        detailsTarget.id,
-        paymentMethod
-      )
-      if (!response.success) {
-        throw new Error(response.message || t('Payment request failed'))
-      }
-      if (response.settled) return { settled: true as const }
-      if (!response.url || !response.data) {
-        throw new Error(response.message || t('Payment request failed'))
-      }
-      return { settled: false as const, url: response.url, data: response.data }
+  const cancelMutation = useMutation({
+    mutationFn: async (applicationId: number) => {
+      const response = await cancelInvoiceApplication(applicationId)
+      if (!response.success) throw new Error(response.message)
+      return response
     },
-    onSuccess: async (result) => {
-      if (result.settled) {
-        toast.success(t('Invoice supplement paid from balance.'))
-        setDetailsTarget(null)
-        await refreshApplications()
-        return
-      }
-      submitPaymentForm(result.url, result.data)
-      toast.success(t('Redirecting to payment page...'))
+    onSuccess: async () => {
+      toast.success(t('Invoice application cancelled.'))
+      setCancelTarget(null)
+      setDetailsTarget(null)
+      await Promise.all([
+        refreshApplications(),
+        queryClient.invalidateQueries({
+          queryKey: ['invoices', 'eligible-orders'],
+        }),
+        queryClient.invalidateQueries({ queryKey: ['invoices', 'balance'] }),
+      ])
     },
-    onError: (error) =>
-      toast.error(
-        error instanceof Error ? t(error.message) : t('Payment request failed')
-      ),
+    onError: (error) => {
+      if (error.message) toast.error(t(error.message))
+      else handleServerError(error)
+    },
   })
 
   const sendMutation = useMutation({
@@ -150,8 +154,13 @@ export function Invoices() {
   })
 
   const handleOpenApplicationDialog = () => {
+    setSubmissionError('')
     setApplicationDialogOpen(true)
-    void Promise.all([configQuery.refetch(), eligibleOrdersQuery.refetch()])
+    void Promise.all([
+      configQuery.refetch(),
+      eligibleOrdersQuery.refetch(),
+      balanceQuery.refetch(),
+    ])
   }
 
   const handleViewInvoiceFile = async () => {
@@ -178,12 +187,14 @@ export function Invoices() {
 
   const config = configQuery.data?.data
   const applications = applicationsQuery.data?.data
-  const paymentMethods = paymentMethodsQuery.data?.data ?? EMPTY_PAYMENT_METHODS
+  const userQuota = balanceQuery.data?.success
+    ? balanceQuery.data.data.quota
+    : undefined
   const eligibleOrders = eligibleOrdersQuery.data?.data ?? EMPTY_ORDERS
   const refreshing =
     configQuery.isFetching ||
     eligibleOrdersQuery.isFetching ||
-    paymentMethodsQuery.isFetching ||
+    balanceQuery.isFetching ||
     applicationsQuery.isFetching
 
   return (
@@ -193,6 +204,18 @@ export function Invoices() {
           {t('Invoice applications')}
         </SectionPageLayout.Title>
         <SectionPageLayout.Actions>
+          {config &&
+          userQuota !== undefined &&
+          config.quota_per_currency_unit > 0 ? (
+            <span className='text-muted-foreground text-sm tabular-nums'>
+              {t('Available balance')}:{' '}
+              {formatInvoiceMoney(
+                (userQuota * 100) / config.quota_per_currency_unit,
+                config.currency,
+                config.currency_symbol
+              )}
+            </span>
+          ) : null}
           <Button
             onClick={handleOpenApplicationDialog}
             disabled={config?.enabled === false}
@@ -229,7 +252,9 @@ export function Invoices() {
                     ? (sendMutation.variables?.id ?? null)
                     : null
                 }
-                deletingId={null}
+                deletingId={
+                  cancelMutation.isPending ? cancelMutation.variables : null
+                }
                 refreshing={refreshing}
                 onPageChange={setPage}
                 onPageSizeChange={setPageSize}
@@ -237,12 +262,12 @@ export function Invoices() {
                 onStatusChange={setStatus}
                 onView={setDetailsTarget}
                 onSend={(application) => sendMutation.mutate(application)}
-                onDelete={() => undefined}
+                onDelete={setCancelTarget}
                 onRefresh={() =>
                   void Promise.all([
                     configQuery.refetch(),
                     eligibleOrdersQuery.refetch(),
-                    paymentMethodsQuery.refetch(),
+                    balanceQuery.refetch(),
                     applicationsQuery.refetch(),
                   ])
                 }
@@ -265,10 +290,16 @@ export function Invoices() {
           eligibleOrdersQuery.data?.success === false
         }
         submitting={createMutation.isPending}
+        userQuota={userQuota}
+        balanceError={
+          balanceQuery.isError || balanceQuery.data?.success === false
+        }
+        submissionError={submissionError}
         onRetry={() =>
           void Promise.all([
             configQuery.refetch(),
             eligibleOrdersQuery.refetch(),
+            balanceQuery.refetch(),
           ])
         }
         onSubmit={async (values) => {
@@ -279,18 +310,29 @@ export function Invoices() {
       <InvoiceDetailsDialog
         application={detailsTarget}
         isAdmin={false}
-        paymentMethods={paymentMethods}
         busy={
-          paymentMutation.isPending ||
+          cancelMutation.isPending ||
           sendMutation.isPending ||
           fileActionPending
         }
         onOpenChange={(open) => !open && setDetailsTarget(null)}
         onReview={() => undefined}
-        onPay={(method) => paymentMutation.mutate(method)}
         onUpload={() => undefined}
         onViewFile={() => void handleViewInvoiceFile()}
         onSend={() => detailsTarget && sendMutation.mutate(detailsTarget)}
+      />
+      <ConfirmDialog
+        open={cancelTarget !== null}
+        onOpenChange={(open) => !open && setCancelTarget(null)}
+        title={t('Cancel application')}
+        desc={t(
+          'Any unrefunded invoice fee will be returned to the balance and the orders will be available for a new application.'
+        )}
+        confirmText={t('Cancel application')}
+        isLoading={cancelMutation.isPending}
+        handleConfirm={() =>
+          cancelTarget && cancelMutation.mutate(cancelTarget.id)
+        }
       />
     </>
   )

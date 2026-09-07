@@ -200,7 +200,7 @@ func TestDeleteInvoiceApplicationProtectsActiveSupplementPayments(t *testing.T) 
 	assert.Nil(t, deleted)
 }
 
-func TestInvoiceReviewThenOnlinePaymentCompletesWithoutCreatingTopUp(t *testing.T) {
+func TestLegacyInvoiceOnlinePaymentCompletesWithoutCreatingTopUp(t *testing.T) {
 	require.NoError(t, model.DB.AutoMigrate(&model.InvoicePaymentOrder{}))
 	setting := invoice_setting.GetInvoiceSetting()
 	original := *setting
@@ -226,33 +226,22 @@ func TestInvoiceReviewThenOnlinePaymentCompletesWithoutCreatingTopUp(t *testing.
 	}
 	require.NoError(t, model.DB.Create(&paidOrder).Error)
 
-	application, err := CreateInvoiceApplication(701, CreateInvoiceApplicationInput{
-		TopUpIds:       []int{paidOrder.Id},
-		InvoiceTitle:   "测试企业",
-		TaxNumber:      "91310000TEST",
-		RecipientEmail: "finance@example.com",
-		ApplicantNote:  "Please include the project name.",
-	})
-	require.NoError(t, err)
-	assert.Equal(t, model.InvoiceStatusPendingReview, application.Status)
-	assert.Equal(t, int64(6_131), application.SuggestedSupplementCents)
-	assert.Equal(t, int64(5_016), application.EstimatedPITCents)
-	assert.Equal(t, application.SuggestedSupplementCents, application.EstimatedTotalTaxCents)
-	assert.NotEqual(t, "{}", application.TaxBreakdown)
-	assert.Equal(t, "AI Agent服务", application.InvoiceItemName)
-	assert.Equal(t, "Please include the project name.", application.ApplicantNote)
-
-	adjustedAmount := application.SuggestedSupplementCents + 1
-	err = ReviewInvoiceApplication(application.Id, 1, true, &adjustedAmount, "", "", "reviewed")
-	require.ErrorContains(t, err, "adjustment reason")
-
-	finalAmount := application.SuggestedSupplementCents
-	require.NoError(t, ReviewInvoiceApplication(application.Id, 1, true, &finalAmount, "", "", "reviewed"))
-	reviewed, err := model.GetInvoiceApplication(application.Id, 701)
-	require.NoError(t, err)
-	assert.Equal(t, model.InvoiceStatusPendingPayment, reviewed.Status)
-	assert.Equal(t, model.InvoicePaymentPending, reviewed.PaymentStatus)
-	assert.Equal(t, application.OrderAmountCents+finalAmount, reviewed.InvoiceAmountCents)
+	// A legacy supplement that was already awaiting payment before migration
+	// must still complete through its existing provider callback.
+	application := &model.InvoiceApplication{
+		UserId: 701, Status: model.InvoiceStatusPendingPayment,
+		PaymentStatus: model.InvoicePaymentPending, Currency: "CNY",
+		InvoiceTitle: "测试企业", TaxNumber: "91310000TEST",
+		RecipientEmail: "finance@example.com", InvoiceItemName: "AI Agent服务",
+		OrderAmountCents: 100_000, InvoiceAmountCents: 106_131,
+		SuggestedSupplementCents: 6_131, FinalSupplementCents: 6_131, CreatedAt: now, UpdatedAt: now,
+	}
+	require.NoError(t, model.DB.Create(application).Error)
+	require.NoError(t, model.DB.Create(&model.InvoiceOrder{
+		ApplicationId: application.Id, TopUpId: paidOrder.Id,
+		TradeNo: paidOrder.TradeNo, PaidAmountCents: 100_000,
+	}).Error)
+	finalAmount := application.FinalSupplementCents
 
 	paymentOrder, err := CreateInvoicePaymentOrder(application.Id, 701, "invoice-payment-test", "alipay", model.PaymentProviderEpay)
 	require.NoError(t, err)
@@ -401,8 +390,8 @@ func TestInvoiceApplicationRejectsMinimumAndExpiredOrders(t *testing.T) {
 	})
 
 	now := time.Now()
-	smallOrder := model.TopUp{UserId: 703, Money: 99, TradeNo: "invoice-boundary-small", PaymentMethod: "stripe", CreateTime: now.Unix(), CompleteTime: now.Unix(), Status: common.TopUpStatusSuccess}
-	expiredOrder := model.TopUp{UserId: 703, Money: 200, TradeNo: "invoice-boundary-expired", PaymentMethod: "stripe", CreateTime: now.AddDate(0, 0, -31).Unix(), CompleteTime: now.AddDate(0, 0, -31).Unix(), Status: common.TopUpStatusSuccess}
+	smallOrder := model.TopUp{UserId: 703, Money: 99, PaidAmountMinor: 9900, PaidCurrency: "USD", TradeNo: "invoice-boundary-small", PaymentMethod: "stripe", CreateTime: now.Unix(), CompleteTime: now.Unix(), Status: common.TopUpStatusSuccess}
+	expiredOrder := model.TopUp{UserId: 703, Money: 200, PaidAmountMinor: 20000, PaidCurrency: "USD", TradeNo: "invoice-boundary-expired", PaymentMethod: "stripe", CreateTime: now.AddDate(0, 0, -31).Unix(), CompleteTime: now.AddDate(0, 0, -31).Unix(), Status: common.TopUpStatusSuccess}
 	require.NoError(t, model.DB.Create(&smallOrder).Error)
 	require.NoError(t, model.DB.Create(&expiredOrder).Error)
 
@@ -431,13 +420,15 @@ func TestInvoiceOrderCanOnlyBeAppliedOnce(t *testing.T) {
 
 	now := time.Now().Unix()
 	paidOrder := model.TopUp{
-		UserId:        704,
-		Money:         200,
-		TradeNo:       "invoice-unique-order",
-		PaymentMethod: "stripe",
-		CreateTime:    now,
-		CompleteTime:  now,
-		Status:        common.TopUpStatusSuccess,
+		UserId:          704,
+		Money:           200,
+		TradeNo:         "invoice-unique-order",
+		PaidAmountMinor: 20_000,
+		PaidCurrency:    "USD",
+		PaymentMethod:   "stripe",
+		CreateTime:      now,
+		CompleteTime:    now,
+		Status:          common.TopUpStatusSuccess,
 	}
 	require.NoError(t, model.DB.Create(&paidOrder).Error)
 	t.Cleanup(func() {

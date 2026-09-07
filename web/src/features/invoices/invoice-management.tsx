@@ -13,7 +13,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { ConfirmDialog } from '@/components/confirm-dialog'
-import { SectionPageLayout } from '@/components/layout'
+import { SectionPageLayout } from '@/components/layout/components/section-page-layout'
 
 import {
   deleteInvoiceApplication,
@@ -200,11 +200,9 @@ export function InvoiceManagement() {
       <InvoiceDetailsDialog
         application={detailsTarget}
         isAdmin
-        paymentMethods={[]}
         busy={busy}
         onOpenChange={(open) => !open && setDetailsTarget(null)}
         onReview={(request) => reviewMutation.mutate(request)}
-        onPay={() => undefined}
         onUpload={(file) => uploadMutation.mutate(file)}
         onViewFile={() => void handleViewInvoiceFile()}
         onSend={() => detailsTarget && sendMutation.mutate(detailsTarget)}
@@ -214,7 +212,13 @@ export function InvoiceManagement() {
         open={deleteTarget !== null}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
         title={t('Confirm delete')}
-        desc={t('This action cannot be undone.')}
+        desc={
+          deleteTarget?.fee_mode === 'balance_on_apply'
+            ? t(
+                'Any unrefunded invoice fee will be returned to the balance and the orders will be available for a new application.'
+              )
+            : t('This action cannot be undone.')
+        }
         destructive
         confirmText={t('Delete')}
         isLoading={deleteMutation.isPending}

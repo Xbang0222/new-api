@@ -356,7 +356,15 @@ func handleCheckoutCompleted(c *gin.Context, event *CreemWebhookEvent) {
 		logger.LogWarn(c.Request.Context(), fmt.Sprintf("Creem 回调客户姓名为空 trade_no=%s creem_order_id=%s", referenceId, event.Object.Order.Id))
 	}
 
-	err := model.RechargeCreem(referenceId, customerEmail, customerName, c.ClientIP())
+	// amount_paid is the provider's actual minor-unit amount, including tax/discounts.
+	var receipts []model.TopUpPaymentReceipt
+	receipt, receiptErr := model.NewTopUpPaymentReceipt(int64(event.Object.Order.AmountPaid), event.Object.Order.Currency)
+	if receiptErr == nil {
+		receipts = append(receipts, receipt)
+	} else {
+		logger.LogWarn(c.Request.Context(), fmt.Sprintf("Creem payment receipt unavailable trade_no=%s error=%q", referenceId, receiptErr.Error()))
+	}
+	err := model.RechargeCreem(referenceId, customerEmail, customerName, c.ClientIP(), receipts...)
 	if err != nil {
 		logger.LogError(c.Request.Context(), fmt.Sprintf("Creem 充值处理失败 trade_no=%s creem_order_id=%s client_ip=%s error=%q", referenceId, event.Object.Order.Id, c.ClientIP(), err.Error()))
 		c.AbortWithStatus(http.StatusInternalServerError)

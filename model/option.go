@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"math"
 	"net/url"
 	"sort"
 	"strconv"
@@ -309,6 +310,20 @@ func validateOptionValue(key string, value string) error {
 	case invoice_setting.SupplementPaymentMethodOptionKey:
 		if value != invoice_setting.SupplementPaymentMethodEpay && value != invoice_setting.SupplementPaymentMethodBalance {
 			return fmt.Errorf("unsupported invoice supplement payment method")
+		}
+	case invoice_setting.FeeRateBasisPointsOptionKey:
+		rate, err := strconv.Atoi(value)
+		if err != nil || rate < 0 || rate > 10000 {
+			return fmt.Errorf("invoice fee rate must be between 0 and 10000 basis points")
+		}
+	case "invoice_setting.minimum_amount":
+		amount, err := strconv.ParseFloat(value, 64)
+		if err != nil || math.IsNaN(amount) || math.IsInf(amount, 0) || amount < 0 || amount > 1_000_000_000 {
+			return fmt.Errorf("minimum invoice amount must be between 0 and 1000000000")
+		}
+	case "invoice_setting.invoice_item_name":
+		if name := strings.TrimSpace(value); name == "" || len([]rune(name)) > 255 {
+			return fmt.Errorf("invoice item name must contain between 1 and 255 characters")
 		}
 	}
 	return nil

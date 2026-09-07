@@ -7,7 +7,6 @@ published by the Free Software Foundation, either version 3 of the
 License, or (at your option) any later version.
 */
 
-import Payment01Icon from '@hugeicons/core-free-icons/Payment01Icon'
 import Upload01Icon from '@hugeicons/core-free-icons/Upload01Icon'
 import ViewIcon from '@hugeicons/core-free-icons/ViewIcon'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -26,14 +25,6 @@ import {
 } from '@/components/ui/dialog'
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 
 import { formatInvoiceDate, formatInvoiceMoney } from '../lib/format'
@@ -41,7 +32,6 @@ import { getInvoiceEmailAction } from '../lib/invoice-email-action'
 import type {
   InvoiceApplication,
   InvoiceOrder,
-  InvoicePaymentMethod,
   ReviewInvoiceApplicationRequest,
 } from '../types'
 import { InvoiceStatusBadge } from './invoice-status-badge'
@@ -49,11 +39,9 @@ import { InvoiceStatusBadge } from './invoice-status-badge'
 type InvoiceDetailsDialogProps = {
   application: InvoiceApplication | null
   isAdmin: boolean
-  paymentMethods: InvoicePaymentMethod[]
   busy: boolean
   onOpenChange: (open: boolean) => void
   onReview: (request: ReviewInvoiceApplicationRequest) => void
-  onPay: (paymentMethod: string) => void
   onUpload: (file: File) => void
   onViewFile: () => void
   onSend: () => void
@@ -78,6 +66,7 @@ export function InvoiceFileAction(props: InvoiceFileActionProps) {
 type InvoiceOrderListProps = {
   orders: InvoiceOrder[]
   currency: string
+  currencySymbol?: string
 }
 
 export function InvoiceOrderList(props: InvoiceOrderListProps) {
@@ -108,7 +97,11 @@ export function InvoiceOrderList(props: InvoiceOrderListProps) {
             </div>
           </div>
           <span className='shrink-0 tabular-nums'>
-            {formatInvoiceMoney(order.paid_amount_cents, props.currency)}
+            {formatInvoiceMoney(
+              order.paid_amount_cents,
+              props.currency,
+              props.currencySymbol
+            )}
           </span>
         </div>
       ))}
@@ -118,44 +111,32 @@ export function InvoiceOrderList(props: InvoiceOrderListProps) {
 
 export function InvoiceDetailsDialog(props: InvoiceDetailsDialogProps) {
   const { t } = useTranslation()
-  const [finalSupplement, setFinalSupplement] = useState('0.00')
-  const [adjustmentReason, setAdjustmentReason] = useState('')
   const [rejectReason, setRejectReason] = useState('')
   const [note, setNote] = useState('')
-  const [paymentMethod, setPaymentMethod] = useState<string | null>(null)
   const [file, setFile] = useState<File | null>(null)
 
   useEffect(() => {
     const application = props.application
     if (!application) return
-    setFinalSupplement(
-      (
-        (application.final_supplement_cents ||
-          application.suggested_supplement_cents) / 100
-      ).toFixed(2)
-    )
-    setAdjustmentReason(application.tax_adjustment_reason || '')
     setRejectReason('')
     setNote(application.admin_note || '')
-    setPaymentMethod(props.paymentMethods[0]?.type ?? null)
     setFile(null)
-  }, [props.application, props.paymentMethods])
+  }, [props.application])
 
   const application = props.application
   if (!application) return null
 
-  const finalSupplementCents = Math.round(Number(finalSupplement) * 100)
-  const validFinalSupplement =
-    Number.isFinite(finalSupplementCents) && finalSupplementCents >= 0
-  const changedEstimate =
-    validFinalSupplement &&
-    finalSupplementCents !== application.suggested_supplement_cents
+  const balanceFee = application.fee_mode === 'balance_on_apply'
+  let feeStatus = t('Deducted from balance')
+  if (application.payment_status === 'refunded') {
+    feeStatus = t('Refunded to balance')
+  }
+  if (application.payment_status === 'not_required') feeStatus = t('No fee')
   const canUpload =
     props.isAdmin &&
     (application.status === 'approved' || application.status === 'issued')
   const emailAction = getInvoiceEmailAction(application, props.isAdmin)
   const orders = application.orders ?? []
-  const payingFromBalance = paymentMethod === 'balance'
 
   return (
     <Dialog open onOpenChange={props.onOpenChange}>
@@ -207,72 +188,101 @@ export function InvoiceDetailsDialog(props: InvoiceDetailsDialogProps) {
               <dd>
                 {formatInvoiceMoney(
                   application.order_amount_cents,
-                  application.currency
+                  application.currency,
+                  application.currency_symbol
                 )}
               </dd>
-              <dt className='text-muted-foreground'>{t('Estimated VAT')}</dt>
-              <dd>
-                {formatInvoiceMoney(
-                  application.estimated_vat_cents,
-                  application.currency
-                )}
-              </dd>
-              <dt className='text-muted-foreground'>
-                {t('Urban maintenance and construction tax')}
-              </dt>
-              <dd>
-                {formatInvoiceMoney(
-                  application.estimated_urban_tax_cents,
-                  application.currency
-                )}
-              </dd>
-              <dt className='text-muted-foreground'>
-                {t('Education surcharges')}
-              </dt>
-              <dd>
-                {formatInvoiceMoney(
-                  application.estimated_education_surcharge_cents +
-                    application.estimated_local_education_surcharge_cents,
-                  application.currency
-                )}
-              </dd>
-              <dt className='text-muted-foreground'>
-                {t('Estimated individual income tax withholding')}
-              </dt>
-              <dd>
-                {formatInvoiceMoney(
-                  application.estimated_pit_withholding_cents,
-                  application.currency
-                )}
-              </dd>
-              <dt className='font-medium'>{t('Estimated total tax')}</dt>
-              <dd className='font-medium'>
-                {formatInvoiceMoney(
-                  application.estimated_total_tax_cents,
-                  application.currency
-                )}
-              </dd>
-              <dt className='font-medium'>{t('Suggested tax supplement')}</dt>
-              <dd className='font-medium'>
-                {formatInvoiceMoney(
-                  application.suggested_supplement_cents,
-                  application.currency
-                )}
-              </dd>
+              {!balanceFee ? (
+                <>
+                  <dt className='text-muted-foreground'>
+                    {t('Estimated VAT')}
+                  </dt>
+                  <dd>
+                    {formatInvoiceMoney(
+                      application.estimated_vat_cents,
+                      application.currency,
+                      application.currency_symbol
+                    )}
+                  </dd>
+                  <dt className='text-muted-foreground'>
+                    {t('Urban maintenance and construction tax')}
+                  </dt>
+                  <dd>
+                    {formatInvoiceMoney(
+                      application.estimated_urban_tax_cents,
+                      application.currency,
+                      application.currency_symbol
+                    )}
+                  </dd>
+                  <dt className='text-muted-foreground'>
+                    {t('Education surcharges')}
+                  </dt>
+                  <dd>
+                    {formatInvoiceMoney(
+                      application.estimated_education_surcharge_cents +
+                        application.estimated_local_education_surcharge_cents,
+                      application.currency,
+                      application.currency_symbol
+                    )}
+                  </dd>
+                  <dt className='text-muted-foreground'>
+                    {t('Estimated individual income tax withholding')}
+                  </dt>
+                  <dd>
+                    {formatInvoiceMoney(
+                      application.estimated_pit_withholding_cents,
+                      application.currency,
+                      application.currency_symbol
+                    )}
+                  </dd>
+                  <dt className='font-medium'>{t('Estimated total tax')}</dt>
+                  <dd className='font-medium'>
+                    {formatInvoiceMoney(
+                      application.estimated_total_tax_cents,
+                      application.currency,
+                      application.currency_symbol
+                    )}
+                  </dd>
+                  <dt className='font-medium'>
+                    {t('Suggested tax supplement')}
+                  </dt>
+                  <dd className='font-medium'>
+                    {formatInvoiceMoney(
+                      application.suggested_supplement_cents,
+                      application.currency,
+                      application.currency_symbol
+                    )}
+                  </dd>
+                </>
+              ) : null}
               <dt className='font-medium'>
-                {t('Final tax supplement amount')}
+                {balanceFee
+                  ? t('Invoice fee')
+                  : t('Final tax supplement amount')}
               </dt>
               <dd className='font-medium'>
                 {formatInvoiceMoney(
                   application.final_supplement_cents,
-                  application.currency
+                  application.currency,
+                  application.currency_symbol
                 )}
               </dd>
+              {balanceFee ? (
+                <>
+                  <dt className='text-muted-foreground'>
+                    {t('Invoice fee rate (%)')}
+                  </dt>
+                  <dd>{(application.fee_rate_basis_points ?? 0) / 100}%</dd>
+                  <dt className='text-muted-foreground'>{t('Fee status')}</dt>
+                  <dd>{feeStatus}</dd>
+                </>
+              ) : null}
               <dt className='font-medium'>{t('Final invoice amount')}</dt>
               <dd className='font-medium'>
                 {formatInvoiceMoney(
                   application.invoice_amount_cents,
-                  application.currency
+                  application.currency,
+                  application.currency_symbol
                 )}
               </dd>
             </dl>
@@ -286,64 +296,28 @@ export function InvoiceDetailsDialog(props: InvoiceDetailsDialogProps) {
               {orders.length}
             </span>
           </div>
-          <InvoiceOrderList orders={orders} currency={application.currency} />
+          <InvoiceOrderList
+            orders={orders}
+            currency={application.currency}
+            currencySymbol={application.currency_symbol}
+          />
         </section>
 
-        <Alert>
-          <AlertTitle>
-            {t('Tax estimate requires administrator verification')}
-          </AlertTitle>
-          <AlertDescription>
-            {t(
-              'In customer-borne mode, all enabled estimated taxes are grossed up into the customer supplement. The final amount must follow the competent tax authority, withholding declaration, and tax payment certificate.'
-            )}
-          </AlertDescription>
-        </Alert>
+        {!balanceFee ? (
+          <Alert>
+            <AlertTitle>{t('Historical tax estimate')}</AlertTitle>
+            <AlertDescription>
+              {t(
+                'Historical tax estimates are shown for reference only. The confirmed invoice amount and fee are listed above.'
+              )}
+            </AlertDescription>
+          </Alert>
+        ) : null}
 
         {props.isAdmin && application.status === 'pending_review' ? (
           <section className='flex flex-col gap-4 rounded-lg border p-4'>
             <h3 className='font-medium'>{t('Review invoice application')}</h3>
             <div className='grid gap-4 md:grid-cols-2'>
-              <Field data-invalid={!validFinalSupplement}>
-                <FieldLabel htmlFor='invoice-final-supplement'>
-                  {t('Final tax supplement amount')}
-                </FieldLabel>
-                <Input
-                  id='invoice-final-supplement'
-                  type='number'
-                  min='0'
-                  step='0.01'
-                  value={finalSupplement}
-                  aria-invalid={!validFinalSupplement}
-                  onChange={(event) => setFinalSupplement(event.target.value)}
-                />
-                <FieldDescription>
-                  {t(
-                    'Enter the actual supplement confirmed for this invoice, or 0 when none is required.'
-                  )}
-                </FieldDescription>
-              </Field>
-              <Field
-                data-invalid={changedEstimate && adjustmentReason.trim() === ''}
-              >
-                <FieldLabel htmlFor='invoice-adjustment-reason'>
-                  {t('Tax adjustment reason')}
-                </FieldLabel>
-                <Input
-                  id='invoice-adjustment-reason'
-                  value={adjustmentReason}
-                  maxLength={2000}
-                  aria-invalid={
-                    changedEstimate && adjustmentReason.trim() === ''
-                  }
-                  onChange={(event) => setAdjustmentReason(event.target.value)}
-                />
-                <FieldDescription>
-                  {t(
-                    'Required when the final amount differs from the system estimate.'
-                  )}
-                </FieldDescription>
-              </Field>
               <Field className='md:col-span-2'>
                 <FieldLabel htmlFor='invoice-admin-note'>
                   {t('Admin note')}
@@ -375,7 +349,6 @@ export function InvoiceDetailsDialog(props: InvoiceDetailsDialogProps) {
                 onClick={() =>
                   props.onReview({
                     action: 'reject',
-                    tax_adjustment_reason: '',
                     reason: rejectReason,
                     note,
                   })
@@ -384,16 +357,10 @@ export function InvoiceDetailsDialog(props: InvoiceDetailsDialogProps) {
                 {t('Reject')}
               </Button>
               <Button
-                disabled={
-                  props.busy ||
-                  !validFinalSupplement ||
-                  (changedEstimate && adjustmentReason.trim() === '')
-                }
+                disabled={props.busy}
                 onClick={() =>
                   props.onReview({
                     action: 'approve',
-                    final_supplement_amount_cents: finalSupplementCents,
-                    tax_adjustment_reason: adjustmentReason,
                     reason: '',
                     note,
                   })
@@ -402,81 +369,6 @@ export function InvoiceDetailsDialog(props: InvoiceDetailsDialogProps) {
                 {t('Approve')}
               </Button>
             </div>
-          </section>
-        ) : null}
-
-        {!props.isAdmin && application.status === 'pending_payment' ? (
-          <section className='flex flex-col gap-4 rounded-lg border p-4'>
-            <h3 className='font-medium'>{t('Pay tax supplement')}</h3>
-            <p className='text-muted-foreground text-sm'>
-              {t('Amount due')}:{' '}
-              {formatInvoiceMoney(
-                application.final_supplement_cents,
-                application.currency
-              )}
-            </p>
-            {payingFromBalance ? (
-              <Alert>
-                <AlertTitle>{t('Balance payment')}</AlertTitle>
-                <AlertDescription>
-                  {t(
-                    'The supplement will be deducted immediately. Payment fails without changing the invoice when the balance is insufficient.'
-                  )}
-                </AlertDescription>
-              </Alert>
-            ) : null}
-            {props.paymentMethods.length > 0 ? (
-              <div className='flex flex-col gap-3 sm:flex-row sm:items-end'>
-                <Field className='flex-1'>
-                  <FieldLabel>{t('Payment method')}</FieldLabel>
-                  <Select
-                    items={props.paymentMethods.map((method) => ({
-                      value: method.type,
-                      label:
-                        method.type === 'balance'
-                          ? t('Pay from balance')
-                          : method.name,
-                    }))}
-                    value={paymentMethod}
-                    onValueChange={setPaymentMethod}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent alignItemWithTrigger={false}>
-                      <SelectGroup>
-                        {props.paymentMethods.map((method) => (
-                          <SelectItem key={method.type} value={method.type}>
-                            {method.type === 'balance'
-                              ? t('Pay from balance')
-                              : method.name}
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                </Field>
-                <Button
-                  disabled={props.busy || !paymentMethod}
-                  onClick={() => paymentMethod && props.onPay(paymentMethod)}
-                >
-                  <HugeiconsIcon
-                    icon={Payment01Icon}
-                    data-icon='inline-start'
-                  />
-                  {payingFromBalance ? t('Deduct from balance') : t('Pay now')}
-                </Button>
-              </div>
-            ) : (
-              <Alert>
-                <AlertTitle>{t('No payment method is available')}</AlertTitle>
-                <AlertDescription>
-                  {t(
-                    'Contact the administrator to configure an online payment method.'
-                  )}
-                </AlertDescription>
-              </Alert>
-            )}
           </section>
         ) : null}
 

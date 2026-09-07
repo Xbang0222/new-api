@@ -26,7 +26,10 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 import { formatInvoiceDate, formatInvoiceMoney } from '../lib/format'
-import { canDeleteInvoiceApplication } from '../lib/invoice-delete-action'
+import {
+  canCancelInvoiceApplication,
+  canDeleteInvoiceApplication,
+} from '../lib/invoice-delete-action'
 import { getInvoiceEmailAction } from '../lib/invoice-email-action'
 import type { InvoiceApplication, InvoiceStatus } from '../types'
 import { InvoiceStatusBadge } from './invoice-status-badge'
@@ -103,7 +106,8 @@ export function InvoiceApplicationsList(props: InvoiceApplicationsListProps) {
             <span className='font-medium tabular-nums'>
               {formatInvoiceMoney(
                 row.original.invoice_amount_cents,
-                row.original.currency
+                row.original.currency,
+                row.original.currency_symbol
               )}
             </span>
             <span className='text-muted-foreground text-xs'>
@@ -175,7 +179,9 @@ export function InvoiceApplicationsList(props: InvoiceApplicationsListProps) {
         header: t('Actions'),
         cell: ({ row }) => {
           const emailAction = getInvoiceEmailAction(row.original, isAdmin)
-          const canDelete = canDeleteInvoiceApplication(row.original, isAdmin)
+          const canDelete = isAdmin
+            ? canDeleteInvoiceApplication(row.original, true)
+            : canCancelInvoiceApplication(row.original)
           return (
             <div
               data-testid='invoice-row-actions'
@@ -210,7 +216,7 @@ export function InvoiceApplicationsList(props: InvoiceApplicationsListProps) {
                   onClick={() => onDelete(row.original)}
                 >
                   <HugeiconsIcon icon={Delete02Icon} data-icon='inline-start' />
-                  {t('Delete')}
+                  {isAdmin ? t('Delete') : t('Cancel application')}
                 </Button>
               ) : null}
             </div>

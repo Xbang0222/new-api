@@ -138,7 +138,7 @@ func normalizeInvoiceLanguage(language string) string {
 }
 
 func normalizeInvoiceApplicationItemName(application *model.InvoiceApplication) {
-	if application != nil && application.Status != model.InvoiceStatusIssued && application.InvoiceItemName == "技术服务费" {
+	if application != nil && application.FeeMode == "" && application.Status != model.InvoiceStatusIssued && application.InvoiceItemName == "技术服务费" {
 		application.InvoiceItemName = "AI Agent服务"
 	}
 }
@@ -169,6 +169,10 @@ type InvoicePublicConfig struct {
 	SupplementPaymentMethod string  `json:"supplement_payment_method"`
 	MinimumAmount           float64 `json:"minimum_amount"`
 	Currency                string  `json:"currency"`
+	CurrencySymbol          string  `json:"currency_symbol"`
+	InvoiceItemName         string  `json:"invoice_item_name"`
+	FeeRateBasisPoints      int     `json:"fee_rate_basis_points"`
+	QuotaPerCurrencyUnit    float64 `json:"quota_per_currency_unit"`
 	VATThresholdCents       int64   `json:"vat_threshold_cents"`
 	VATRateBasisPoints      int     `json:"vat_rate_basis_points"`
 	PolicyNotice            string  `json:"policy_notice"`
@@ -183,15 +187,21 @@ type CreateInvoiceApplicationInput struct {
 }
 
 func GetInvoiceConfig() InvoicePublicConfig {
-	setting := invoice_setting.GetInvoiceSetting()
+	setting := *invoice_setting.GetInvoiceSetting()
+	policy, err := currentInvoiceFeePolicy(setting)
+	if err != nil {
+		return InvoicePublicConfig{SupplementPaymentMethod: invoice_setting.SupplementPaymentMethodBalance}
+	}
 	return InvoicePublicConfig{
 		Enabled:                 setting.Enabled,
-		SupplementPaymentMethod: setting.SupplementPaymentMethod,
+		SupplementPaymentMethod: invoice_setting.SupplementPaymentMethodBalance,
 		MinimumAmount:           setting.MinimumAmount,
-		Currency:                setting.Currency,
-		VATThresholdCents:       setting.VATThresholdCents,
-		VATRateBasisPoints:      setting.VATRateBasisPoints,
-		PolicyNotice:            setting.PolicyNotice,
+		Currency:                policy.Currency,
+		CurrencySymbol:          policy.CurrencySymbol,
+		InvoiceItemName:         strings.TrimSpace(setting.InvoiceItemName),
+		FeeRateBasisPoints:      setting.FeeRateBasisPoints,
+		QuotaPerCurrencyUnit:    policy.QuotaPerCurrencyUnit,
+		PolicyNotice:            "The invoice fee is deducted from your balance when you apply and refunded if the application is rejected or cancelled.",
 	}
 }
 
@@ -202,6 +212,10 @@ func ListInvoiceApplications(userId int, status string, keyword string, pageInfo
 	}
 	for _, application := range applications {
 		normalizeInvoiceApplicationItemName(application)
+		application.CanCancel, err = model.CanCancelInvoiceApplication(application)
+		if err != nil {
+			return nil, 0, err
+		}
 	}
 	return applications, total, nil
 }
@@ -212,6 +226,10 @@ func GetInvoiceApplication(applicationId int, userId int) (*model.InvoiceApplica
 		return nil, err
 	}
 	normalizeInvoiceApplicationItemName(application)
+	application.CanCancel, err = model.CanCancelInvoiceApplication(application)
+	if err != nil {
+		return nil, err
+	}
 	return application, nil
 }
 
@@ -230,13 +248,18 @@ func validateInvoiceRecipientEmail(value string) (string, error) {
 	return recipient, nil
 }
 
-func ListEligibleInvoiceOrders(userId int) ([]model.TopUp, error) {
-	setting := invoice_setting.GetInvoiceSetting()
+func ListEligibleInvoiceOrders(userId int) ([]InvoiceEligibleOrder, error) {
+	setting := *invoice_setting.GetInvoiceSetting()
 	if !setting.Enabled {
-		return []model.TopUp{}, nil
+		return []InvoiceEligibleOrder{}, nil
 	}
 
-	query := model.DB.Where("user_id = ? AND status = ? AND money > ?", userId, common.TopUpStatusSuccess, 0)
+	policy, err := currentInvoiceFeePolicy(setting)
+	if err != nil {
+		return nil, err
+	}
+
+	query := model.DB.Where("user_id = ? AND status = ?", userId, common.TopUpStatusSuccess)
 	if setting.ApplicationWindowDays > 0 {
 		cutoff := time.Now().AddDate(0, 0, -setting.ApplicationWindowDays).Unix()
 		query = query.Where("CASE WHEN complete_time > 0 THEN complete_time ELSE create_time END >= ?", cutoff)
@@ -247,7 +270,7 @@ func ListEligibleInvoiceOrders(userId int) ([]model.TopUp, error) {
 		return nil, err
 	}
 	if len(topUps) == 0 {
-		return topUps, nil
+		return []InvoiceEligibleOrder{}, nil
 	}
 
 	topUpIds := make([]int, 0, len(topUps))
@@ -262,21 +285,40 @@ func ListEligibleInvoiceOrders(userId int) ([]model.TopUp, error) {
 	for _, id := range usedIds {
 		used[id] = struct{}{}
 	}
-	eligible := make([]model.TopUp, 0, len(topUps))
+	receipts, err := loadInvoicePaymentEvidence(model.DB, topUps)
+	if err != nil {
+		return nil, err
+	}
+	eligible := make([]InvoiceEligibleOrder, 0, len(topUps))
 	for _, topUp := range topUps {
-		if _, exists := used[topUp.Id]; !exists {
-			eligible = append(eligible, topUp)
+		if _, exists := used[topUp.Id]; exists {
+			continue
 		}
+		quote, err := quoteInvoicePaidOrder(topUp, policy, receipts[topUp.TradeNo])
+		if errors.Is(err, ErrInvoicePaidAmountUnverifiable) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		eligible = append(eligible, InvoiceEligibleOrder{
+			TopUp: topUp, InvoiceAmountCents: quote.InvoiceAmountCents,
+			Currency: policy.Currency, CurrencySymbol: policy.CurrencySymbol,
+		})
 	}
 	return eligible, nil
 }
 
 func CreateInvoiceApplication(userId int, input CreateInvoiceApplicationInput) (*model.InvoiceApplication, error) {
-	setting := invoice_setting.GetInvoiceSetting()
+	if userId <= 0 {
+		return nil, model.ErrInvoiceNotFound
+	}
+	setting := *invoice_setting.GetInvoiceSetting()
 	if !setting.Enabled {
 		return nil, errors.New("invoice applications are disabled")
 	}
-	if err := validateInvoiceSetting(setting); err != nil {
+	policy, err := currentInvoiceFeePolicy(setting)
+	if err != nil {
 		return nil, err
 	}
 	if len(input.TopUpIds) == 0 || len(input.TopUpIds) > maxInvoiceOrdersPerApplication {
@@ -305,9 +347,19 @@ func CreateInvoiceApplication(userId int, input CreateInvoiceApplicationInput) (
 	}
 
 	var created model.InvoiceApplication
+	cacheReserved := false
+	reservedQuota := 0
+	reservationCommitted := false
+	defer func() {
+		if cacheReserved && !reservationCommitted {
+			if refundErr := model.SyncUserQuotaCacheDelta(userId, reservedQuota); refundErr != nil {
+				common.SysError(fmt.Sprintf("failed to compensate invoice fee cache reservation user_id=%d quota=%d: %v", userId, reservedQuota, refundErr))
+			}
+		}
+	}()
 	err = model.DB.Transaction(func(tx *gorm.DB) error {
 		var topUps []model.TopUp
-		if err := tx.Where("id IN ? AND user_id = ? AND status = ? AND money > ?", uniqueIds, userId, common.TopUpStatusSuccess, 0).
+		if err := tx.Where("id IN ? AND user_id = ? AND status = ?", uniqueIds, userId, common.TopUpStatusSuccess).
 			Order("id asc").Find(&topUps).Error; err != nil {
 			return err
 		}
@@ -336,17 +388,24 @@ func CreateInvoiceApplication(userId int, input CreateInvoiceApplicationInput) (
 			return model.ErrInvoiceOrderAlreadyApplied
 		}
 
+		receipts, err := loadInvoicePaymentEvidence(tx, topUps)
+		if err != nil {
+			return err
+		}
 		var totalCents int64
 		orders := make([]model.InvoiceOrder, 0, len(topUps))
+		quotes := make([]invoicePaidOrderQuote, 0, len(topUps))
 		for _, topUp := range topUps {
-			if math.IsNaN(topUp.Money) || math.IsInf(topUp.Money, 0) || topUp.Money <= 0 {
-				return errors.New("paid order amount is invalid")
+			quote, err := quoteInvoicePaidOrder(topUp, policy, receipts[topUp.TradeNo])
+			if err != nil {
+				return err
 			}
-			paidCents := decimal.NewFromFloat(topUp.Money).Mul(decimal.NewFromInt(100)).Round(0).IntPart()
-			if paidCents <= 0 || totalCents > maxInvoiceAmountCents-paidCents {
+			paidCents := quote.InvoiceAmountCents
+			if totalCents > maxInvoiceAmountCents-paidCents {
 				return errors.New("paid order amount is invalid")
 			}
 			totalCents += paidCents
+			quotes = append(quotes, quote)
 			completedAt := topUp.CompleteTime
 			if completedAt <= 0 {
 				completedAt = topUp.CreateTime
@@ -360,46 +419,58 @@ func CreateInvoiceApplication(userId int, input CreateInvoiceApplicationInput) (
 			})
 		}
 
-		minimumCents := decimal.NewFromFloat(setting.MinimumAmount).Mul(decimal.NewFromInt(100)).Round(0).IntPart()
-		if totalCents < minimumCents {
+		if totalCents < policy.MinimumAmountCents {
 			return errors.New("selected paid orders do not meet the minimum invoice amount")
 		}
-		estimate, err := CalculateInvoiceTax(totalCents, *setting, time.Now())
+		feeCents, chargedQuota, err := calculateInvoiceFee(totalCents, policy)
 		if err != nil {
 			return err
 		}
-		snapshotBytes, err := common.Marshal(setting)
+		snapshotBytes, err := common.Marshal(struct {
+			Policy invoiceFeePolicy        `json:"policy"`
+			Orders []invoicePaidOrderQuote `json:"orders"`
+		}{Policy: policy, Orders: quotes})
 		if err != nil {
 			return err
 		}
-		breakdownBytes, err := common.Marshal(estimate)
-		if err != nil {
-			return err
+		if chargedQuota > 0 {
+			cacheReserved, err = model.ReserveInvoiceFeeCache(userId, chargedQuota)
+			if err != nil {
+				return err
+			}
+			reservedQuota = chargedQuota
+			if err := model.ChargeUserQuotaTx(tx, userId, chargedQuota); err != nil {
+				return err
+			}
 		}
 		now := time.Now().Unix()
 		created = model.InvoiceApplication{
-			UserId:                       userId,
-			Status:                       model.InvoiceStatusPendingReview,
-			PaymentStatus:                model.InvoicePaymentNotRequired,
-			InvoiceTitle:                 strings.TrimSpace(input.InvoiceTitle),
-			TaxNumber:                    strings.TrimSpace(input.TaxNumber),
-			RecipientEmail:               recipientEmail,
-			ApplicantNote:                applicantNote,
-			InvoiceItemName:              strings.TrimSpace(setting.InvoiceItemName),
-			Currency:                     strings.ToUpper(strings.TrimSpace(setting.Currency)),
-			OrderAmountCents:             totalCents,
-			InvoiceAmountCents:           totalCents,
-			EstimatedVATCents:            estimate.EstimatedVATCents,
-			EstimatedUrbanTaxCents:       estimate.EstimatedUrbanTaxCents,
-			EstimatedEducationCents:      estimate.EstimatedEducationSurchargeCents,
-			EstimatedLocalEducationCents: estimate.EstimatedLocalEducationCents,
-			EstimatedPITCents:            estimate.EstimatedPITWithholdingCents,
-			EstimatedTotalTaxCents:       estimate.EstimatedTotalTaxCents,
-			TaxBreakdown:                 string(breakdownBytes),
-			RuleSnapshot:                 string(snapshotBytes),
-			SuggestedSupplementCents:     estimate.SuggestedSupplementCents,
-			CreatedAt:                    now,
-			UpdatedAt:                    now,
+			UserId:                   userId,
+			Status:                   model.InvoiceStatusPendingReview,
+			PaymentStatus:            model.InvoicePaymentNotRequired,
+			FeeMode:                  model.InvoiceFeeModeBalanceOnApply,
+			FeeRateBasisPoints:       policy.FeeRateBasisPoints,
+			ChargedQuota:             chargedQuota,
+			InvoiceTitle:             strings.TrimSpace(input.InvoiceTitle),
+			TaxNumber:                strings.TrimSpace(input.TaxNumber),
+			RecipientEmail:           recipientEmail,
+			ApplicantNote:            applicantNote,
+			InvoiceItemName:          strings.TrimSpace(setting.InvoiceItemName),
+			Currency:                 policy.Currency,
+			CurrencySymbol:           policy.CurrencySymbol,
+			OrderAmountCents:         totalCents,
+			InvoiceAmountCents:       totalCents,
+			RuleSnapshot:             string(snapshotBytes),
+			SuggestedSupplementCents: feeCents,
+			FinalSupplementCents:     feeCents,
+			CreatedAt:                now,
+			UpdatedAt:                now,
+		}
+		if chargedQuota > 0 {
+			created.PaymentStatus = model.InvoicePaymentPaid
+			created.PaymentMethod = model.PaymentMethodBalance
+			created.PaymentTradeNo = fmt.Sprintf("INVFEEUSR%dNO%s%d", userId, common.GetRandomString(6), time.Now().UnixNano())
+			created.PaymentConfirmedAt = now
 		}
 		if err := tx.Create(&created).Error; err != nil {
 			return err
@@ -409,6 +480,18 @@ func CreateInvoiceApplication(userId int, input CreateInvoiceApplicationInput) (
 		}
 		if err := tx.Create(&orders).Error; err != nil {
 			return err
+		}
+		if chargedQuota > 0 {
+			paymentOrder := model.InvoicePaymentOrder{
+				ApplicationId: created.Id, UserId: userId, TradeNo: created.PaymentTradeNo,
+				AmountCents: feeCents, Currency: policy.Currency,
+				PaymentMethod: model.PaymentMethodBalance, PaymentProvider: model.PaymentProviderBalance,
+				Status: model.InvoicePaymentOrderPaid, ProviderPayload: fmt.Sprintf("charged_quota=%d", chargedQuota),
+				CreateTime: now, CompleteTime: now,
+			}
+			if err := tx.Create(&paymentOrder).Error; err != nil {
+				return err
+			}
 		}
 		created.Orders = orders
 		return nil
@@ -421,11 +504,18 @@ func CreateInvoiceApplication(userId int, input CreateInvoiceApplicationInput) (
 		}
 		return nil, err
 	}
+	reservationCommitted = true
+	if created.ChargedQuota > 0 {
+		syncInvoiceFeeBalance(&created, -created.ChargedQuota, !cacheReserved)
+	}
+	created.CanCancel = true
 	return &created, nil
 }
 
 func ReviewInvoiceApplication(applicationId int, reviewerId int, approve bool, finalSupplementCents *int64, adjustmentReason string, rejectReason string, note string) error {
-	return model.UpdateInvoiceApplication(applicationId, func(tx *gorm.DB, application *model.InvoiceApplication) error {
+	var refundedApplication *model.InvoiceApplication
+	refundedQuota := 0
+	err := model.UpdateInvoiceApplication(applicationId, func(tx *gorm.DB, application *model.InvoiceApplication) error {
 		if application.Status != model.InvoiceStatusPendingReview {
 			return model.ErrInvoiceStatusInvalid
 		}
@@ -434,6 +524,12 @@ func ReviewInvoiceApplication(applicationId int, reviewerId int, approve bool, f
 			if strings.TrimSpace(rejectReason) == "" {
 				return errors.New("rejection reason is required")
 			}
+			var err error
+			refundedQuota, err = model.RefundInvoiceFeeTx(tx, application)
+			if err != nil {
+				return err
+			}
+			refundedApplication = application
 			return tx.Model(application).Updates(map[string]interface{}{
 				"status":        model.InvoiceStatusRejected,
 				"reviewer_id":   reviewerId,
@@ -444,28 +540,26 @@ func ReviewInvoiceApplication(applicationId int, reviewerId int, approve bool, f
 			}).Error
 		}
 
-		finalAmount := application.SuggestedSupplementCents
-		if finalSupplementCents != nil {
-			finalAmount = *finalSupplementCents
+		if application.FeeMode == model.InvoiceFeeModeBalanceOnApply {
+			if finalSupplementCents != nil && *finalSupplementCents != application.FinalSupplementCents {
+				return errors.New("invoice fee cannot be changed after application")
+			}
+			return tx.Model(application).Updates(map[string]interface{}{
+				"status":               model.InvoiceStatusApproved,
+				"invoice_amount_cents": application.OrderAmountCents,
+				"reviewer_id":          reviewerId, "reviewed_at": now,
+				"reject_reason": "", "admin_note": strings.TrimSpace(note), "updated_at": now,
+			}).Error
 		}
-		if finalAmount < 0 || finalAmount > maxInvoiceAmountCents || application.OrderAmountCents > maxInvoiceAmountCents-finalAmount {
-			return errors.New("final tax supplement amount is invalid")
-		}
-		if finalAmount != application.SuggestedSupplementCents && strings.TrimSpace(adjustmentReason) == "" {
-			return errors.New("tax adjustment reason is required when the final amount differs from the system estimate")
-		}
-		status := model.InvoiceStatusApproved
-		paymentStatus := model.InvoicePaymentNotRequired
-		if finalAmount > 0 {
-			status = model.InvoiceStatusPendingPayment
-			paymentStatus = model.InvoicePaymentPending
-		}
+
+		// Legacy requests awaiting review have not paid a fee. Approve them
+		// without creating a new supplement that the current UI cannot pay.
 		return tx.Model(application).Updates(map[string]interface{}{
-			"status":                 status,
-			"payment_status":         paymentStatus,
-			"final_supplement_cents": finalAmount,
-			"invoice_amount_cents":   application.OrderAmountCents + finalAmount,
-			"tax_adjustment_reason":  strings.TrimSpace(adjustmentReason),
+			"status":                 model.InvoiceStatusApproved,
+			"payment_status":         model.InvoicePaymentNotRequired,
+			"final_supplement_cents": 0,
+			"invoice_amount_cents":   application.OrderAmountCents,
+			"tax_adjustment_reason":  "",
 			"reviewer_id":            reviewerId,
 			"reviewed_at":            now,
 			"reject_reason":          "",
@@ -473,12 +567,23 @@ func ReviewInvoiceApplication(applicationId int, reviewerId int, approve bool, f
 			"updated_at":             now,
 		}).Error
 	})
+	if err == nil && refundedQuota > 0 {
+		syncInvoiceFeeBalance(refundedApplication, refundedQuota, true)
+	}
+	return err
 }
 
 func DeleteInvoiceApplication(applicationId int) (*model.InvoiceApplication, error) {
-	application, err := model.DeleteInvoiceApplication(applicationId)
+	return deleteInvoiceApplication(applicationId, 0)
+}
+
+func deleteInvoiceApplication(applicationId int, userId int) (*model.InvoiceApplication, error) {
+	application, refundedQuota, err := model.DeleteInvoiceApplicationForUser(applicationId, userId)
 	if err != nil {
 		return nil, err
+	}
+	if refundedQuota > 0 {
+		syncInvoiceFeeBalance(application, refundedQuota, true)
 	}
 	if application.InvoiceFilePath == "" {
 		return application, nil
@@ -505,7 +610,7 @@ func CreateInvoicePaymentOrder(applicationId int, userId int, tradeNo string, pa
 		if application.UserId != userId {
 			return model.ErrInvoiceNotFound
 		}
-		if application.Status != model.InvoiceStatusPendingPayment || application.PaymentStatus != model.InvoicePaymentPending || application.FinalSupplementCents <= 0 {
+		if application.FeeMode == model.InvoiceFeeModeBalanceOnApply || application.Status != model.InvoiceStatusPendingPayment || application.PaymentStatus != model.InvoicePaymentPending || application.FinalSupplementCents <= 0 {
 			return model.ErrInvoiceStatusInvalid
 		}
 		created = model.InvoicePaymentOrder{
@@ -558,7 +663,7 @@ func PayInvoiceSupplementWithBalance(applicationId int, userId int) (*model.Invo
 		if application.UserId != userId {
 			return model.ErrInvoiceNotFound
 		}
-		if application.Status != model.InvoiceStatusPendingPayment || application.PaymentStatus != model.InvoicePaymentPending || application.FinalSupplementCents <= 0 {
+		if application.FeeMode == model.InvoiceFeeModeBalanceOnApply || application.Status != model.InvoiceStatusPendingPayment || application.PaymentStatus != model.InvoicePaymentPending || application.FinalSupplementCents <= 0 {
 			return model.ErrInvoiceStatusInvalid
 		}
 		quota, err := invoiceSupplementQuota(application.FinalSupplementCents, application.Currency)
@@ -635,7 +740,7 @@ func CompleteInvoicePaymentOrder(tradeNo string, providerPayload string, expecte
 			return model.ErrInvoicePaymentOrderInvalid
 		}
 		if application.PaymentStatus != model.InvoicePaymentPaid {
-			if application.Status != model.InvoiceStatusPendingPayment || application.PaymentStatus != model.InvoicePaymentPending {
+			if application.FeeMode == model.InvoiceFeeModeBalanceOnApply || application.Status != model.InvoiceStatusPendingPayment || application.PaymentStatus != model.InvoicePaymentPending {
 				return model.ErrInvoiceStatusInvalid
 			}
 			now := time.Now().Unix()

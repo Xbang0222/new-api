@@ -7,10 +7,8 @@ published by the Free Software Foundation, either version 3 of the
 License, or (at your option) any later version.
 */
 
-import assert from 'node:assert/strict'
-import { describe, test } from 'node:test'
-
 import type { TFunction } from 'i18next'
+import { describe, expect, test } from 'vitest'
 
 import { createInvoiceRuleSchema } from '../lib/invoice-rule-form'
 
@@ -18,67 +16,81 @@ const t = ((key: string) => key) as TFunction
 
 const baseRules = {
   enabled: true,
-  supplementPaymentMethod: 'epay',
-  taxBurdenMode: 'supplement_by_customer',
-  minimumAmount: 0,
-  applicationWindowDays: 365,
-  currency: 'CNY',
+  minimumAmount: 50,
   invoiceItemName: 'AI Agent服务',
-  vatThresholdAmount: 1000,
-  vatRatePercent: 1,
-  vatStandardRatePercent: 3,
-  vatPreferentialEndDate: '2027-12-31',
-  urbanMaintenanceTaxRatePercent: 7,
-  educationSurchargeRatePercent: 3,
-  localEducationRatePercent: 2,
-  surchargeReliefPercent: 50,
-  pitWithholdingEnabled: true,
-  policyEffectiveDate: '2026-01-01',
-  policyNotice: '',
+  feeRatePercent: 3,
 }
 
 describe('invoice rule validation', () => {
-  test('accepts a complete individual-service tax policy', () => {
-    const result = createInvoiceRuleSchema(t).safeParse(baseRules)
+  test.each([0, 3.25, 100])(
+    'accepts a fee rate of %s percent without legacy tax settings',
+    (feeRatePercent) => {
+      const result = createInvoiceRuleSchema(t).safeParse({
+        ...baseRules,
+        feeRatePercent,
+      })
 
-    assert.equal(result.success, true)
-  })
-
-  test('rejects a tax rate above one hundred percent', () => {
-    const result = createInvoiceRuleSchema(t).safeParse({
-      ...baseRules,
-      vatRatePercent: 101,
-    })
-
-    assert.equal(result.success, false)
-    if (!result.success) {
-      assert.deepEqual(result.error.issues[0]?.path, ['vatRatePercent'])
+      expect(result.success).toBe(true)
     }
-  })
+  )
 
-  test('rejects a non-CNY invoice currency', () => {
-    const result = createInvoiceRuleSchema(t).safeParse({
-      ...baseRules,
-      currency: 'USD',
-    })
+  test.each([-0.01, 100.01, 3.001, Number.NaN, Number.POSITIVE_INFINITY])(
+    'rejects an invalid fee rate of %s percent',
+    (feeRatePercent) => {
+      const result = createInvoiceRuleSchema(t).safeParse({
+        ...baseRules,
+        feeRatePercent,
+      })
 
-    assert.equal(result.success, false)
-    if (!result.success) {
-      assert.deepEqual(result.error.issues[0]?.path, ['currency'])
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.issues.map((issue) => issue.path)).toContainEqual([
+          'feeRatePercent',
+        ])
+      }
     }
-  })
+  )
 
-  test('rejects an unsupported invoice supplement payment method', () => {
+  test('rejects a negative minimum amount', () => {
     const result = createInvoiceRuleSchema(t).safeParse({
       ...baseRules,
-      supplementPaymentMethod: 'manual_transfer',
+      minimumAmount: -0.01,
     })
 
-    assert.equal(result.success, false)
+    expect(result.success).toBe(false)
     if (!result.success) {
-      assert.deepEqual(result.error.issues[0]?.path, [
-        'supplementPaymentMethod',
+      expect(result.error.issues.map((issue) => issue.path)).toContainEqual([
+        'minimumAmount',
       ])
+    }
+  })
+
+  test('requires a nonempty invoice item name', () => {
+    const result = createInvoiceRuleSchema(t).safeParse({
+      ...baseRules,
+      invoiceItemName: '   ',
+    })
+
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues.map((issue) => issue.path)).toContainEqual([
+        'invoiceItemName',
+      ])
+    }
+  })
+
+  test('trims the item name and ignores legacy currency and tax options', () => {
+    const result = createInvoiceRuleSchema(t).safeParse({
+      ...baseRules,
+      invoiceItemName: '  AI Agent服务  ',
+      currency: 'CNY',
+      supplementPaymentMethod: 'epay',
+      vatRatePercent: 1,
+    })
+
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data).toEqual(baseRules)
     }
   })
 })

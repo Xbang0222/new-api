@@ -3,27 +3,91 @@ package model
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 
 	"github.com/shopspring/decimal"
+	"golang.org/x/text/currency"
 	"gorm.io/gorm"
 )
 
 type TopUp struct {
-	Id                int     `json:"id"`
-	UserId            int     `json:"user_id" gorm:"index"`
-	Amount            int64   `json:"amount"`
-	Money             float64 `json:"money"`
-	TradeNo           string  `json:"trade_no" gorm:"unique;type:varchar(255);index"`
-	PaymentMethod     string  `json:"payment_method" gorm:"type:varchar(50)"`
-	PaymentProvider   string  `json:"payment_provider" gorm:"type:varchar(50);default:''"`
-	CreateTime        int64   `json:"create_time"`
-	CompleteTime      int64   `json:"complete_time"`
-	Status            string  `json:"status"`
-	InviterRewardSent bool    `json:"inviter_reward_sent" gorm:"default:false"`
+	Id     int     `json:"id"`
+	UserId int     `json:"user_id" gorm:"index"`
+	Amount int64   `json:"amount"`
+	Money  float64 `json:"money"`
+	// PaidAmountMinor stores verified provider minor units (cents for USD/CNY).
+	// Empty currency means that no trustworthy payment receipt was captured.
+	PaidAmountMinor   int64  `json:"paid_amount_minor" gorm:"type:bigint;not null;default:0"`
+	PaidCurrency      string `json:"paid_currency" gorm:"type:varchar(16);not null;default:''"`
+	TradeNo           string `json:"trade_no" gorm:"unique;type:varchar(255);index"`
+	PaymentMethod     string `json:"payment_method" gorm:"type:varchar(50)"`
+	PaymentProvider   string `json:"payment_provider" gorm:"type:varchar(50);default:''"`
+	CreateTime        int64  `json:"create_time"`
+	CompleteTime      int64  `json:"complete_time"`
+	Status            string `json:"status"`
+	InviterRewardSent bool   `json:"inviter_reward_sent" gorm:"default:false"`
+}
+
+// TopUpPaymentReceipt is supplied only by a verified successful payment callback.
+// It never changes Money, whose older provider-specific meaning controls credit.
+type TopUpPaymentReceipt struct {
+	AmountMinor int64
+	Currency    string
+}
+
+func NewTopUpPaymentReceipt(amountMinor int64, currencyCode string) (TopUpPaymentReceipt, error) {
+	unit, err := currency.ParseISO(strings.ToUpper(strings.TrimSpace(currencyCode)))
+	if err != nil || unit.String() == "XXX" || amountMinor <= 0 || amountMinor > int64(common.MaxWalletQuota) {
+		return TopUpPaymentReceipt{}, errors.New("invalid verified payment receipt")
+	}
+	return TopUpPaymentReceipt{AmountMinor: amountMinor, Currency: unit.String()}, nil
+}
+
+// ParseTopUpPaymentReceipt accepts exact display amounts from Waffo callbacks.
+// Exponents and fractions of a currency minor unit are rejected, never rounded.
+func ParseTopUpPaymentReceipt(amount string, currencyCode string) (TopUpPaymentReceipt, error) {
+	amount = strings.TrimSpace(amount)
+	if amount == "" || len(amount) > 64 {
+		return TopUpPaymentReceipt{}, errors.New("invalid verified payment amount")
+	}
+	for _, character := range amount {
+		if (character < '0' || character > '9') && character != '.' {
+			return TopUpPaymentReceipt{}, errors.New("invalid verified payment amount")
+		}
+	}
+	unit, err := currency.ParseISO(strings.ToUpper(strings.TrimSpace(currencyCode)))
+	if err != nil || unit.String() == "XXX" {
+		return TopUpPaymentReceipt{}, errors.New("invalid verified payment currency")
+	}
+	value, err := decimal.NewFromString(amount)
+	if err != nil {
+		return TopUpPaymentReceipt{}, errors.New("invalid verified payment amount")
+	}
+	scale, _ := currency.Standard.Rounding(unit)
+	minor := value.Shift(int32(scale))
+	if !minor.IsPositive() || minor.GreaterThan(decimal.NewFromInt(int64(common.MaxWalletQuota))) || !minor.Equal(minor.Truncate(0)) {
+		return TopUpPaymentReceipt{}, errors.New("invalid verified payment amount")
+	}
+	return NewTopUpPaymentReceipt(minor.IntPart(), unit.String())
+}
+
+func applyTopUpPaymentReceipt(topUp *TopUp, receipts []TopUpPaymentReceipt) error {
+	if len(receipts) == 0 {
+		return nil
+	}
+	if len(receipts) != 1 {
+		return errors.New("expected a single verified payment receipt")
+	}
+	receipt, err := NewTopUpPaymentReceipt(receipts[0].AmountMinor, receipts[0].Currency)
+	if err != nil {
+		return err
+	}
+	topUp.PaidAmountMinor, topUp.PaidCurrency = receipt.AmountMinor, receipt.Currency
+	return nil
 }
 
 const (
@@ -330,7 +394,7 @@ func RechargeEpay(tradeNo string, actualPaymentMethod string, callerIp string) (
 	return false, nil
 }
 
-func Recharge(referenceId string, customerId string, callerIp string) (err error) {
+func Recharge(referenceId string, customerId string, callerIp string, receipts ...TopUpPaymentReceipt) (err error) {
 	if referenceId == "" {
 		return errors.New("未提供支付单号")
 	}
@@ -357,6 +421,9 @@ func Recharge(referenceId string, customerId string, callerIp string) (err error
 			return errors.New("充值订单状态错误")
 		}
 
+		if err := applyTopUpPaymentReceipt(topUp, receipts); err != nil {
+			return err
+		}
 		topUp.CompleteTime = common.GetTimestamp()
 		topUp.Status = common.TopUpStatusSuccess
 		err = tx.Save(topUp).Error
@@ -752,7 +819,7 @@ func ManualCompleteTopUp(tradeNo string, callerIp string) error {
 	}
 	return nil
 }
-func RechargeCreem(referenceId string, customerEmail string, customerName string, callerIp string) (err error) {
+func RechargeCreem(referenceId string, customerEmail string, customerName string, callerIp string, receipts ...TopUpPaymentReceipt) (err error) {
 	if referenceId == "" {
 		return errors.New("未提供支付单号")
 	}
@@ -779,6 +846,9 @@ func RechargeCreem(referenceId string, customerEmail string, customerName string
 			return errors.New("充值订单状态错误")
 		}
 
+		if err := applyTopUpPaymentReceipt(topUp, receipts); err != nil {
+			return err
+		}
 		topUp.CompleteTime = common.GetTimestamp()
 		topUp.Status = common.TopUpStatusSuccess
 		err = tx.Save(topUp).Error
@@ -827,7 +897,7 @@ func RechargeCreem(referenceId string, customerEmail string, customerName string
 	return nil
 }
 
-func RechargeWaffo(tradeNo string, callerIp string) (err error) {
+func RechargeWaffo(tradeNo string, callerIp string, receipts ...TopUpPaymentReceipt) (err error) {
 	if tradeNo == "" {
 		return errors.New("未提供支付单号")
 	}
@@ -865,6 +935,9 @@ func RechargeWaffo(tradeNo string, callerIp string) (err error) {
 			return ErrInvalidTopUpQuota
 		}
 
+		if err := applyTopUpPaymentReceipt(topUp, receipts); err != nil {
+			return err
+		}
 		topUp.CompleteTime = common.GetTimestamp()
 		topUp.Status = common.TopUpStatusSuccess
 		if err := tx.Save(topUp).Error; err != nil {
@@ -890,7 +963,7 @@ func RechargeWaffo(tradeNo string, callerIp string) (err error) {
 	return nil
 }
 
-func RechargeWaffoPancake(tradeNo string) (err error) {
+func RechargeWaffoPancake(tradeNo string, receipts ...TopUpPaymentReceipt) (err error) {
 	if tradeNo == "" {
 		return errors.New("未提供支付单号")
 	}
@@ -928,6 +1001,9 @@ func RechargeWaffoPancake(tradeNo string) (err error) {
 			return ErrInvalidTopUpQuota
 		}
 
+		if err := applyTopUpPaymentReceipt(topUp, receipts); err != nil {
+			return err
+		}
 		topUp.CompleteTime = common.GetTimestamp()
 		topUp.Status = common.TopUpStatusSuccess
 		if err := tx.Save(topUp).Error; err != nil {

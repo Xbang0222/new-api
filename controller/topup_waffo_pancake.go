@@ -523,7 +523,30 @@ func WaffoPancakeWebhook(c *gin.Context) {
 	LockOrder(tradeNo)
 	defer UnlockOrder(tradeNo)
 
-	if err := model.RechargeWaffoPancake(tradeNo); err != nil {
+	// The verified webhook total is tax-inclusive. Older events without total
+	// are unambiguous only when taxAmount is explicitly zero; never infer paid
+	// money from the local credit amount or today's product configuration.
+	var paid struct {
+		Data struct {
+			Total *string `json:"total"`
+		} `json:"data"`
+	}
+	var receipts []model.TopUpPaymentReceipt
+	paidAmount := ""
+	if err := common.Unmarshal(bodyBytes, &paid); err == nil {
+		if paid.Data.Total != nil {
+			paidAmount = *paid.Data.Total
+		} else if tax, err := decimal.NewFromString(event.Data.TaxAmount); err == nil && tax.IsZero() {
+			paidAmount = event.Data.Amount
+		}
+	}
+	receipt, receiptErr := model.ParseTopUpPaymentReceipt(paidAmount, event.Data.Currency)
+	if receiptErr == nil {
+		receipts = append(receipts, receipt)
+	} else {
+		logger.LogWarn(c.Request.Context(), fmt.Sprintf("Waffo Pancake payment receipt unavailable trade_no=%s error=%q", tradeNo, receiptErr.Error()))
+	}
+	if err := model.RechargeWaffoPancake(tradeNo, receipts...); err != nil {
 		logger.LogError(c.Request.Context(), fmt.Sprintf("Waffo Pancake 充值处理失败 trade_no=%s event_id=%s order_id=%s client_ip=%s error=%q", tradeNo, event.ID, event.Data.OrderID, c.ClientIP(), err.Error()))
 		c.String(http.StatusInternalServerError, "retry")
 		return

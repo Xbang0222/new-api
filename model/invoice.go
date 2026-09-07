@@ -18,6 +18,9 @@ const (
 	InvoicePaymentNotRequired = "not_required"
 	InvoicePaymentPending     = "pending"
 	InvoicePaymentPaid        = "paid"
+	InvoicePaymentRefunded    = "refunded"
+
+	InvoiceFeeModeBalanceOnApply = "balance_on_apply"
 
 	InvoicePaymentOrderPending = "pending"
 	InvoicePaymentOrderPaid    = "paid"
@@ -33,7 +36,7 @@ var (
 	ErrInvoicePaymentOrderNotFound  = errors.New("invoice payment order not found")
 	ErrInvoicePaymentOrderInvalid   = errors.New("invoice payment order status invalid")
 	ErrInvoicePaymentMethodMismatch = errors.New("invoice payment method mismatch")
-	ErrWalletQuotaInsufficient      = errors.New("wallet quota insufficient")
+	ErrWalletQuotaInsufficient      = errors.New("额度不足")
 )
 
 type InvoiceApplication struct {
@@ -51,6 +54,12 @@ type InvoiceApplication struct {
 	ApplicantNote                string         `json:"applicant_note" gorm:"type:text"`
 	InvoiceItemName              string         `json:"invoice_item_name" gorm:"type:varchar(255)"`
 	Currency                     string         `json:"currency" gorm:"type:varchar(8)"`
+	CurrencySymbol               string         `json:"currency_symbol" gorm:"type:varchar(64);not null;default:''"`
+	FeeMode                      string         `json:"fee_mode" gorm:"type:varchar(32);not null;default:''"`
+	FeeRateBasisPoints           int            `json:"fee_rate_basis_points" gorm:"type:int;not null;default:0"`
+	ChargedQuota                 int            `json:"charged_quota" gorm:"type:bigint;not null;default:0"`
+	RefundedQuota                int            `json:"refunded_quota" gorm:"type:bigint;not null;default:0"`
+	CanCancel                    bool           `json:"can_cancel" gorm:"-"`
 	OrderAmountCents             int64          `json:"order_amount_cents"`
 	InvoiceAmountCents           int64          `json:"invoice_amount_cents"`
 	EstimatedVATCents            int64          `json:"estimated_vat_cents"`
@@ -178,24 +187,38 @@ func GetInvoiceApplicationForUpdate(tx *gorm.DB, id int) (*InvoiceApplication, e
 }
 
 func DeleteInvoiceApplication(id int) (*InvoiceApplication, error) {
+	application, _, err := DeleteInvoiceApplicationForUser(id, 0)
+	return application, err
+}
+
+// DeleteInvoiceApplicationForUser cancels an unissued application, returns its
+// original wallet fee, and releases its orders in the same transaction. A zero
+// userId is reserved for the administrator service; self-service callers pass
+// their authenticated user ID. The second return value is the committed refund.
+func DeleteInvoiceApplicationForUser(id int, userId int) (*InvoiceApplication, int, error) {
+	if id <= 0 || userId < 0 {
+		return nil, 0, ErrInvoiceNotFound
+	}
 	var deleted InvoiceApplication
+	refundedQuota := 0
 	err := DB.Transaction(func(tx *gorm.DB) error {
 		application, err := GetInvoiceApplicationForUpdate(tx, id)
 		if err != nil {
 			return err
 		}
-		deletable := application.Status == InvoiceStatusPendingReview || application.Status == InvoiceStatusRejected
-		if application.Status == InvoiceStatusPendingPayment && application.PaymentStatus == InvoicePaymentPending && application.PaymentConfirmedAt == 0 {
-			var activePaymentCount int64
-			if err = tx.Model(&InvoicePaymentOrder{}).
-				Where("application_id = ? AND status IN ?", id, []string{InvoicePaymentOrderPending, InvoicePaymentOrderPaid}).
-				Count(&activePaymentCount).Error; err != nil {
-				return err
-			}
-			deletable = activePaymentCount == 0
+		if userId > 0 && application.UserId != userId {
+			return ErrInvoiceNotFound
+		}
+		deletable, err := canCancelInvoiceApplication(tx, application)
+		if err != nil {
+			return err
 		}
 		if !deletable {
 			return ErrInvoiceStatusInvalid
+		}
+		refundedQuota, err = RefundInvoiceFeeTx(tx, application)
+		if err != nil {
+			return err
 		}
 		deleted = *application
 
@@ -215,9 +238,80 @@ func DeleteInvoiceApplication(id int) (*InvoiceApplication, error) {
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	return &deleted, nil
+	return &deleted, refundedQuota, nil
+}
+
+// CanCancelInvoiceApplication is a display hint; deletion repeats this check
+// under the application lock before returning any money or releasing orders.
+func CanCancelInvoiceApplication(application *InvoiceApplication) (bool, error) {
+	return canCancelInvoiceApplication(DB, application)
+}
+
+func canCancelInvoiceApplication(tx *gorm.DB, application *InvoiceApplication) (bool, error) {
+	deletable := application.Status == InvoiceStatusPendingReview || application.Status == InvoiceStatusRejected
+	if application.FeeMode == InvoiceFeeModeBalanceOnApply {
+		// Upload precedes email delivery. A prepared invoice must remain protected
+		// even when its delivery has failed and status is still approved.
+		deletable = deletable || application.Status == InvoiceStatusApproved
+		return deletable && application.IssuedAt == 0 && application.InvoiceFilePath == "" && application.InvoiceEmailSentAt == 0, nil
+	}
+	if application.Status == InvoiceStatusPendingPayment && application.PaymentStatus == InvoicePaymentPending && application.PaymentConfirmedAt == 0 {
+		var activePayments int64
+		if err := tx.Model(&InvoicePaymentOrder{}).
+			Where("application_id = ? AND status IN ?", application.Id, []string{InvoicePaymentOrderPending, InvoicePaymentOrderPaid}).
+			Count(&activePayments).Error; err != nil {
+			return false, err
+		}
+		return activePayments == 0, nil
+	}
+	return deletable, nil
+}
+
+// RefundInvoiceFeeTx refunds only the recorded balance fee, never a legacy
+// external payment. Callers must hold the application lock and change its state
+// in the same transaction. RefundedQuota makes rejection followed by deletion
+// idempotent and keeps refunds independent from later currency/rate changes.
+func RefundInvoiceFeeTx(tx *gorm.DB, application *InvoiceApplication) (int, error) {
+	if tx == nil || application == nil || application.Id <= 0 || application.UserId <= 0 {
+		return 0, errors.New("invalid invoice fee refund")
+	}
+	if application.FeeMode != InvoiceFeeModeBalanceOnApply {
+		return 0, nil
+	}
+	if application.Status == InvoiceStatusIssued || application.IssuedAt > 0 || application.InvoiceFilePath != "" || application.InvoiceEmailSentAt > 0 {
+		return 0, ErrInvoiceStatusInvalid
+	}
+	if application.ChargedQuota < 0 || application.ChargedQuota > common.MaxWalletQuota || application.RefundedQuota < 0 || application.RefundedQuota > application.ChargedQuota {
+		return 0, errors.New("invalid invoice fee refund amount")
+	}
+	refund := application.ChargedQuota - application.RefundedQuota
+	if refund == 0 {
+		return 0, nil
+	}
+	var user User
+	if err := lockForUpdate(tx).Select("id", "quota").Where("id = ?", application.UserId).First(&user).Error; err != nil {
+		return 0, err
+	}
+	result := tx.Model(&User{}).Where("id = ? AND quota <= ?", application.UserId, common.MaxWalletQuota-refund).
+		Update("quota", gorm.Expr("quota + ?", refund))
+	if result.Error != nil {
+		return 0, result.Error
+	}
+	if result.RowsAffected != 1 {
+		return 0, ErrWalletQuotaLimitExceeded
+	}
+	if err := tx.Model(application).Updates(map[string]interface{}{
+		"refunded_quota": application.ChargedQuota,
+		"payment_status": InvoicePaymentRefunded,
+		"updated_at":     common.GetTimestamp(),
+	}).Error; err != nil {
+		return 0, err
+	}
+	application.RefundedQuota = application.ChargedQuota
+	application.PaymentStatus = InvoicePaymentRefunded
+	return refund, nil
 }
 
 func GetInvoicePaymentOrderByTradeNo(tradeNo string) (*InvoicePaymentOrder, error) {

@@ -9,17 +9,19 @@ const (
 	SupplementPaymentMethodEpay      = "epay"
 	SupplementPaymentMethodBalance   = "balance"
 	SupplementPaymentMethodOptionKey = "invoice_setting.supplement_payment_method"
+	FeeRateBasisPointsOptionKey      = "invoice_setting.fee_rate_basis_points"
 )
 
-// InvoiceSetting describes the tax-estimation policy used when an individual
-// provides technical services to an enterprise in mainland China. The saved
-// application snapshot is authoritative for that application; changing these
-// defaults never rewrites an existing application.
+// InvoiceSetting configures new balance-fee applications. Legacy tax fields
+// remain available for historical records; new applications use the item name,
+// minimum amount, fee rate and system currency. Saved application snapshots
+// remain authoritative when these settings later change.
 type InvoiceSetting struct {
 	Enabled                            bool    `json:"enabled"`
 	SupplementPaymentMethod            string  `json:"supplement_payment_method"`
 	TaxBurdenMode                      string  `json:"tax_burden_mode"`
 	MinimumAmount                      float64 `json:"minimum_amount"`
+	FeeRateBasisPoints                 int     `json:"fee_rate_basis_points"`
 	ApplicationWindowDays              int     `json:"application_window_days"`
 	Currency                           string  `json:"currency"`
 	InvoiceItemName                    string  `json:"invoice_item_name"`
@@ -62,11 +64,5 @@ func init() {
 }
 
 func GetInvoiceSetting() *InvoiceSetting {
-	if invoiceSetting.SupplementPaymentMethod != SupplementPaymentMethodBalance {
-		invoiceSetting.SupplementPaymentMethod = SupplementPaymentMethodEpay
-	}
-	if invoiceSetting.InvoiceItemName == "技术服务费" {
-		invoiceSetting.InvoiceItemName = "AI Agent服务"
-	}
 	return &invoiceSetting
 }

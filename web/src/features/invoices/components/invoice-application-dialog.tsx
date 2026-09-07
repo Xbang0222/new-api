@@ -60,6 +60,9 @@ type InvoiceApplicationDialogProps = {
   ordersLoading: boolean
   ordersError: boolean
   submitting: boolean
+  userQuota?: number
+  balanceError?: boolean
+  submissionError?: string
   onRetry: () => void
   onSubmit: (values: InvoiceApplicationFormValues) => Promise<void>
 }
@@ -72,12 +75,40 @@ export function InvoiceApplicationDialog(props: InvoiceApplicationDialogProps) {
     defaultValues: invoiceApplicationFormDefaults,
   })
   const selectedIds = form.watch('top_up_ids')
-  const currency = props.config?.currency ?? 'CNY'
-  const selectedTotal = props.orders.reduce((total, order) => {
+  const currency = props.config?.currency ?? 'USD'
+  const currencySymbol = props.config?.currency_symbol
+  const invoiceOrders = useMemo(
+    () =>
+      props.orders.filter(
+        (order) =>
+          Number.isSafeInteger(order.invoice_amount_cents) &&
+          order.invoice_amount_cents > 0 &&
+          order.currency === currency &&
+          order.currency_symbol === currencySymbol
+      ),
+    [props.orders, currency, currencySymbol]
+  )
+  const selectedTotal = invoiceOrders.reduce((total, order) => {
     return selectedIds.includes(order.id)
-      ? total + Math.round(order.money * 100)
+      ? total + order.invoice_amount_cents
       : total
   }, 0)
+  const hasUnavailableSelection = selectedIds.some(
+    (id) => !invoiceOrders.some((order) => order.id === id)
+  )
+  const feeCents = Math.round(
+    (selectedTotal * (props.config?.fee_rate_basis_points ?? 0)) / 10_000
+  )
+  const quotaPerUnit = props.config?.quota_per_currency_unit ?? 0
+  const estimatedQuota = (feeCents * quotaPerUnit) / 100
+  // Ignore floating-point noise at integer boundaries without hiding a missing
+  // quota unit. The server calculates and charges the exact decimal amount.
+  const roundingTolerance = Math.min(0.25, estimatedQuota * Number.EPSILON * 2)
+  const requiredQuota = Math.ceil(estimatedQuota - roundingTolerance)
+  const insufficientQuota =
+    props.userQuota !== undefined && props.userQuota < requiredQuota
+  const belowMinimum =
+    selectedTotal < Math.round((props.config?.minimum_amount ?? 0) * 100)
 
   const handleOpenChange = (open: boolean) => {
     props.onOpenChange(open)
@@ -96,8 +127,12 @@ export function InvoiceApplicationDialog(props: InvoiceApplicationDialogProps) {
   }
 
   const submit = form.handleSubmit(async (values) => {
-    await props.onSubmit(values)
-    form.reset(invoiceApplicationFormDefaults)
+    try {
+      await props.onSubmit(values)
+      form.reset(invoiceApplicationFormDefaults)
+    } catch {
+      // The parent displays the server failure; preserve the entered application.
+    }
   })
   const availability = {
     configEnabled: props.config?.enabled,
@@ -105,14 +140,19 @@ export function InvoiceApplicationDialog(props: InvoiceApplicationDialogProps) {
     configError: props.configError,
     ordersLoading: props.ordersLoading,
     ordersError: props.ordersError,
-    orderCount: props.orders.length,
+    orderCount: invoiceOrders.length,
   }
   const selectionState = getInvoiceOrderSelectionState(availability)
-  const submitDisabled = !canSubmitInvoiceApplication(
-    availability,
-    selectedIds.length,
-    props.submitting
-  )
+  const submitDisabled =
+    hasUnavailableSelection ||
+    insufficientQuota ||
+    belowMinimum ||
+    (feeCents > 0 && (props.userQuota === undefined || quotaPerUnit <= 0)) ||
+    !canSubmitInvoiceApplication(
+      availability,
+      selectedIds.length,
+      props.submitting
+    )
 
   let orderSelectionContent: ReactNode
   if (selectionState === 'config_loading') {
@@ -186,7 +226,7 @@ export function InvoiceApplicationDialog(props: InvoiceApplicationDialogProps) {
   } else {
     orderSelectionContent = (
       <div className='max-h-[22rem] overflow-y-auto rounded-lg border'>
-        {props.orders.map((order) => {
+        {invoiceOrders.map((order) => {
           const checked = selectedIds.includes(order.id)
           return (
             <Field
@@ -214,7 +254,11 @@ export function InvoiceApplicationDialog(props: InvoiceApplicationDialogProps) {
                   </span>
                 </span>
                 <span className='tabular-nums'>
-                  {formatInvoiceMoney(Math.round(order.money * 100), currency)}
+                  {formatInvoiceMoney(
+                    order.invoice_amount_cents,
+                    order.currency,
+                    order.currency_symbol
+                  )}
                 </span>
               </FieldLabel>
             </Field>
@@ -241,9 +285,14 @@ export function InvoiceApplicationDialog(props: InvoiceApplicationDialogProps) {
             <FieldSet className='min-w-0'>
               <FieldLegend>{t('Paid orders')}</FieldLegend>
               <FieldDescription>
+                {t(
+                  'Only paid orders with a verified amount and currency are available.'
+                )}
+              </FieldDescription>
+              <FieldDescription>
                 {t('Selected amount')}:{' '}
                 <span className='text-foreground font-medium tabular-nums'>
-                  {formatInvoiceMoney(selectedTotal, currency)}
+                  {formatInvoiceMoney(selectedTotal, currency, currencySymbol)}
                 </span>
               </FieldDescription>
               {orderSelectionContent}
@@ -321,32 +370,62 @@ export function InvoiceApplicationDialog(props: InvoiceApplicationDialogProps) {
 
           {props.config ? (
             <Alert className='mt-6'>
-              <AlertTitle>{t('Policy notice')}</AlertTitle>
+              <AlertTitle>{t('Invoice fee')}</AlertTitle>
               <AlertDescription>
                 <div className='flex flex-col gap-2'>
-                  <p>{props.config.policy_notice}</p>
+                  <dl className='grid grid-cols-[1fr_auto] gap-x-4 gap-y-2'>
+                    <dt>{t('Invoice item')}</dt>
+                    <dd>{props.config.invoice_item_name}</dd>
+                    <dt>{t('Final invoice amount')}</dt>
+                    <dd>
+                      {formatInvoiceMoney(
+                        selectedTotal,
+                        currency,
+                        currencySymbol
+                      )}
+                    </dd>
+                    <dt>{t('Invoice fee rate (%)')}</dt>
+                    <dd>{props.config.fee_rate_basis_points / 100}%</dd>
+                    <dt>{t('Fee deducted on submission')}</dt>
+                    <dd>
+                      {formatInvoiceMoney(feeCents, currency, currencySymbol)}
+                    </dd>
+                    <dt>{t('Available balance')}</dt>
+                    <dd>
+                      {props.userQuota !== undefined && quotaPerUnit > 0
+                        ? formatInvoiceMoney(
+                            (props.userQuota * 100) / quotaPerUnit,
+                            currency,
+                            currencySymbol
+                          )
+                        : t('Unavailable')}
+                    </dd>
+                  </dl>
                   <p>
                     {t('Minimum invoice amount')}:{' '}
                     {formatInvoiceMoney(
                       Math.round(props.config.minimum_amount * 100),
-                      props.config.currency
+                      currency,
+                      currencySymbol
                     )}
-                    {' · '}
-                    {t('VAT threshold')}:{' '}
-                    {formatInvoiceMoney(
-                      props.config.vat_threshold_cents,
-                      props.config.currency
-                    )}
-                    {' · '}
-                    {t('Current estimated VAT rate')}:{' '}
-                    {props.config.vat_rate_basis_points / 100}%
                   </p>
                   <p>
                     {t(
-                      'The system will estimate VAT, surcharges, and individual income tax withholding after submission. An administrator must verify the estimate and confirm any final tax supplement before payment.'
+                      'The fee is deducted from your balance when you apply and refunded if the application is rejected or cancelled.'
                     )}
                   </p>
                 </div>
+              </AlertDescription>
+            </Alert>
+          ) : null}
+
+          {insufficientQuota || props.submissionError || props.balanceError ? (
+            <Alert variant='destructive' className='mt-3'>
+              <AlertDescription>
+                {insufficientQuota
+                  ? t('Insufficient quota')
+                  : props.submissionError ||
+                    t('Failed to load balance. Refresh and try again.')}
               </AlertDescription>
             </Alert>
           ) : null}

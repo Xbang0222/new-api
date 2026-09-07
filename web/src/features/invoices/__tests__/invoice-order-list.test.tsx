@@ -8,11 +8,9 @@ the Free Software Foundation, either version 3 of the License, or
 */
 
 import assert from 'node:assert/strict'
-import { test } from 'node:test'
 
 import { renderToStaticMarkup } from 'react-dom/server'
-
-import '@/i18n/config'
+import { test } from 'vitest'
 
 import { InvoiceOrderList } from '../components/invoice-details-dialog'
 

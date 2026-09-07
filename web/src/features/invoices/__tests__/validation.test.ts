@@ -8,9 +8,9 @@ License, or (at your option) any later version.
 */
 
 import assert from 'node:assert/strict'
-import { describe, test } from 'node:test'
 
 import type { TFunction } from 'i18next'
+import { describe, test } from 'vitest'
 
 import { createInvoiceApplicationSchema } from '../lib/invoice-application-form'
 

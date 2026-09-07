@@ -8,7 +8,8 @@ License, or (at your option) any later version.
 */
 
 import assert from 'node:assert/strict'
-import { describe, test } from 'node:test'
+
+import { describe, test } from 'vitest'
 
 import { getInvoiceEmailAction } from '../lib/invoice-email-action'
 import type { InvoiceApplication } from '../types'

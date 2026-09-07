@@ -116,6 +116,7 @@ const defaultBillingSettings: BillingSettings = {
   'invoice_setting.supplement_payment_method': 'epay',
   'invoice_setting.tax_burden_mode': 'supplement_by_customer',
   'invoice_setting.minimum_amount': 0,
+  'invoice_setting.fee_rate_basis_points': 0,
   'invoice_setting.application_window_days': 365,
   'invoice_setting.currency': 'CNY',
   'invoice_setting.invoice_item_name': 'AI Agent服务',

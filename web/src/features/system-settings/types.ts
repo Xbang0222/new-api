@@ -370,6 +370,7 @@ export type BillingSettings = {
   'invoice_setting.supplement_payment_method': 'epay' | 'balance' | string
   'invoice_setting.tax_burden_mode': 'included' | 'supplement_by_customer'
   'invoice_setting.minimum_amount': number
+  'invoice_setting.fee_rate_basis_points': number
   'invoice_setting.application_window_days': number
   'invoice_setting.currency': 'CNY'
   'invoice_setting.invoice_item_name': string

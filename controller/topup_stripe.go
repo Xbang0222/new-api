@@ -295,7 +295,19 @@ func fulfillOrder(ctx context.Context, event stripe.Event, referenceId string, c
 		return
 	}
 
-	err := model.Recharge(referenceId, customerId, callerIp)
+	amountMinor, receiptErr := strconv.ParseInt(event.GetObjectValue("amount_total"), 10, 64)
+	var receipts []model.TopUpPaymentReceipt
+	if receiptErr == nil {
+		receipt, err := model.NewTopUpPaymentReceipt(amountMinor, event.GetObjectValue("currency"))
+		receiptErr = err
+		if err == nil {
+			receipts = append(receipts, receipt)
+		}
+	}
+	if receiptErr != nil {
+		logger.LogWarn(ctx, fmt.Sprintf("Stripe payment receipt unavailable trade_no=%s error=%q", referenceId, receiptErr.Error()))
+	}
+	err := model.Recharge(referenceId, customerId, callerIp, receipts...)
 	if err != nil {
 		logger.LogError(ctx, fmt.Sprintf("Stripe 充值处理失败 trade_no=%s event_type=%s client_ip=%s error=%q", referenceId, string(event.Type), callerIp, err.Error()))
 		return

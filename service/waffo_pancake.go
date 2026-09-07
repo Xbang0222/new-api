@@ -159,11 +159,14 @@ func WaffoPancakeBuyerIdentityFromUserID(userID int) string {
 	return fmt.Sprintf("new-api-user-%d", userID)
 }
 
-// VerifyConfiguredWaffoPancakeWebhook verifies the signature header. The SDK
-// picks the matching test / prod public key from the payload's `mode` field.
+// VerifyConfiguredWaffoPancakeWebhook verifies the platform signature and binds
+// the signed event to the configured store before either payment flow uses it.
 func VerifyConfiguredWaffoPancakeWebhook(payload string, signatureHeader string) (*WaffoPancakeWebhookEvent, error) {
 	evt, err := pancake.VerifyWebhookTyped[pancake.WebhookEventData](payload, signatureHeader, nil)
 	if err != nil {
+		return nil, err
+	}
+	if err := validateWaffoPancakeStoreID(evt.StoreID); err != nil {
 		return nil, err
 	}
 	identity := ""
@@ -192,6 +195,19 @@ func VerifyConfiguredWaffoPancakeWebhook(payload string, signatureHeader string)
 			MerchantProvidedBuyerIdentity: identity,
 		},
 	}, nil
+}
+
+// Platform signing keys are shared across stores. Apply the same ownership
+// rule to live webhooks and previously saved subscription payment receipts.
+func validateWaffoPancakeStoreID(storeID string) error {
+	expected := strings.TrimSpace(setting.WaffoPancakeStoreID)
+	if expected == "" {
+		return fmt.Errorf("waffo pancake store is not configured")
+	}
+	if storeID != expected {
+		return fmt.Errorf("waffo pancake webhook store mismatch")
+	}
+	return nil
 }
 
 // ResolveWaffoPancakeTradeNo maps a verified webhook event to a local TopUp

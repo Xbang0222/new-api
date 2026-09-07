@@ -14,27 +14,28 @@ export type InvoiceStatus =
   | 'rejected'
   | 'issued'
 
-export type InvoicePaymentStatus = 'not_required' | 'pending' | 'paid'
+export type InvoicePaymentStatus =
+  | 'not_required'
+  | 'pending'
+  | 'paid'
+  | 'refunded'
 
 export type InvoiceConfig = {
   enabled: boolean
-  supplement_payment_method: 'epay' | 'balance' | string
   minimum_amount: number
   currency: string
-  vat_threshold_cents: number
-  vat_rate_basis_points: number
-  policy_notice: string
-}
-
-export type InvoicePaymentMethod = {
-  name: string
-  type: string
-  color?: string
+  currency_symbol: string
+  invoice_item_name: string
+  fee_rate_basis_points: number
+  quota_per_currency_unit: number
 }
 
 export type EligibleInvoiceOrder = {
   id: number
   money: number
+  invoice_amount_cents: number
+  currency: string
+  currency_symbol: string
   trade_no: string
   payment_method: string
   create_time: number
@@ -63,6 +64,12 @@ export type InvoiceApplication = {
   applicant_note: string
   invoice_item_name: string
   currency: string
+  currency_symbol?: string
+  fee_mode?: 'balance_on_apply' | ''
+  fee_rate_basis_points?: number
+  charged_quota?: number
+  refunded_quota?: number
+  can_cancel?: boolean
   order_amount_cents: number
   invoice_amount_cents: number
   estimated_vat_cents: number
@@ -108,18 +115,8 @@ export type CreateInvoiceApplicationRequest = {
 
 export type ReviewInvoiceApplicationRequest = {
   action: 'approve' | 'reject'
-  final_supplement_amount_cents?: number
-  tax_adjustment_reason: string
   reason: string
   note: string
-}
-
-export type InvoicePaymentResponse = InvoiceApiResponse<
-  Record<string, string>
-> & {
-  url?: string
-  trade_no?: string
-  settled?: boolean
 }
 
 export type InvoiceApiResponse<T> = {

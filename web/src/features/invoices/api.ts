@@ -16,8 +16,6 @@ import type {
   InvoiceApplication,
   InvoiceApplicationPage,
   InvoiceConfig,
-  InvoicePaymentMethod,
-  InvoicePaymentResponse,
   ReviewInvoiceApplicationRequest,
 } from './types'
 
@@ -35,10 +33,10 @@ export async function getEligibleInvoiceOrders(): Promise<
   return response.data
 }
 
-export async function getInvoicePaymentMethods(): Promise<
-  InvoiceApiResponse<InvoicePaymentMethod[]>
+export async function getInvoiceBalance(): Promise<
+  InvoiceApiResponse<{ quota: number }>
 > {
-  const response = await api.get('/api/invoice/payment-methods')
+  const response = await api.get('/api/user/self')
   return response.data
 }
 
@@ -77,23 +75,21 @@ export async function getAdminInvoiceApplications(
 export async function createInvoiceApplication(
   request: CreateInvoiceApplicationRequest
 ): Promise<InvoiceApiResponse<InvoiceApplication>> {
-  const response = await api.post('/api/invoice/applications', request)
+  const response = await api.post('/api/invoice/applications', request, {
+    skipBusinessError: true,
+  })
   return response.data
 }
 
-export async function requestInvoiceSupplementPayment(
-  applicationId: number,
-  paymentMethod: string
-): Promise<InvoicePaymentResponse> {
+export async function cancelInvoiceApplication(
+  applicationId: number
+): Promise<InvoiceApiResponse<null>> {
   const response = await api.post(
-    `/api/invoice/applications/${applicationId}/pay`,
-    { payment_method: paymentMethod },
-    { skipBusinessError: true } as Record<string, unknown>
+    `/api/invoice/applications/${applicationId}/cancel`,
+    undefined,
+    { skipBusinessError: true }
   )
-  return {
-    ...response.data,
-    url: response.data.url || (response as unknown as { url?: string }).url,
-  }
+  return response.data
 }
 
 export async function reviewInvoiceApplication(
