@@ -169,7 +169,7 @@ type SubscriptionPlan struct {
 	CreemProductId        string `json:"creem_product_id" gorm:"type:varchar(128);default:''"`
 	WaffoPancakeProductId string `json:"waffo_pancake_product_id" gorm:"type:varchar(128);default:''"`
 
-	// Max purchases per user (0 = unlimited)
+	// Max unexpired active subscriptions per user (0 = unlimited).
 	MaxPurchasePerUser int `json:"max_purchase_per_user" gorm:"type:int;default:0"`
 
 	// Upgrade user group after purchase (empty = no change)
@@ -410,13 +410,15 @@ func getSubscriptionPlanByIdTx(tx *gorm.DB, id int) (*SubscriptionPlan, error) {
 	return &plan, nil
 }
 
-func CountUserSubscriptionsByPlan(userId int, planId int) (int64, error) {
+// CountActiveUserSubscriptionsByPlan excludes expired and cancelled holdings,
+// even when the background expiry task has not updated their status yet.
+func CountActiveUserSubscriptionsByPlan(userId int, planId int) (int64, error) {
 	if userId <= 0 || planId <= 0 {
 		return 0, errors.New("invalid userId or planId")
 	}
 	var count int64
 	if err := DB.Model(&UserSubscription{}).
-		Where("user_id = ? AND plan_id = ?", userId, planId).
+		Where("user_id = ? AND plan_id = ? AND status = ? AND end_time > ?", userId, planId, "active", common.GetTimestamp()).
 		Count(&count).Error; err != nil {
 		return 0, err
 	}
@@ -492,9 +494,11 @@ func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *Subscriptio
 		return nil, errors.New("invalid user id")
 	}
 	if plan.MaxPurchasePerUser > 0 {
+		// Callers lock the user before any snapshot reads so concurrent purchases
+		// observe the preceding committed holding, including on MySQL.
 		var count int64
 		if err := tx.Model(&UserSubscription{}).
-			Where("user_id = ? AND plan_id = ?", userId, plan.Id).
+			Where("user_id = ? AND plan_id = ? AND status = ? AND end_time > ?", userId, plan.Id, "active", common.GetTimestamp()).
 			Count(&count).Error; err != nil {
 			return nil, err
 		}
@@ -763,6 +767,12 @@ func PurchaseSubscriptionWithBalance(userId int, planId int) error {
 	var chargedQuota int
 	var upgradeGroup string
 	err := DB.Transaction(func(tx *gorm.DB) error {
+		// Acquire the user lock before reading the plan: a plan-cache miss must
+		// not establish a stale repeatable-read snapshot before a concurrent purchase.
+		var user User
+		if err := lockForUpdate(tx).Where("id = ?", userId).First(&user).Error; err != nil {
+			return err
+		}
 		plan, err := getSubscriptionPlanByIdTx(tx, planId)
 		if err != nil {
 			return err
@@ -782,10 +792,6 @@ func PurchaseSubscriptionWithBalance(userId int, planId int) error {
 			return err
 		}
 
-		var user User
-		if err := lockForUpdate(tx).Where("id = ?", userId).First(&user).Error; err != nil {
-			return err
-		}
 		if requiredQuota > 0 && user.Quota < requiredQuota {
 			return errors.New("余额不足")
 		}

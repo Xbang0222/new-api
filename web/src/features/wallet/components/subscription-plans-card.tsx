@@ -114,6 +114,7 @@ export function SubscriptionPlansCard({
 
   const [purchaseOpen, setPurchaseOpen] = useState(false)
   const [selectedPlan, setSelectedPlan] = useState<PlanRecord | null>(null)
+  const [subscriptionTime, setSubscriptionTime] = useState(Date.now)
 
   const enableStripe = !!topupInfo?.enable_stripe_topup
   const enableCreem = !!topupInfo?.enable_creem_topup
@@ -144,6 +145,7 @@ export function SubscriptionPlansCard({
         )
         setActiveSubscriptions(res.data.subscriptions || [])
         setAllSubscriptions(res.data.all_subscriptions || [])
+        setSubscriptionTime(Date.now())
       }
     } catch {
       // ignore
@@ -195,15 +197,36 @@ export function SubscriptionPlansCard({
     billingPreference === 'subscription_first' ||
     billingPreference === 'subscription_only'
 
-  const planPurchaseCountMap = useMemo(() => {
+  const { planActiveCountMap, nextExpiry } = useMemo(() => {
     const map = new Map<number, number>()
+    let nextExpiry = Infinity
+    const now = subscriptionTime / 1000
     for (const sub of allSubscriptions) {
-      const planId = sub?.subscription?.plan_id
-      if (!planId) continue
+      const subscription = sub.subscription
+      const planId = subscription.plan_id
+      if (
+        !planId ||
+        subscription.status !== 'active' ||
+        subscription.end_time <= now
+      ) {
+        continue
+      }
       map.set(planId, (map.get(planId) || 0) + 1)
+      nextExpiry = Math.min(nextExpiry, subscription.end_time * 1000)
     }
-    return map
-  }, [allSubscriptions])
+    return { planActiveCountMap: map, nextExpiry }
+  }, [allSubscriptions, subscriptionTime])
+
+  useEffect(() => {
+    if (!Number.isFinite(nextExpiry)) return
+    // Long-lived plans can exceed the browser's signed 32-bit timer limit.
+    const delay = Math.min(Math.max(0, nextExpiry - Date.now()), 2_147_483_647)
+    const timer = window.setTimeout(
+      () => setSubscriptionTime(Date.now()),
+      delay
+    )
+    return () => window.clearTimeout(timer)
+  }, [nextExpiry, subscriptionTime])
 
   useEffect(() => {
     onAvailabilityChange?.(isAvailable)
@@ -529,7 +552,7 @@ export function SubscriptionPlansCard({
               const price = Number(plan.price_amount || 0).toFixed(2)
               const isPopular = index === 0 && plans.length > 1
               const limit = Number(plan.max_purchase_per_user || 0)
-              const count = planPurchaseCountMap.get(plan.id) || 0
+              const count = planActiveCountMap.get(plan.id) || 0
               const reached = limit > 0 && count >= limit
 
               const benefits = [
@@ -540,7 +563,10 @@ export function SubscriptionPlansCard({
                 totalAmount > 0
                   ? `${t('Total Quota')}: ${formatQuota(totalAmount)}`
                   : `${t('Total Quota')}: ${t('Unlimited')}`,
-                limit > 0 ? `${t('Purchase Limit')}: ${limit}` : null,
+                `${t('Active Subscription Limit')}: ${limit > 0 ? limit : t('Unlimited')}`,
+                limit > 0
+                  ? t('You can purchase again after a subscription expires.')
+                  : null,
                 plan.upgrade_group
                   ? `${t('Upgrade Group')}: ${plan.upgrade_group}`
                   : null,
@@ -604,7 +630,11 @@ export function SubscriptionPlansCard({
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent>
-                          {t('Purchase limit reached')} ({count}/{limit})
+                          {t('Active subscription limit reached')} ({count}/
+                          {limit}){' '}
+                          {t(
+                            'You can purchase again after a subscription expires.'
+                          )}
                         </TooltipContent>
                       </Tooltip>
                     ) : (
@@ -652,9 +682,9 @@ export function SubscriptionPlansCard({
             ? Number(selectedPlan.plan.max_purchase_per_user)
             : undefined
         }
-        purchaseCount={
+        activeSubscriptionCount={
           selectedPlan?.plan?.id
-            ? planPurchaseCountMap.get(selectedPlan.plan.id)
+            ? planActiveCountMap.get(selectedPlan.plan.id)
             : undefined
         }
       />

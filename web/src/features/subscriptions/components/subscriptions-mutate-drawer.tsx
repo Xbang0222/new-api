@@ -480,7 +480,7 @@ export function SubscriptionsMutateDrawer({
                   name='max_purchase_per_user'
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{t('Purchase Limit')}</FormLabel>
+                      <FormLabel>{t('Active Subscription Limit')}</FormLabel>
                       <FormControl>
                         <Input
                           {...field}
@@ -494,7 +494,9 @@ export function SubscriptionsMutateDrawer({
                         />
                       </FormControl>
                       <FormDescription>
-                        {t('0 means unlimited')}
+                        {t(
+                          'Maximum active subscriptions per user for this plan. Expired subscriptions do not count. 0 means unlimited.'
+                        )}
                       </FormDescription>
                       <FormMessage />
                     </FormItem>

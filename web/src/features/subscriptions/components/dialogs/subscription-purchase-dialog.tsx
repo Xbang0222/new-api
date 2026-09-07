@@ -63,7 +63,7 @@ interface Props {
   enableOnlineTopUp?: boolean
   epayMethods?: PaymentMethod[]
   purchaseLimit?: number
-  purchaseCount?: number
+  activeSubscriptionCount?: number
   userQuota?: number
   onPurchaseSuccess?: () => void | Promise<void>
 }
@@ -112,7 +112,7 @@ export function SubscriptionPurchaseDialog(props: Props) {
   const insufficientBalance = userQuota < balanceCost
   const limitReached =
     (props.purchaseLimit || 0) > 0 &&
-    (props.purchaseCount || 0) >= (props.purchaseLimit || 0)
+    (props.activeSubscriptionCount || 0) >= (props.purchaseLimit || 0)
 
   const handlePayStripe = async () => {
     setPaying(true)
@@ -314,6 +314,16 @@ export function SubscriptionPurchaseDialog(props: Props) {
               <GroupBadge group={plan.upgrade_group} />
             </div>
           )}
+          <div className='flex items-center justify-between gap-2'>
+            <span className='text-muted-foreground text-sm'>
+              {t('Active Subscription Limit')}
+            </span>
+            <span className='text-sm'>
+              {props.purchaseLimit && props.purchaseLimit > 0
+                ? props.purchaseLimit
+                : t('Unlimited')}
+            </span>
+          </div>
           <Separator />
           <div className='flex items-center justify-between'>
             <span className='text-sm font-medium'>{t('Amount Due')}</span>
@@ -324,8 +334,9 @@ export function SubscriptionPurchaseDialog(props: Props) {
         {limitReached && (
           <Alert variant='destructive'>
             <AlertDescription>
-              {t('Purchase limit reached')} ({props.purchaseCount}/
-              {props.purchaseLimit})
+              {t('Active subscription limit reached')} (
+              {props.activeSubscriptionCount}/{props.purchaseLimit}){' '}
+              {t('You can purchase again after a subscription expires.')}
             </AlertDescription>
           </Alert>
         )}
@@ -405,12 +416,10 @@ export function SubscriptionPurchaseDialog(props: Props) {
             {hasEpay && (
               <div className='grid grid-cols-[minmax(0,1fr)_auto] gap-2'>
                 <Select
-                  items={[
-                    ...(props.epayMethods || []).map((m) => ({
-                      value: m.type,
-                      label: m.name || m.type,
-                    })),
-                  ]}
+                  items={(props.epayMethods || []).map((m) => ({
+                    value: m.type,
+                    label: m.name || m.type,
+                  }))}
                   value={selectedEpayMethod}
                   onValueChange={(v) => v !== null && setSelectedEpayMethod(v)}
                   disabled={limitReached}
