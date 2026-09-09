@@ -165,6 +165,7 @@ func SetApiRouter(router *gin.Engine) {
 			subscriptionRoute.GET("/plans", controller.GetSubscriptionPlans)
 			subscriptionRoute.GET("/self", controller.GetSubscriptionSelf)
 			subscriptionRoute.PUT("/self/preference", controller.UpdateSubscriptionPreference)
+			subscriptionRoute.PUT("/self/order", controller.UpdateSubscriptionOrder)
 			subscriptionRoute.POST("/balance/pay", middleware.CriticalRateLimit(), controller.SubscriptionRequestBalancePay)
 			subscriptionRoute.POST("/epay/pay", middleware.CriticalRateLimit(), controller.SubscriptionRequestEpay)
 			subscriptionRoute.POST("/stripe/pay", middleware.CriticalRateLimit(), controller.SubscriptionRequestStripePay)

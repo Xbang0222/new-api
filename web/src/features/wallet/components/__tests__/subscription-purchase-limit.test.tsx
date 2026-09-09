@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -28,6 +29,7 @@ import { api } from '@/lib/api'
 import { SubscriptionPlansCard } from '../subscription-plans-card'
 
 const now = 1_800_000_000
+const queryClients: QueryClient[] = []
 
 const monthlyPlan: SubscriptionPlan = {
   id: 1,
@@ -79,8 +81,14 @@ async function renderPlans(
             },
     },
   }))
+  const client = new QueryClient()
+  queryClients.push(client)
   await act(async () => {
-    render(<SubscriptionPlansCard topupInfo={null} userQuota={50_000_000} />)
+    render(
+      <QueryClientProvider client={client}>
+        <SubscriptionPlansCard topupInfo={null} userQuota={50_000_000} />
+      </QueryClientProvider>
+    )
   })
   expect(
     screen.getByRole('heading', { name: monthlyPlan.title })
@@ -93,6 +101,7 @@ describe('subscription purchase limits', () => {
   })
 
   afterEach(() => {
+    for (const client of queryClients.splice(0)) client.clear()
     vi.useRealTimers()
   })
 

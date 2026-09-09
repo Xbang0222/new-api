@@ -52,23 +52,40 @@ func GetSubscriptionPlans(c *gin.Context) {
 
 func GetSubscriptionSelf(c *gin.Context) {
 	userId := c.GetInt("id")
-	settingMap, _ := model.GetUserSetting(userId, false)
+	settingMap, err := model.GetUserSetting(userId, true)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
 	pref := common.NormalizeBillingPreference(settingMap.BillingPreference)
 
 	// Get all subscriptions (including expired)
 	allSubscriptions, err := model.GetAllUserSubscriptions(userId)
 	if err != nil {
-		allSubscriptions = []model.SubscriptionSummary{}
+		common.ApiError(c, err)
+		return
 	}
 
 	// Get active subscriptions for backward compatibility
 	activeSubscriptions, err := model.GetAllActiveUserSubscriptions(userId)
 	if err != nil {
-		activeSubscriptions = []model.SubscriptionSummary{}
+		common.ApiError(c, err)
+		return
 	}
 
+	activeIDs := make(map[int]bool, len(activeSubscriptions))
+	for _, sub := range activeSubscriptions {
+		activeIDs[sub.Subscription.Id] = true
+	}
+	order := make([]int, 0, len(settingMap.SubscriptionOrder))
+	for _, id := range settingMap.SubscriptionOrder {
+		if activeIDs[id] {
+			order = append(order, id)
+		}
+	}
 	common.ApiSuccess(c, gin.H{
 		"billing_preference": pref,
+		"subscription_order": order,
 		"subscriptions":      activeSubscriptions, // all active subscriptions
 		"all_subscriptions":  allSubscriptions,    // all subscriptions including expired
 	})

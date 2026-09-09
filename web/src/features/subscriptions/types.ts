@@ -139,6 +139,7 @@ export interface SubscriptionResetResult {
 // ============================================================================
 
 export interface SelfSubscriptionData {
+  subscription_order?: number[]
   billing_preference: string
   subscriptions: UserSubscriptionRecord[]
   all_subscriptions: UserSubscriptionRecord[]

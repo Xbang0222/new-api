@@ -179,12 +179,23 @@ func UpdateUserSetting(userId int, setting dto.UserSetting) error {
 	if userId == 0 {
 		return errors.New("id 为空！")
 	}
-	settingBytes, err := common.Marshal(setting)
+	var settingValue string
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		var user User
+		if err := lockForUpdate(tx).Select("id", "setting").Where("id = ?", userId).First(&user).Error; err != nil {
+			return err
+		}
+		// Subscription order is owned by UpdateSubscriptionDebitOrder. General
+		// settings forms may omit it or carry an older snapshot.
+		setting.SubscriptionOrder = user.GetSetting().SubscriptionOrder
+		settingBytes, err := common.Marshal(setting)
+		if err != nil {
+			return err
+		}
+		settingValue = string(settingBytes)
+		return tx.Model(&User{}).Where("id = ?", userId).Update("setting", settingValue).Error
+	})
 	if err != nil {
-		return err
-	}
-	settingValue := string(settingBytes)
-	if err = DB.Model(&User{}).Where("id = ?", userId).Update("setting", settingValue).Error; err != nil {
 		return err
 	}
 	return updateUserSettingCache(userId, settingValue)
