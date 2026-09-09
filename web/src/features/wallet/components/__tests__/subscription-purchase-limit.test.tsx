@@ -76,7 +76,11 @@ async function renderPlans(
           ? [{ plan: { ...monthlyPlan, max_purchase_per_user: limit } }]
           : {
               billing_preference: 'subscription_first',
-              subscriptions: records,
+              subscriptions: records.filter(
+                ({ subscription }) =>
+                  subscription.status === 'active' &&
+                  subscription.end_time > now
+              ),
               all_subscriptions: records,
             },
     },
@@ -172,6 +176,78 @@ describe('subscription purchase limits', () => {
     })
 
     expect(screen.getByRole('button', { name: 'Subscribe Now' })).toBeEnabled()
+  })
+
+  it('updates active and expired counts with the debit lists when a subscription expires on the open page', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    await renderPlans(
+      [
+        subscription({ end_time: now + 60 }),
+        subscription({ id: 2 }),
+        subscription({ id: 3 }),
+        subscription({ id: 4, status: 'expired', end_time: now - 1 }),
+      ],
+      3
+    )
+    expect(screen.getByText('3 active')).toBeInTheDocument()
+    expect(screen.getByText('1 expired')).toBeInTheDocument()
+
+    vi.mocked(Date.now).mockReturnValue((now + 60) * 1000)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000)
+    })
+
+    expect(screen.getByText('2 active')).toBeInTheDocument()
+    expect(screen.getByText('2 expired')).toBeInTheDocument()
+    const activeList = screen.getByRole('list', {
+      name: 'Active subscriptions in debit order',
+    })
+    expect(within(activeList).getAllByRole('listitem')).toHaveLength(2)
+    const history = screen.getByRole('region', {
+      name: 'Expired and cancelled subscriptions',
+    })
+    expect(within(history).getAllByRole('listitem')).toHaveLength(2)
+    expect(screen.getByRole('button', { name: 'Subscribe Now' })).toBeEnabled()
+  })
+
+  it('disables subscription billing preferences when the last active subscription expires on the open page', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    await renderPlans([subscription({ end_time: now + 60 })])
+    fireEvent.click(screen.getByRole('combobox'))
+    expect(
+      screen.getByRole('option', { name: 'Subscription First' })
+    ).not.toHaveAttribute('aria-disabled', 'true')
+    expect(
+      screen.getByRole('option', { name: 'Subscription Only' })
+    ).not.toHaveAttribute('aria-disabled', 'true')
+
+    vi.mocked(Date.now).mockReturnValue((now + 60) * 1000)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000)
+    })
+
+    expect(
+      screen.getByRole('option', { name: 'Subscription First (No Active)' })
+    ).toHaveAttribute('aria-disabled', 'true')
+    expect(
+      screen.getByRole('option', { name: 'Subscription Only (No Active)' })
+    ).toHaveAttribute('aria-disabled', 'true')
+    expect(
+      screen.getByRole('option', { name: 'Wallet First' })
+    ).not.toHaveAttribute('aria-disabled', 'true')
+    expect(
+      screen.getByRole('option', { name: 'Wallet Only' })
+    ).not.toHaveAttribute('aria-disabled', 'true')
+    expect(screen.getByText('No Active')).toBeInTheDocument()
+    expect(screen.getByText('1 expired')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Preference saved as Subscription First, but no active subscription. Wallet will be used automatically.'
+      )
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('No active subscriptions to reorder.')
+    ).toBeInTheDocument()
   })
 
   it('keeps a long-lived subscription limited until expiry beyond the browser timer limit', async () => {

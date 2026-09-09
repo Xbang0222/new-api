@@ -39,6 +39,7 @@ import { SubscriptionSummary } from './subscription-summary'
 interface SubscriptionOrderEditorProps {
   activeSubscriptions: UserSubscriptionRecord[]
   allSubscriptions: UserSubscriptionRecord[]
+  nowSeconds?: number
   savedOrder: number[]
   planTitles: Map<number, string>
   onSaved: (data: SelfSubscriptionData) => void
@@ -48,7 +49,7 @@ export function SubscriptionOrderEditor(props: SubscriptionOrderEditorProps) {
   const { t } = useTranslation()
   // null follows the saved order; [] previews the default expiry order.
   const [draftOrder, setDraftOrder] = useState<number[] | null>(null)
-  const now = Date.now() / 1000
+  const now = props.nowSeconds ?? Date.now() / 1000
   const activeSubscriptions = props.activeSubscriptions.filter(
     ({ subscription }) =>
       subscription.status === 'active' && subscription.end_time > now

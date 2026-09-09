@@ -192,7 +192,16 @@ export function SubscriptionPlansCard({
     }
   }
 
-  const hasActive = activeSubscriptions.length > 0
+  const activeSubscriptionCount = useMemo(
+    () =>
+      activeSubscriptions.filter(
+        ({ subscription }) =>
+          subscription.status === 'active' &&
+          subscription.end_time > subscriptionTime / 1000
+      ).length,
+    [activeSubscriptions, subscriptionTime]
+  )
+  const hasActive = activeSubscriptionCount > 0
   const hasAny = allSubscriptions.length > 0
   const isAvailable = loading || plans.length > 0 || hasAny
   const disablePref = !hasActive
@@ -294,18 +303,18 @@ export function SubscriptionPlansCard({
                 />
                 {hasActive ? (
                   <span className={cn(textColorMap.success)}>
-                    {activeSubscriptions.length} {t('active')}
+                    {activeSubscriptionCount} {t('active')}
                   </span>
                 ) : (
                   <span className='text-muted-foreground'>
                     {t('No Active')}
                   </span>
                 )}
-                {allSubscriptions.length > activeSubscriptions.length && (
+                {allSubscriptions.length > activeSubscriptionCount && (
                   <>
                     <span className='text-muted-foreground/30'>·</span>
                     <span className='text-muted-foreground'>
-                      {allSubscriptions.length - activeSubscriptions.length}{' '}
+                      {allSubscriptions.length - activeSubscriptionCount}{' '}
                       {t('expired')}
                     </span>
                   </>
@@ -409,6 +418,7 @@ export function SubscriptionPlansCard({
               <SubscriptionOrderEditor
                 activeSubscriptions={activeSubscriptions}
                 allSubscriptions={allSubscriptions}
+                nowSeconds={subscriptionTime / 1000}
                 savedOrder={subscriptionOrder}
                 planTitles={planTitleMap}
                 onSaved={applySelfSubscription}
