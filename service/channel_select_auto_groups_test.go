@@ -10,6 +10,7 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
@@ -126,4 +127,153 @@ func TestCacheGetRandomSatisfiedChannelUsesTokenAutoGroupsWhenGlobalAutoIsEmpty(
 	assert.Equal(t, 2102, second.Id)
 	assert.Equal(t, "default", selectedGroup)
 	assert.Equal(t, "default", common.GetContextKeyString(ctx, constant.ContextKeyAutoGroup))
+}
+
+func TestAutoGroupRelayAttemptsRespectOrderBudgetAndCrossGroupSwitch(t *testing.T) {
+	for _, test := range []struct {
+		name          string
+		retries       int
+		crossGroup    bool
+		smart         bool
+		maxAttempts   int
+		sharedChannel bool
+		wantGroups    []string
+	}{
+		{name: "legacy zero retries still reaches next group", retries: 0, crossGroup: true, wantGroups: []string{"vip", "default"}},
+		{name: "legacy each group has its own budget", retries: 1, crossGroup: true, wantGroups: []string{"vip", "vip", "default", "default"}},
+		{name: "legacy failed channels are not reused", retries: 5, crossGroup: true, wantGroups: []string{"vip", "vip", "default", "default"}},
+		{name: "legacy cross group disabled", retries: 5, wantGroups: []string{"vip", "vip"}},
+		{name: "intelligent cross group enabled", retries: 0, crossGroup: true, smart: true, wantGroups: []string{"vip", "vip", "default", "default"}},
+		{name: "intelligent cross group disabled", retries: 0, smart: true, wantGroups: []string{"vip", "vip"}},
+		{name: "intelligent request budget stays bounded", crossGroup: true, smart: true, maxAttempts: 2, wantGroups: []string{"vip", "vip"}},
+		{name: "failed channel shared by groups is excluded", retries: 5, crossGroup: true, sharedChannel: true, wantGroups: []string{"vip", "vip", "default", "default"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			db := setupChannelSelectAutoGroupsTest(t)
+			common.RetryTimes = test.retries
+			original := operation_setting.GetChannelSchedulingSetting()
+			originalGroups, err := common.Marshal(original.GroupStrategies)
+			require.NoError(t, err)
+			strategies := `{"vip":"legacy","default":"legacy"}`
+			if test.smart {
+				strategies = `{"vip":"intelligent","default":"intelligent"}`
+			}
+			maxAttempts := 8
+			if test.maxAttempts > 0 {
+				maxAttempts = test.maxAttempts
+			}
+			require.NoError(t, operation_setting.ApplyChannelSchedulingConfig(map[string]string{"group_strategies": strategies, "max_attempts": fmt.Sprint(maxAttempts)}))
+			t.Cleanup(func() {
+				require.NoError(t, operation_setting.ApplyChannelSchedulingConfig(map[string]string{
+					"group_strategies": string(originalGroups), "max_attempts": fmt.Sprint(original.MaxAttempts),
+				}))
+			})
+			const modelName = "auto-retry-path-model"
+			createChannelSelectAutoGroupsChannel(t, db, 2201, "vip", modelName)
+			createChannelSelectAutoGroupsChannel(t, db, 2202, "vip", modelName)
+			createChannelSelectAutoGroupsChannel(t, db, 2203, "default", modelName)
+			createChannelSelectAutoGroupsChannel(t, db, 2204, "default", modelName)
+			if test.sharedChannel {
+				require.NoError(t, db.Model(&model.Channel{}).Where("id = ?", 2201).Update("group", "vip,default").Error)
+				require.NoError(t, db.Create(&model.Ability{Group: "default", Model: modelName, ChannelId: 2201, Enabled: true, Weight: 100}).Error)
+			}
+			model.InitChannelCache()
+			ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+			common.SetContextKey(ctx, constant.ContextKeyUserGroup, "default")
+			common.SetContextKey(ctx, constant.ContextKeyTokenAutoGroups, []string{"vip", "default"})
+			common.SetContextKey(ctx, constant.ContextKeyTokenCrossGroupRetry, test.crossGroup)
+
+			// Distributor selects the first channel with a different RetryParam
+			// than the controller, but they share the same request context.
+			first, group, err := CacheGetRandomSatisfiedChannel(&RetryParam{Ctx: ctx, TokenGroup: "auto", ModelName: modelName})
+			require.NoError(t, err)
+			require.NotNil(t, first)
+			param := &RetryParam{Ctx: ctx, TokenGroup: "auto", ModelName: modelName}
+			limit := GetRelayAttemptLimit(param)
+			groups := []string{group}
+			seen := map[int]bool{first.Id: true}
+			param.MarkAttempted(first.Id)
+			for attempt := 1; attempt < limit; attempt++ {
+				param.IncreaseRetry()
+				channel, group, err := CacheGetRandomSatisfiedChannel(param)
+				require.NoError(t, err)
+				if channel == nil {
+					break
+				}
+				assert.False(t, seen[channel.Id], "a failed channel must not be retried")
+				seen[channel.Id] = true
+				groups = append(groups, group)
+				param.MarkAttempted(channel.Id)
+				assert.Equal(t, attempt, param.GetRetry(), "request attempt index must not reset when changing groups")
+			}
+			assert.Equal(t, test.wantGroups, groups)
+		})
+	}
+}
+
+func TestLegacyRetryDoesNotSkipTheNextPriorityAfterExcludingFailedChannel(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		disable  bool
+		affinity bool
+	}{
+		{name: "failed channel remains enabled"},
+		{name: "failed channel removed from cache", disable: true},
+		{name: "affinity channel removed from cache", disable: true, affinity: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			db := setupChannelSelectAutoGroupsTest(t)
+			const modelName = "legacy-retry-priority-model"
+			for index, priority := range []int64{30, 20, 10} {
+				id := 2301 + index
+				createChannelSelectAutoGroupsChannel(t, db, id, "default", modelName)
+				require.NoError(t, db.Model(&model.Channel{}).Where("id = ?", id).Update("priority", priority).Error)
+				require.NoError(t, db.Model(&model.Ability{}).Where("channel_id = ?", id).Update("priority", priority).Error)
+			}
+			model.InitChannelCache()
+			ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+			common.SetContextKey(ctx, constant.ContextKeyUsingGroup, "default")
+			param := &RetryParam{Ctx: ctx, TokenGroup: "default", ModelName: modelName}
+			for index, wantID := range []int{2301, 2302, 2303} {
+				if index > 0 {
+					param.IncreaseRetry()
+				}
+				var channel *model.Channel
+				var err error
+				if test.affinity && index == 0 {
+					channel, err = model.CacheGetChannel(wantID)
+				} else {
+					channel, _, err = CacheGetRandomSatisfiedChannel(param)
+				}
+				require.NoError(t, err)
+				require.NotNil(t, channel)
+				assert.Equal(t, wantID, channel.Id)
+				param.MarkChannelAttempted(channel)
+				if test.disable {
+					require.NoError(t, db.Model(&model.Channel{}).Where("id = ?", channel.Id).Update("status", common.ChannelStatusAutoDisabled).Error)
+					model.InitChannelCache()
+				}
+			}
+			param.IncreaseRetry()
+			channel, _, err := CacheGetRandomSatisfiedChannel(param)
+			require.NoError(t, err)
+			assert.Nil(t, channel, "exhausted priorities must not reuse the last failed channel")
+		})
+	}
+}
+
+func TestAutoGroupWithoutCrossGroupRetryStillSkipsInitiallyUnavailableGroup(t *testing.T) {
+	db := setupChannelSelectAutoGroupsTest(t)
+	const modelName = "auto-initial-empty-group-model"
+	createChannelSelectAutoGroupsChannel(t, db, 2401, "default", modelName)
+	model.InitChannelCache()
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	common.SetContextKey(ctx, constant.ContextKeyUserGroup, "default")
+	common.SetContextKey(ctx, constant.ContextKeyTokenAutoGroups, []string{"vip", "default"})
+	param := &RetryParam{Ctx: ctx, TokenGroup: "auto", ModelName: modelName}
+	channel, group, err := CacheGetRandomSatisfiedChannel(param)
+	require.NoError(t, err)
+	require.NotNil(t, channel)
+	assert.Equal(t, 2401, channel.Id)
+	assert.Equal(t, "default", group)
 }

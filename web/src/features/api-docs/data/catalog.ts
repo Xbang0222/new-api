@@ -40,6 +40,9 @@ const streamParameter: ApiParameter = {
     'When true, the response is delivered as a server-sent event stream.',
 }
 
+const relayRetryNote =
+  'Automatic retries stop after cancellation or once response output begins. If a stream is interrupted, it will not be continued by another provider.'
+
 const taskIdParameter: ApiParameter = {
   name: 'task_id',
   location: 'path',
@@ -145,6 +148,7 @@ export const apiEndpoints: ApiEndpoint[] = [
     method: 'POST',
     path: '/v1/chat/completions',
     auth: 'bearer',
+    notes: [relayRetryNote],
     contentType: 'application/json',
     parameters: [
       modelParameter,
@@ -228,6 +232,7 @@ export const apiEndpoints: ApiEndpoint[] = [
     method: 'POST',
     path: '/v1/responses',
     auth: 'bearer',
+    notes: [relayRetryNote],
     contentType: 'application/json',
     parameters: [
       modelParameter,
@@ -304,6 +309,7 @@ export const apiEndpoints: ApiEndpoint[] = [
     method: 'POST',
     path: '/v1/responses/compact',
     auth: 'bearer',
+    notes: [relayRetryNote],
     contentType: 'application/json',
     parameters: [
       modelParameter,
@@ -349,6 +355,7 @@ export const apiEndpoints: ApiEndpoint[] = [
     method: 'POST',
     path: '/v1/completions',
     auth: 'bearer',
+    notes: [relayRetryNote],
     contentType: 'application/json',
     parameters: [
       modelParameter,
@@ -397,6 +404,7 @@ export const apiEndpoints: ApiEndpoint[] = [
     method: 'POST',
     path: '/v1/embeddings',
     auth: 'bearer',
+    notes: [relayRetryNote],
     contentType: 'application/json',
     parameters: [
       modelParameter,
@@ -460,6 +468,7 @@ export const apiEndpoints: ApiEndpoint[] = [
     method: 'POST',
     path: '/v1/rerank',
     auth: 'bearer',
+    notes: [relayRetryNote],
     contentType: 'application/json',
     parameters: [
       modelParameter,
@@ -528,6 +537,7 @@ export const apiEndpoints: ApiEndpoint[] = [
     method: 'POST',
     path: '/v1/moderations',
     auth: 'bearer',
+    notes: [relayRetryNote],
     contentType: 'application/json',
     parameters: [
       {
@@ -622,6 +632,7 @@ export const apiEndpoints: ApiEndpoint[] = [
     responseDescription:
       'Depending on response_format and provider support, each data item contains either a URL or Base64 image data.',
     notes: [
+      relayRetryNote,
       'Use 1024x1024, not 1024×1024. The multiplication symbol is rejected.',
       'Model-specific limits may be lower than the gateway limit.',
     ],
@@ -637,6 +648,7 @@ export const apiEndpoints: ApiEndpoint[] = [
     method: 'POST',
     path: '/v1/images/edits',
     auth: 'bearer',
+    notes: [relayRetryNote],
     contentType: 'multipart/form-data',
     parameters: [
       { ...modelParameter, location: 'form' },
@@ -707,6 +719,7 @@ export const apiEndpoints: ApiEndpoint[] = [
     method: 'POST',
     path: '/v1/audio/transcriptions',
     auth: 'bearer',
+    notes: [relayRetryNote],
     contentType: 'multipart/form-data',
     parameters: [
       { ...modelParameter, location: 'form' },
@@ -757,6 +770,7 @@ export const apiEndpoints: ApiEndpoint[] = [
     method: 'POST',
     path: '/v1/audio/speech',
     auth: 'bearer',
+    notes: [relayRetryNote],
     contentType: 'application/json',
     parameters: [
       modelParameter,
@@ -816,6 +830,7 @@ export const apiEndpoints: ApiEndpoint[] = [
     method: 'POST',
     path: '/v1/audio/translations',
     auth: 'bearer',
+    notes: [relayRetryNote],
     contentType: 'multipart/form-data',
     parameters: [
       { ...modelParameter, location: 'form' },
@@ -859,6 +874,7 @@ export const apiEndpoints: ApiEndpoint[] = [
     method: 'POST',
     path: '/v1/messages',
     auth: 'claude',
+    notes: [relayRetryNote],
     contentType: 'application/json',
     parameters: [
       {
@@ -922,6 +938,7 @@ export const apiEndpoints: ApiEndpoint[] = [
     method: 'POST',
     path: '/v1beta/models/{model}:generateContent',
     auth: 'gemini',
+    notes: [relayRetryNote],
     contentType: 'application/json',
     parameters: [
       {
@@ -1014,6 +1031,7 @@ export const apiEndpoints: ApiEndpoint[] = [
     method: 'POST',
     path: '/v1beta/models/{model}:embedContent',
     auth: 'gemini',
+    notes: [relayRetryNote],
     contentType: 'application/json',
     parameters: [
       {

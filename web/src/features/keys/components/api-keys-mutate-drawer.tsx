@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronDown, KeyRound, Settings2, WalletCards } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useForm, type SubmitErrorHandler } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -112,6 +112,7 @@ export function ApiKeysMutateDrawer({
   const [initializedTarget, setInitializedTarget] = useState<string | null>(
     null
   )
+  const hasAutoRetryPreference = useRef(false)
   const defaultUseAutoGroup = status?.default_use_auto_group === true
 
   // Fetch models
@@ -221,6 +222,7 @@ export function ApiKeysMutateDrawer({
     if (initializedTarget === target) return
     if (isUpdate && currentRow) {
       if (apiKeyData?.success && apiKeyData.data) {
+        hasAutoRetryPreference.current = apiKeyData.data.group === 'auto'
         form.reset(
           transformApiKeyToFormDefaults(
             apiKeyData.data,
@@ -231,6 +233,7 @@ export function ApiKeysMutateDrawer({
         setInitializedTarget(target)
       }
     } else {
+      hasAutoRetryPreference.current = defaultUseAutoGroup && backendHasAuto
       form.reset(
         getApiKeyFormDefaultValues(defaultUseAutoGroup && backendHasAuto)
       )
@@ -274,7 +277,6 @@ export function ApiKeysMutateDrawer({
       if (currentGroup === 'auto') {
         form.setValue('auto_groups', [])
         form.setValue('auto_groups_mode', 'inherit')
-        form.setValue('cross_group_retry', false)
       }
     }
   }, [groups, form, selectedGroup])
@@ -427,15 +429,17 @@ export function ApiKeysMutateDrawer({
                         value={field.value}
                         onValueChange={(group) => {
                           field.onChange(group)
-                          if (group === 'auto') {
+                          // Apply the Auto default only on its first selection;
+                          // later group changes preserve the user's switch choice.
+                          if (
+                            group === 'auto' &&
+                            !hasAutoRetryPreference.current
+                          ) {
+                            hasAutoRetryPreference.current = true
                             form.setValue('cross_group_retry', true, {
                               shouldDirty: true,
                             })
-                            return
                           }
-                          form.setValue('cross_group_retry', false, {
-                            shouldDirty: true,
-                          })
                         }}
                         placeholder={t('Select a group')}
                       />
@@ -496,10 +500,17 @@ export function ApiKeysMutateDrawer({
                         <FormLabel className='text-sm'>
                           {t('Cross-group retry')}
                         </FormLabel>
-                        <FormDescription className='line-clamp-2 text-xs sm:line-clamp-none'>
-                          {t(
-                            'When enabled, if channels in the current group fail, it will try channels in the next group in order.'
-                          )}
+                        <FormDescription className='text-xs'>
+                          <span className='line-clamp-2 sm:line-clamp-none'>
+                            {t(
+                              'When enabled, if channels in the current group fail, it will try channels in the next group in order.'
+                            )}
+                          </span>
+                          <span className='mt-1 block text-xs'>
+                            {t(
+                              'Cross-group retries may reduce prompt cache hits and increase costs.'
+                            )}
+                          </span>
                         </FormDescription>
                       </div>
                       <FormControl>

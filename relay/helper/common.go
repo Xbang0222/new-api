@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
@@ -116,7 +117,9 @@ func PingData(c *gin.Context) error {
 		return fmt.Errorf("request context done: %w", c.Request.Context().Err())
 	}
 
-	if _, err := c.Writer.Write([]byte(": PING\n\n")); err != nil {
+	n, err := c.Writer.Write([]byte(": PING\n\n"))
+	common.SetContextKey(c, constant.ContextKeyRelayKeepAliveBytes, common.GetContextKeyInt(c, constant.ContextKeyRelayKeepAliveBytes)+n)
+	if err != nil {
 		return fmt.Errorf("write ping data failed: %w", err)
 	}
 	return FlushWriter(c)

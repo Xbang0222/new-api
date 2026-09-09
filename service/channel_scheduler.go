@@ -287,6 +287,18 @@ func GetRelayAttemptLimit(param *RetryParam) int {
 	if limit < 1 {
 		limit = 1
 	}
+	if param != nil && param.TokenGroup == "auto" && common.GetContextKeyBool(param.Ctx, constant.ContextKeyTokenCrossGroupRetry) {
+		userGroup := common.GetContextKeyString(param.Ctx, constant.ContextKeyUserGroup)
+		groupCount := len(GetRequestAutoGroups(param.Ctx, userGroup))
+		if groupCount > 1 {
+			// Legacy retries are a per-group budget. Keep a separate bounded
+			// request limit so exhausting one group can actually reach the next.
+			if limit > math.MaxInt/groupCount {
+				return math.MaxInt
+			}
+			limit *= groupCount
+		}
+	}
 	return limit
 }
 
@@ -307,27 +319,53 @@ func selectLegacyChannel(param *RetryParam, group string, retry int) (*model.Cha
 		return nil, nil
 	}
 
-	priorities := make([]int64, 0, len(available))
+	prioritySnapshots, _ := common.GetContextKeyType[map[string][]int64](param.Ctx, constant.ContextKeyChannelRetryPriorities)
+	if prioritySnapshots == nil {
+		prioritySnapshots = make(map[string][]int64)
+		common.SetContextKey(param.Ctx, constant.ContextKeyChannelRetryPriorities, prioritySnapshots)
+	}
+	priorities, hasSnapshot := prioritySnapshots[group]
+	if !hasSnapshot {
+		priorities = make([]int64, 0, len(available))
+	}
+	prioritySet := make(map[int64]bool, len(priorities))
+	for _, priority := range priorities {
+		prioritySet[priority] = true
+	}
 	for _, channel := range available {
 		priority := channel.GetPriority()
-		if len(priorities) == 0 || priorities[len(priorities)-1] != priority {
+		if !prioritySet[priority] {
 			priorities = append(priorities, priority)
+			prioritySet[priority] = true
 		}
 	}
+	// Session affinity can choose the first channel outside this selector.
+	// Keep its tier even if the failure removed that channel from the pool.
+	if priority, attempted := param.lastAttemptedPriority[group]; attempted && !prioritySet[priority] {
+		priorities = append(priorities, priority)
+	}
+	sort.Slice(priorities, func(i, j int) bool { return priorities[i] > priorities[j] })
+	prioritySnapshots[group] = priorities
 	if retry >= len(priorities) {
 		retry = len(priorities) - 1
 	}
 	if retry < 0 {
 		retry = 0
 	}
-	targetPriority := priorities[retry]
-	tier := make([]*model.Channel, 0, len(available))
-	for _, channel := range available {
-		if channel.GetPriority() == targetPriority {
-			tier = append(tier, channel)
+	// Keep the original priority ranks when excluding attempts; deleting a
+	// failed tier before indexing would skip the immediately lower priority.
+	for _, targetPriority := range priorities[retry:] {
+		tier := make([]*model.Channel, 0, len(available))
+		for _, channel := range available {
+			if channel.GetPriority() == targetPriority && !param.HasAttempted(channel.Id) {
+				tier = append(tier, channel)
+			}
+		}
+		if len(tier) > 0 {
+			return selectLegacyWeightedChannel(tier), nil
 		}
 	}
-	return selectLegacyWeightedChannel(tier), nil
+	return nil, nil
 }
 
 func selectLegacyWeightedChannel(channels []*model.Channel) *model.Channel {

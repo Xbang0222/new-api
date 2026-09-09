@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -277,13 +278,14 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			}
 			retryParam.MarkRateLimited(channel.Id, decision.RetryAfterMillis)
 			if _, specificChannel := c.Get("specific_channel_id"); specificChannel {
-				candidate := &channelRateLimitWaitCandidate{channel: channel, group: relayInfo.UsingGroup, retryAfterMillis: decision.RetryAfterMillis}
+				candidate := &channelRateLimitWaitCandidate{channel: channel, group: relayInfo.UsingGroup, retryAfterMillis: decision.RetryAfterMillis, autoGroupRetryIndex: common.GetContextKeyInt(c, constant.ContextKeyAutoGroupRetryIndex)}
 				channel, reservation, channelErr = waitForRateLimitedChannel(c, relayInfo, retryParam, candidate)
 				break
 			}
 			if waitCandidate == nil || decision.RetryAfterMillis < waitCandidate.retryAfterMillis {
 				waitCandidate = &channelRateLimitWaitCandidate{
 					channel: channel, group: relayInfo.UsingGroup, retryAfterMillis: decision.RetryAfterMillis,
+					autoGroupRetryIndex: common.GetContextKeyInt(c, constant.ContextKeyAutoGroupRetryIndex),
 				}
 			}
 			relayInfo.ChannelMeta = nil
@@ -291,7 +293,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		if channelErr != nil {
 			logger.LogError(c, channelErr.Error())
 			if waitCandidate == nil && channelErr.GetErrorCode() != types.ErrorCodeChannelRateLimited && retryParam.RateLimitError() == nil &&
-				service.IsIntelligentSchedulingForGroup(common.GetContextKeyString(c, constant.ContextKeyUsingGroup)) && relayInfo.LastError != nil {
+				relayInfo.LastError != nil {
 				newAPIError = relayInfo.LastError
 			} else {
 				newAPIError = channelErr
@@ -299,7 +301,26 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			break
 		}
 		addUsedChannel(c, channel.Id)
-		retryParam.MarkAttempted(channel.Id)
+		retryParam.MarkChannelAttempted(channel)
+		if relayInfo.Billing == nil && relayInfo.TieredBillingSnapshot == nil &&
+			relayInfo.PriceData.FreeModel && relayInfo.PriceData.GroupRatioInfo.GroupRatio != 0 {
+			// A free initial group skipped funding checks. Ordinary ratio and
+			// per-call billing must create their session before a paid fallback,
+			// preserving token limits and the user's subscription preference.
+			selectedPrice, priceErr := helper.ModelPriceHelper(c, relayInfo, tokens, meta)
+			if priceErr != nil {
+				service.ReleaseChannelRequestReservation(reservation)
+				newAPIError = types.NewError(priceErr, types.ErrorCodeModelPriceError, types.ErrOptionWithStatusCode(http.StatusBadRequest), types.ErrOptionWithSkipRetry())
+				break
+			}
+			if !selectedPrice.FreeModel {
+				if billingErr := service.PreConsumeBilling(c, selectedPrice.QuotaToPreConsume, relayInfo); billingErr != nil {
+					service.ReleaseChannelRequestReservation(reservation)
+					newAPIError = billingErr
+					break
+				}
+			}
+		}
 		if billingErr := service.PrepareTieredBillingForSelectedGroup(c, relayInfo); billingErr != nil {
 			service.ReleaseChannelRequestReservation(reservation)
 			newAPIError = billingErr
@@ -380,9 +401,10 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 }
 
 type channelRateLimitWaitCandidate struct {
-	channel          *model.Channel
-	group            string
-	retryAfterMillis int64
+	channel             *model.Channel
+	group               string
+	retryAfterMillis    int64
+	autoGroupRetryIndex int
 }
 
 func waitForRateLimitedChannel(
@@ -426,6 +448,17 @@ func waitForRateLimitedChannel(
 	if candidate.group != "" {
 		info.UsingGroup = candidate.group
 		common.SetContextKey(c, constant.ContextKeyUsingGroup, candidate.group)
+	}
+	if retryParam.TokenGroup == "auto" {
+		userGroup := common.GetContextKeyString(c, constant.ContextKeyUserGroup)
+		for index, group := range service.GetRequestAutoGroups(c, userGroup) {
+			if group == candidate.group {
+				common.SetContextKey(c, constant.ContextKeyAutoGroup, group)
+				common.SetContextKey(c, constant.ContextKeyAutoGroupIndex, index)
+				common.SetContextKey(c, constant.ContextKeyAutoGroupRetryIndex, candidate.autoGroupRetryIndex)
+				break
+			}
+		}
 	}
 	info.PriceData.GroupRatioInfo = helper.HandleGroupRatio(c, info)
 	if setupErr := middleware.SetupContextForSelectedChannel(c, channel, info.OriginModelName); setupErr != nil {
@@ -511,7 +544,7 @@ func fastTokenCountMetaForPricing(request dto.Request) *types.TokenCountMeta {
 }
 
 func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service.RetryParam) (*model.Channel, *types.NewAPIError) {
-	if info.ChannelMeta == nil && !retryParam.HasRateLimited(c.GetInt("channel_id")) {
+	if info.ChannelMeta == nil && !retryParam.HasRateLimited(c.GetInt("channel_id")) && !retryParam.HasAttempted(c.GetInt("channel_id")) {
 		channelId := c.GetInt("channel_id")
 		channel, err := model.CacheGetChannel(channelId)
 		if err != nil {
@@ -552,7 +585,11 @@ func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service
 }
 
 func shouldRetry(c *gin.Context, relayInfo *relaycommon.RelayInfo, openaiErr *types.NewAPIError, retryTimes int) bool {
-	if openaiErr == nil {
+	if openaiErr == nil || retryTimes <= 0 || !canRetryRelayResponse(c, relayInfo) {
+		return false
+	}
+	// Provider-format error wrappers can preserve only the cancellation text.
+	if errors.Is(openaiErr, context.Canceled) || strings.Contains(strings.ToLower(openaiErr.Error()), context.Canceled.Error()) {
 		return false
 	}
 	if _, ok := c.Get("specific_channel_id"); ok {
@@ -563,21 +600,18 @@ func shouldRetry(c *gin.Context, relayInfo *relaycommon.RelayInfo, openaiErr *ty
 	}
 	usingGroup := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
 	if service.IsIntelligentSchedulingForGroup(usingGroup) {
-		return retryTimes > 0 && service.ShouldRetryIntelligentSchedulingError(
+		return service.ShouldRetryIntelligentSchedulingError(
 			usingGroup, relayInfo, openaiErr,
-		) && canRetryIntelligentRelayResponse(c, relayInfo)
+		)
 	}
 	if service.ShouldSkipRetryAfterChannelAffinityFailure(c) {
 		return false
 	}
-	if types.IsChannelError(openaiErr) {
-		return true
-	}
 	if types.IsSkipRetryError(openaiErr) {
 		return false
 	}
-	if retryTimes <= 0 {
-		return false
+	if types.IsChannelError(openaiErr) {
+		return true
 	}
 	code := openaiErr.StatusCode
 	if code >= 200 && code < 300 {
@@ -592,15 +626,26 @@ func shouldRetry(c *gin.Context, relayInfo *relaycommon.RelayInfo, openaiErr *ty
 	return operation_setting.ShouldRetryByStatusCode(code)
 }
 
-func canRetryIntelligentRelayResponse(c *gin.Context, relayInfo *relaycommon.RelayInfo) bool {
-	if c == nil || relayInfo == nil {
+func canRetryRelayResponse(c *gin.Context, relayInfo *relaycommon.RelayInfo) bool {
+	if c == nil || (c.Request != nil && c.Request.Context().Err() != nil) {
 		return false
 	}
 	if c.Writer.Status() == http.StatusSwitchingProtocols {
 		return false
 	}
+	if c.Writer.Written() && c.Writer.Header().Get("Content-Encoding") != "" {
+		// Compressed writers may report encoded sizes, which cannot be
+		// compared with the uncompressed keepalive byte count.
+		return false
+	}
+	if relayInfo == nil {
+		return !c.Writer.Written()
+	}
 	if relayInfo.IsStream {
-		return !relayInfo.HasSendResponse() && relayInfo.UpstreamFirstContentTime.IsZero()
+		// SSE headers and keepalive comments may already be flushed before
+		// model output. Only substantive response data ends failover there.
+		return !relayInfo.HasSendResponse() && relayInfo.SendResponseCount == 0 && relayInfo.UpstreamFirstContentTime.IsZero() &&
+			c.Writer.Size() <= common.GetContextKeyInt(c, constant.ContextKeyRelayKeepAliveBytes)
 	}
 	return !relayInfo.HasSendResponse() && !c.Writer.Written()
 }
@@ -930,8 +975,7 @@ func executeTaskSubmissionWith(
 					logger.LogError(c, channelErr.Error())
 					if taskErr == nil ||
 						channelErr.GetErrorCode() == types.ErrorCodeChannelRateLimited ||
-						retryParam.RateLimitError() != nil ||
-						!service.IsIntelligentSchedulingForGroup(common.GetContextKeyString(c, constant.ContextKeyUsingGroup)) {
+						retryParam.RateLimitError() != nil {
 						code := string(channelErr.GetErrorCode())
 						if code == "" {
 							code = "get_channel_failed"
@@ -962,7 +1006,7 @@ func executeTaskSubmissionWith(
 			}
 			retryParam.MarkRateLimited(channel.Id, decision.RetryAfterMillis)
 			if fixedChannel {
-				candidate := &channelRateLimitWaitCandidate{channel: channel, group: relayInfo.UsingGroup, retryAfterMillis: decision.RetryAfterMillis}
+				candidate := &channelRateLimitWaitCandidate{channel: channel, group: relayInfo.UsingGroup, retryAfterMillis: decision.RetryAfterMillis, autoGroupRetryIndex: common.GetContextKeyInt(c, constant.ContextKeyAutoGroupRetryIndex)}
 				var waitErr *types.NewAPIError
 				channel, reservation, waitErr = waitForRateLimitedChannel(c, relayInfo, retryParam, candidate)
 				if waitErr != nil {
@@ -974,6 +1018,7 @@ func executeTaskSubmissionWith(
 			if waitCandidate == nil || decision.RetryAfterMillis < waitCandidate.retryAfterMillis {
 				waitCandidate = &channelRateLimitWaitCandidate{
 					channel: channel, group: relayInfo.UsingGroup, retryAfterMillis: decision.RetryAfterMillis,
+					autoGroupRetryIndex: common.GetContextKeyInt(c, constant.ContextKeyAutoGroupRetryIndex),
 				}
 			}
 			relayInfo.ChannelMeta = nil
@@ -984,7 +1029,7 @@ func executeTaskSubmissionWith(
 		diagnostics.attempt(retryParam.GetRetry()+1, channel, relayInfo.LockedChannel != nil)
 
 		addUsedChannel(c, channel.Id)
-		retryParam.MarkAttempted(channel.Id)
+		retryParam.MarkChannelAttempted(channel)
 		bodyStorage, bodyErr := common.GetBodyStorage(c)
 		if bodyErr != nil {
 			service.ReleaseChannelRequestReservation(reservation)
@@ -1204,24 +1249,24 @@ func respondTaskError(c *gin.Context, taskErr *taskdto.TaskError) {
 }
 
 func shouldRetryTaskRelay(c *gin.Context, relayInfo *relaycommon.RelayInfo, channelId int, taskErr *taskdto.TaskError, retryTimes int) bool {
-	if taskErr == nil {
+	if taskErr == nil || taskErr.LocalError || retryTimes <= 0 || errors.Is(taskErr.Error, context.Canceled) || !canRetryRelayResponse(c, relayInfo) {
+		return false
+	}
+	if _, specificChannel := c.Get("specific_channel_id"); specificChannel {
+		return false
+	}
+	if service.GetChannelConstraints(c).SuppressesRetry() {
 		return false
 	}
 	usingGroup := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
 	if service.IsIntelligentSchedulingForGroup(usingGroup) {
-		return retryTimes > 0 && !taskErr.LocalError && service.ShouldRetryIntelligentSchedulingError(
+		return service.ShouldRetryIntelligentSchedulingError(
 			usingGroup,
 			relayInfo,
 			types.NewOpenAIError(taskErr.Error, types.ErrorCodeBadResponseStatusCode, taskErr.StatusCode),
 		)
 	}
 	if service.ShouldSkipRetryAfterChannelAffinityFailure(c) {
-		return false
-	}
-	if retryTimes <= 0 {
-		return false
-	}
-	if service.GetChannelConstraints(c).SuppressesRetry() {
 		return false
 	}
 	if taskErr.StatusCode == http.StatusTooManyRequests {
@@ -1242,9 +1287,6 @@ func shouldRetryTaskRelay(c *gin.Context, relayInfo *relaycommon.RelayInfo, chan
 	}
 	if taskErr.StatusCode == 408 {
 		// azure处理超时不重试
-		return false
-	}
-	if taskErr.LocalError {
 		return false
 	}
 	if taskErr.StatusCode/100 == 2 {
