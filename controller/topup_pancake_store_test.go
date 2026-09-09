@@ -97,11 +97,21 @@ func TestPancakeWebhookStoreBindingProtectsPaymentState(t *testing.T) {
 	}
 }
 
-func pancakeStoreWebhookRequest(t *testing.T, router *gin.Engine, key *rsa.PrivateKey, tradeNo, store, mode string) *httptest.ResponseRecorder {
+func pancakeStoreWebhookRequest(t *testing.T, router *gin.Engine, key *rsa.PrivateKey, tradeNo, store, mode string, dataOverrides ...map[string]any) *httptest.ResponseRecorder {
 	t.Helper()
+	data := map[string]any{"orderId": "ORD_local", "orderMerchantExternalId": tradeNo, "merchantProvidedBuyerIdentity": "new-api-user-1", "amount": "19.00", "total": "19.00", "taxAmount": "0.00", "currency": "USD"}
+	for _, overrides := range dataOverrides {
+		for key, value := range overrides {
+			if value == nil {
+				delete(data, key)
+			} else {
+				data[key] = value
+			}
+		}
+	}
 	body, err := common.Marshal(map[string]any{
 		"id": "event_local", "eventType": "order.completed", "storeId": store, "mode": mode,
-		"data": map[string]any{"orderId": "ORD_local", "orderMerchantExternalId": tradeNo, "merchantProvidedBuyerIdentity": "new-api-user-1", "amount": "19.00", "total": "19.00", "taxAmount": "0.00", "currency": "USD"},
+		"data": data,
 	})
 	require.NoError(t, err)
 	timestamp := fmt.Sprintf("%d", time.Now().UnixMilli())

@@ -13,6 +13,7 @@ import (
 	"github.com/samber/hot"
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // Subscription duration units
@@ -570,45 +571,87 @@ func refreshSubscriptionUserGroupCache(userId int, operation string) {
 // Complete a subscription order (idempotent). Creates a UserSubscription snapshot from the plan.
 // expectedPaymentProvider guards against cross-gateway callback attacks (empty skips the check).
 // actualPaymentMethod updates the order's PaymentMethod to reflect the real payment type used (empty skips update).
-func CompleteSubscriptionOrder(tradeNo string, providerPayload string, expectedPaymentProvider string, actualPaymentMethod string) error {
+func CompleteSubscriptionOrder(tradeNo string, providerPayload string, expectedPaymentProvider string, actualPaymentMethod string, receipts ...TopUpPaymentReceipt) error {
 	if tradeNo == "" {
 		return errors.New("tradeNo is empty")
 	}
-	refCol := "`trade_no`"
-	if common.UsingMainDatabase(common.DatabaseTypePostgreSQL) {
-		refCol = `"trade_no"`
-	}
-	var logUserId int
-	var logPlanTitle string
-	var logMoney float64
-	var logPaymentMethod string
-	var upgradeGroup string
-	err := DB.Transaction(func(tx *gorm.DB) error {
-		var order SubscriptionOrder
-		if err := lockForUpdate(tx).Where(refCol+" = ?", tradeNo).First(&order).Error; err != nil {
+	// Read the lock targets before opening the transaction. A consistent read
+	// inside a MySQL transaction could freeze the purchase-limit snapshot before
+	// the buyer lock is acquired. The locked rows are checked again below.
+	var pendingOrder SubscriptionOrder
+	if err := DB.Where("trade_no = ?", tradeNo).First(&pendingOrder).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return ErrSubscriptionOrderNotFound
 		}
-		if expectedPaymentProvider != "" && order.PaymentProvider != expectedPaymentProvider {
-			return ErrPaymentMethodMismatch
-		}
-		if order.Status == common.TopUpStatusSuccess {
+		return err
+	}
+	if expectedPaymentProvider != "" && pendingOrder.PaymentProvider != expectedPaymentProvider {
+		return ErrPaymentMethodMismatch
+	}
+	if pendingOrder.PaymentProvider == PaymentProviderBalance || pendingOrder.PaymentMethod == PaymentMethodBalance {
+		if pendingOrder.Status == common.TopUpStatusSuccess {
 			return nil
 		}
-		if order.Status != common.TopUpStatusPending {
-			return ErrSubscriptionOrderStatusInvalid
-		}
-		plan, err := GetSubscriptionPlanById(order.PlanId)
+		return ErrSubscriptionOrderStatusInvalid
+	}
+	var buyer User
+	if err := DB.Select("id", "inviter_id").First(&buyer, pendingOrder.UserId).Error; err != nil {
+		return err
+	}
+	var plan *SubscriptionPlan
+	if pendingOrder.Status == common.TopUpStatusPending {
+		var err error
+		plan, err = GetSubscriptionPlanById(pendingOrder.PlanId)
 		if err != nil {
 			return err
 		}
-		if !plan.Enabled {
-			// still allow completion for already purchased orders
-		}
-		// 锁定用户行：并发完成同一用户的不同订单（包括多实例部署下）时，
-		// 使 CreateUserSubscriptionFromPlanTx 的 MaxPurchasePerUser 检查按用户串行。
-		var userRow User
-		if err := lockForUpdate(tx).Select("id").Where("id = ?", order.UserId).First(&userRow).Error; err != nil {
+	}
+	var logUserId, inviterId int
+	var logPlanTitle, logPaymentMethod, rewardLog string
+	var logMoney float64
+	var upgradeGroup string
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		var order SubscriptionOrder
+		if err := lockForUpdate(tx).Where("trade_no = ?", tradeNo).First(&order).Error; err != nil {
 			return err
+		}
+		if order.UserId != pendingOrder.UserId || order.PlanId != pendingOrder.PlanId || order.PaymentProvider != pendingOrder.PaymentProvider {
+			return errors.New("subscription order changed during completion; retry")
+		}
+		if order.Status != common.TopUpStatusPending && order.Status != common.TopUpStatusSuccess {
+			return ErrSubscriptionOrderStatusInvalid
+		}
+		alreadyDone := order.Status == common.TopUpStatusSuccess
+		if !alreadyDone {
+			order.CompleteTime = common.GetTimestamp()
+			if providerPayload != "" {
+				order.ProviderPayload = providerPayload
+			}
+			if actualPaymentMethod != "" {
+				order.PaymentMethod = actualPaymentMethod
+			}
+		}
+		// Match invoice and recharge locking: order -> top-up -> users. Both
+		// users are locked in ID order, including cyclic invitation relationships.
+		topUp, err := upsertSubscriptionTopUpTx(tx, &order, receipts)
+		if err != nil {
+			return err
+		}
+		inviterExists, err := lockSubscriptionRewardUsersTx(tx, buyer.Id, buyer.InviterId)
+		if err != nil {
+			return err
+		}
+		if inviterExists {
+			inviterId, rewardLog, err = processSubscriptionInviterRewardTx(tx, &order, topUp, buyer.InviterId)
+			if err != nil {
+				return err
+			}
+		}
+		if alreadyDone {
+			return nil
+		}
+		if plan == nil {
+			return errors.New("subscription order changed during completion; retry")
 		}
 		subscription, err := CreateUserSubscriptionFromPlanTx(tx, order.UserId, plan, "order")
 		if err != nil {
@@ -617,24 +660,12 @@ func CompleteSubscriptionOrder(tradeNo string, providerPayload string, expectedP
 		if subscription.PrevUserGroup != "" {
 			upgradeGroup = strings.TrimSpace(subscription.UpgradeGroup)
 		}
-		if err := upsertSubscriptionTopUpTx(tx, &order); err != nil {
-			return err
-		}
 		order.Status = common.TopUpStatusSuccess
-		order.CompleteTime = common.GetTimestamp()
-		if providerPayload != "" {
-			order.ProviderPayload = providerPayload
-		}
-		if actualPaymentMethod != "" && order.PaymentMethod != actualPaymentMethod {
-			order.PaymentMethod = actualPaymentMethod
-		}
 		if err := tx.Save(&order).Error; err != nil {
 			return err
 		}
-		logUserId = order.UserId
-		logPlanTitle = plan.Title
-		logMoney = order.Money
-		logPaymentMethod = order.PaymentMethod
+		logUserId, logPlanTitle = order.UserId, plan.Title
+		logMoney, logPaymentMethod = order.Money, order.PaymentMethod
 		return nil
 	})
 	if err != nil {
@@ -647,43 +678,52 @@ func CompleteSubscriptionOrder(tradeNo string, providerPayload string, expectedP
 		msg := fmt.Sprintf("订阅购买成功，套餐: %s，支付金额: %.2f，支付方式: %s", logPlanTitle, logMoney, logPaymentMethod)
 		RecordLog(logUserId, LogTypeTopup, msg)
 	}
+	if inviterId > 0 {
+		RecordLog(inviterId, LogTypeSystem, rewardLog)
+	}
 	return nil
 }
 
-func upsertSubscriptionTopUpTx(tx *gorm.DB, order *SubscriptionOrder) error {
-	if tx == nil || order == nil {
-		return errors.New("invalid subscription order")
+func upsertSubscriptionTopUpTx(tx *gorm.DB, order *SubscriptionOrder, receipts []TopUpPaymentReceipt) (*TopUp, error) {
+	// Insert before the locking read: locking a missing unique key in MySQL
+	// takes a gap lock that can deadlock two distinct concurrent purchases.
+	candidate := TopUp{
+		UserId: order.UserId, TradeNo: order.TradeNo, Money: order.Money,
+		CreateTime: order.CreateTime, CompleteTime: order.CompleteTime,
+		PaymentProvider: order.PaymentProvider, PaymentMethod: order.PaymentMethod,
+		Status: common.TopUpStatusSuccess,
 	}
-	now := common.GetTimestamp()
+	if err := applyTopUpPaymentReceipt(&candidate, receipts); err != nil {
+		return nil, err
+	}
+	if err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "trade_no"}}, DoNothing: true}).Create(&candidate).Error; err != nil {
+		return nil, err
+	}
 	var topup TopUp
-	if err := tx.Where("trade_no = ?", order.TradeNo).First(&topup).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			topup = TopUp{
-				UserId:        order.UserId,
-				Amount:        0,
-				Money:         order.Money,
-				TradeNo:       order.TradeNo,
-				PaymentMethod: order.PaymentMethod,
-				CreateTime:    order.CreateTime,
-				CompleteTime:  now,
-				Status:        common.TopUpStatusSuccess,
-			}
-			return tx.Create(&topup).Error
+	if err := lockForUpdate(tx).Where("trade_no = ?", order.TradeNo).First(&topup).Error; err != nil {
+		return nil, err
+	}
+	if topup.UserId != order.UserId || topup.Amount != 0 ||
+		(topup.PaymentProvider != "" && topup.PaymentProvider != order.PaymentProvider) ||
+		(topup.PaymentMethod != "" && topup.PaymentMethod != order.PaymentMethod) {
+		return nil, errors.New("subscription payment record does not match order")
+	}
+	if len(receipts) > 0 {
+		previousAmount, previousCurrency := topup.PaidAmountMinor, topup.PaidCurrency
+		if err := applyTopUpPaymentReceipt(&topup, receipts); err != nil {
+			return nil, err
 		}
-		return err
+		if (previousAmount != 0 || previousCurrency != "") &&
+			(previousAmount != topup.PaidAmountMinor || previousCurrency != topup.PaidCurrency) {
+			return nil, errors.New("subscription payment receipt changed")
+		}
 	}
-	topup.Money = order.Money
-	if topup.PaymentMethod == "" {
-		topup.PaymentMethod = order.PaymentMethod
-	} else if topup.PaymentMethod != order.PaymentMethod {
-		return ErrPaymentMethodMismatch
-	}
-	if topup.CreateTime == 0 {
-		topup.CreateTime = order.CreateTime
-	}
-	topup.CompleteTime = now
+	topup.PaymentProvider, topup.PaymentMethod = order.PaymentProvider, order.PaymentMethod
 	topup.Status = common.TopUpStatusSuccess
-	return tx.Save(&topup).Error
+	if topup.CompleteTime == 0 {
+		topup.CompleteTime = order.CompleteTime
+	}
+	return &topup, tx.Save(&topup).Error
 }
 
 func ExpireSubscriptionOrder(tradeNo string, expectedPaymentProvider string) error {

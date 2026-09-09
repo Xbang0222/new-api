@@ -30,6 +30,10 @@ type TopUp struct {
 	CompleteTime      int64  `json:"complete_time"`
 	Status            string `json:"status"`
 	InviterRewardSent bool   `json:"inviter_reward_sent" gorm:"default:false"`
+	// Freeze the credited rebate and its basis; later policy/rate changes must
+	// not rewrite invitation history. Two zeros retain legacy estimation behavior.
+	InviterRewardQuota     int `json:"inviter_reward_quota" gorm:"type:bigint;not null;default:0"`
+	InviterRewardBaseQuota int `json:"inviter_reward_base_quota" gorm:"type:bigint;not null;default:0"`
 }
 
 // TopUpPaymentReceipt is supplied only by a verified successful payment callback.
@@ -210,7 +214,7 @@ func GetTopUpByTradeNo(tradeNo string) *TopUp {
 }
 
 func calculateInviterRewardQuota(rechargeQuota int) (rewardQuota int, description string) {
-	if rechargeQuota <= 0 || common.InviterRewardValue <= 0 {
+	if rechargeQuota < 0 || (rechargeQuota == 0 && common.InviterRewardType != "fixed") || common.InviterRewardValue <= 0 {
 		return 0, ""
 	}
 
@@ -219,10 +223,14 @@ func calculateInviterRewardQuota(rechargeQuota int) (rewardQuota int, descriptio
 		if common.InviterRewardValue > 100 {
 			return 0, ""
 		}
-		rewardQuota = int(decimal.NewFromInt(int64(rechargeQuota)).
+		var err error
+		rewardQuota, err = common.WalletQuotaFromDecimalStrict(decimal.NewFromInt(int64(rechargeQuota)).
 			Mul(decimal.NewFromInt(int64(common.InviterRewardValue))).
 			Div(decimal.NewFromInt(100)).
-			IntPart())
+			Truncate(0))
+		if err != nil {
+			return 0, ""
+		}
 		description = fmt.Sprintf(
 			"邀请用户充值返利 %s（充值额度: %s，返利比例: %d%%）",
 			logger.LogQuota(rewardQuota),
@@ -236,69 +244,97 @@ func calculateInviterRewardQuota(rechargeQuota int) (rewardQuota int, descriptio
 		return 0, ""
 	}
 
-	if rewardQuota <= 0 {
+	if rewardQuota <= 0 || rewardQuota > common.MaxWalletQuota {
 		return 0, ""
 	}
 	return rewardQuota, description
 }
 
 func ProcessInviterReward(userId int, rechargeQuota int, topUpId int) error {
-	if !operation_setting.IsPaymentComplianceConfirmed() || common.InviterRewardType == "" {
+	if rechargeQuota <= 0 {
 		return nil
+	}
+	var inviterId int
+	var logMessage string
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		var err error
+		inviterId, logMessage, err = processInviterRewardTx(tx, userId, rechargeQuota, topUpId)
+		return err
+	})
+	if err == nil && inviterId > 0 {
+		RecordLog(inviterId, LogTypeSystem, logMessage)
+	}
+	return err
+}
+
+// processInviterRewardTx commits the balance, history snapshot, and idempotency
+// marker together. Callers record the log only after their transaction commits.
+func processInviterRewardTx(tx *gorm.DB, userId int, rechargeQuota int, topUpId int) (int, string, error) {
+	if !operation_setting.IsPaymentComplianceConfirmed() || common.InviterRewardType == "" {
+		return 0, "", nil
 	}
 
 	rewardQuota, logMessage := calculateInviterRewardQuota(rechargeQuota)
 	if rewardQuota <= 0 {
-		return nil
+		return 0, "", nil
 	}
-
-	var inviterId int
-	err := DB.Transaction(func(tx *gorm.DB) error {
-		if topUpId > 0 {
-			topUp := &TopUp{}
-			if err := lockForUpdate(tx).Select("id", "inviter_reward_sent").First(topUp, topUpId).Error; err != nil {
-				return fmt.Errorf("检查充值返利订单失败: %w", err)
-			}
-			if topUp.InviterRewardSent {
-				return nil
+	if topUpId > 0 {
+		var topUp TopUp
+		if err := lockForUpdate(tx).First(&topUp, topUpId).Error; err != nil {
+			return 0, "", fmt.Errorf("检查充值返利订单失败: %w", err)
+		}
+		if topUp.UserId != userId || topUp.Status != common.TopUpStatusSuccess || topUp.PaymentProvider == PaymentProviderBalance || topUp.PaymentMethod == PaymentMethodBalance {
+			return 0, "", errors.New("invalid inviter reward order")
+		}
+		if topUp.InviterRewardSent {
+			return 0, "", nil
+		}
+		if rechargeQuota == 0 {
+			if _, err := NewTopUpPaymentReceipt(topUp.PaidAmountMinor, topUp.PaidCurrency); err != nil {
+				return 0, "", err
 			}
 		}
-
-		user := &User{}
-		if err := tx.Select("id", "inviter_id").First(user, userId).Error; err != nil {
-			return fmt.Errorf("查询被邀请用户失败: %w", err)
+	} else if rechargeQuota == 0 {
+		return 0, "", errors.New("fixed subscription reward requires a verified payment record")
+	}
+	var user User
+	if err := tx.Select("id", "inviter_id").First(&user, userId).Error; err != nil {
+		return 0, "", fmt.Errorf("查询被邀请用户失败: %w", err)
+	}
+	inviterId := user.InviterId
+	if inviterId == 0 || inviterId == userId {
+		inviterId, rewardQuota = 0, 0
+	} else {
+		result := tx.Model(&User{}).
+			Where("id = ? AND aff_quota <= ? AND aff_history <= ?", inviterId, common.MaxWalletQuota-rewardQuota, common.MaxWalletQuota-rewardQuota).
+			Updates(map[string]interface{}{
+				"aff_quota":   gorm.Expr("aff_quota + ?", rewardQuota),
+				"aff_history": gorm.Expr("aff_history + ?", rewardQuota),
+			})
+		if result.Error != nil {
+			return 0, "", fmt.Errorf("更新邀请人返利额度失败: %w", result.Error)
 		}
-		if user.InviterId == 0 {
-			if topUpId > 0 {
-				return tx.Model(&TopUp{}).Where("id = ?", topUpId).Update("inviter_reward_sent", true).Error
+		if result.RowsAffected == 0 {
+			var count int64
+			if err := tx.Model(&User{}).Where("id = ?", inviterId).Count(&count).Error; err != nil {
+				return 0, "", err
 			}
-			return nil
+			if count > 0 {
+				return 0, "", ErrWalletQuotaLimitExceeded
+			}
+			inviterId, rewardQuota = 0, 0
 		}
-
-		if err := tx.Model(&User{}).Where("id = ?", user.InviterId).Updates(map[string]interface{}{
-			"aff_quota":   gorm.Expr("aff_quota + ?", rewardQuota),
-			"aff_history": gorm.Expr("aff_history + ?", rewardQuota),
+	}
+	if topUpId > 0 {
+		if err := tx.Model(&TopUp{}).Where("id = ?", topUpId).Updates(map[string]interface{}{
+			"inviter_reward_sent":       true,
+			"inviter_reward_quota":      rewardQuota,
+			"inviter_reward_base_quota": rechargeQuota,
 		}).Error; err != nil {
-			return fmt.Errorf("更新邀请人返利额度失败: %w", err)
+			return 0, "", fmt.Errorf("标记充值返利状态失败: %w", err)
 		}
-
-		if topUpId > 0 {
-			if err := tx.Model(&TopUp{}).Where("id = ?", topUpId).Update("inviter_reward_sent", true).Error; err != nil {
-				return fmt.Errorf("标记充值返利状态失败: %w", err)
-			}
-		}
-
-		inviterId = user.InviterId
-		return nil
-	})
-	if err != nil {
-		return err
 	}
-
-	if inviterId > 0 {
-		RecordLog(inviterId, LogTypeSystem, logMessage)
-	}
-	return nil
+	return inviterId, logMessage, nil
 }
 
 func UpdatePendingTopUpStatus(tradeNo string, expectedPaymentProvider string, targetStatus string) error {
@@ -581,7 +617,7 @@ func GetInviterRebateDetails(inviterId int, limit int) (rebates []*InviterRebate
 
 	var topups []*TopUp
 	err = query.
-		Select("id, user_id, amount, money, trade_no, payment_method, payment_provider, create_time, complete_time, status").
+		Select("id, user_id, amount, money, trade_no, payment_method, payment_provider, create_time, complete_time, status, inviter_reward_base_quota, inviter_reward_quota").
 		Order("id desc").
 		Limit(limit).
 		Find(&topups).Error
@@ -598,8 +634,13 @@ func GetInviterRebateDetails(inviterId int, limit int) (rebates []*InviterRebate
 			inviteeUsername = invitee.Username
 			inviteeName = invitee.DisplayName
 		}
-		rechargeQuota := estimateTopUpRechargeQuota(topup)
-		rewardQuota, _ := calculateInviterRewardQuota(rechargeQuota)
+		rechargeQuota, rewardQuota := topup.InviterRewardBaseQuota, topup.InviterRewardQuota
+		if rechargeQuota == 0 && rewardQuota == 0 {
+			rechargeQuota = estimateTopUpRechargeQuota(topup)
+			if rechargeQuota > 0 {
+				rewardQuota, _ = calculateInviterRewardQuota(rechargeQuota)
+			}
+		}
 		rebates = append(rebates, &InviterRebateDetail{
 			Id:              topup.Id,
 			InviteeId:       topup.UserId,

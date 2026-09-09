@@ -86,7 +86,7 @@ func TestTopUpVerifiedPaymentWebhookReceipts(t *testing.T) {
 
 // topUpReceiptWebhookRequest exercises each provider's real signature boundary;
 // these locally signed fixtures never call a payment service.
-func topUpReceiptWebhookRequest(t *testing.T, router *gin.Engine, provider, tradeNo string, amountMinor int64, currency string, validSignature bool) *httptest.ResponseRecorder {
+func topUpReceiptWebhookRequest(t *testing.T, router *gin.Engine, provider, tradeNo string, amountMinor int64, currency string, validSignature bool, eventTypes ...string) *httptest.ResponseRecorder {
 	t.Helper()
 	var event any
 	if provider == model.PaymentProviderStripe {
@@ -94,7 +94,11 @@ func topUpReceiptWebhookRequest(t *testing.T, router *gin.Engine, provider, trad
 		if currency != "" {
 			object["amount_total"], object["currency"] = amountMinor, currency
 		}
-		event = map[string]any{"id": "evt_local", "object": "event", "type": "checkout.session.completed", "data": map[string]any{"object": object}}
+		eventType := "checkout.session.completed"
+		if len(eventTypes) > 0 {
+			eventType = eventTypes[0]
+		}
+		event = map[string]any{"id": "evt_local", "object": "event", "type": eventType, "data": map[string]any{"object": object}}
 	} else {
 		event = map[string]any{"id": "evt_local", "eventType": "checkout.completed", "object": map[string]any{
 			"request_id": tradeNo, "order": map[string]any{"id": "ord_local", "status": "paid", "type": "onetime", "amount_paid": amountMinor, "currency": currency},
