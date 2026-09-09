@@ -22,6 +22,12 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Empty, EmptyDescription, EmptyHeader } from '@/components/ui/empty'
@@ -212,26 +218,34 @@ export function SubscriptionOrderEditor(props: SubscriptionOrderEditorProps) {
         </div>
       </section>
       {inactiveSubscriptions.length > 0 && (
-        <section
-          aria-label={t('Expired and cancelled subscriptions')}
-          className='space-y-2'
-        >
-          <h3 className='text-muted-foreground text-xs font-medium'>
-            {t('Expired and cancelled subscriptions')}
-          </h3>
-          <ul className='max-h-64 space-y-3 overflow-y-auto p-1'>
-            {inactiveSubscriptions.map(({ subscription }) => (
-              <li
-                key={subscription.id}
-                className='bg-background rounded-md border p-3'
-              >
-                <SubscriptionSummary
-                  subscription={subscription}
-                  planTitle={props.planTitles.get(subscription.plan_id) || ''}
-                />
-              </li>
-            ))}
-          </ul>
+        <section aria-label={t('Expired and cancelled subscriptions')}>
+          <Accordion>
+            <AccordionItem value='history'>
+              <AccordionTrigger className='text-muted-foreground text-xs'>
+                <span>
+                  {t('Expired and cancelled subscriptions')} (
+                  {inactiveSubscriptions.length})
+                </span>
+              </AccordionTrigger>
+              <AccordionContent>
+                <ul className='max-h-64 space-y-3 overflow-y-auto p-1'>
+                  {inactiveSubscriptions.map(({ subscription }) => (
+                    <li
+                      key={subscription.id}
+                      className='bg-background rounded-md border p-3'
+                    >
+                      <SubscriptionSummary
+                        subscription={subscription}
+                        planTitle={
+                          props.planTitles.get(subscription.plan_id) || ''
+                        }
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
         </section>
       )}
     </div>

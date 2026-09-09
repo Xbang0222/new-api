@@ -206,6 +206,11 @@ describe('subscription purchase limits', () => {
     const history = screen.getByRole('region', {
       name: 'Expired and cancelled subscriptions',
     })
+    const historyToggle = within(history).getByRole('button', {
+      name: 'Expired and cancelled subscriptions (2)',
+    })
+    expect(historyToggle).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(historyToggle)
     expect(within(history).getAllByRole('listitem')).toHaveLength(2)
     expect(screen.getByRole('button', { name: 'Subscribe Now' })).toBeEnabled()
   })

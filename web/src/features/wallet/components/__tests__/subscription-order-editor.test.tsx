@@ -120,7 +120,9 @@ beforeEach(() => {
 })
 
 describe('subscription debit ordering', () => {
-  test('uses the server debit order while expired and cancelled subscriptions remain outside the sortable list', () => {
+  test('keeps debit order while history defaults to collapsed and supports mouse and keyboard toggles', async () => {
+    const user = userEvent.setup()
+    const put = vi.spyOn(api, 'put')
     render(
       <Harness
         data={{
@@ -139,10 +141,31 @@ describe('subscription debit ordering', () => {
     const history = screen.getByRole('region', {
       name: 'Expired and cancelled subscriptions',
     })
+    const toggle = within(history).getByRole('button', {
+      name: 'Expired and cancelled subscriptions (2)',
+    })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(within(history).queryByRole('list')).not.toBeInTheDocument()
+    await user.click(toggle)
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
     expect(within(history).getAllByRole('heading', { level: 4 })).toHaveLength(
       2
     )
-    expect(within(history).queryByRole('button')).not.toBeInTheDocument()
+    expect(
+      within(history).queryByRole('button', { name: /Move subscription/ })
+    ).not.toBeInTheDocument()
+    await user.keyboard('{Enter}')
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(within(history).queryByRole('list')).not.toBeInTheDocument()
+    await user.keyboard(' ')
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    expect(within(history).getAllByRole('listitem')).toHaveLength(2)
+    expect(toggle).toHaveFocus()
+    expect(debitOrder()).toEqual([
+      'Pro · Subscription #22',
+      'Basic · Subscription #11',
+    ])
+    expect(put).not.toHaveBeenCalled()
     expect(
       screen.getByRole('button', { name: 'Save debit order' })
     ).toBeDisabled()
