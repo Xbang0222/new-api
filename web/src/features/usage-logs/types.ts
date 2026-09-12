@@ -217,6 +217,8 @@ export interface LogOtherData {
   text_input?: number
   text_output?: number
   cache_tokens?: number
+  image_cache_tokens?: number
+  billing_tokens?: Record<string, number>
   cache_creation_tokens?: number
   cache_creation_tokens_5m?: number
   cache_creation_tokens_1h?: number
@@ -241,6 +243,9 @@ export interface LogOtherData {
   // settlement run.
   billing_mode?: string
   usage_semantic?: string
+  billing_unit?: 'token' | 'request'
+  fixed_price?: number
+  image_count?: number
   expr_b64?: string
   matched_tier?: string
   per_second_pricing_rule?: string

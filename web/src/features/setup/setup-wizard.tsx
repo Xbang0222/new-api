@@ -25,7 +25,6 @@ import { toast } from 'sonner'
 
 import { ErrorState } from '@/components/error-state'
 import { LanguageSwitcher } from '@/components/language-switcher'
-import { SystemLogoImage } from '@/components/layout/components/system-logo-image'
 import { LoadingState } from '@/components/loading-state'
 import {
   Card,
@@ -38,6 +37,9 @@ import {
 import { Form } from '@/components/ui/form'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useSystemConfig } from '@/hooks/use-system-config'
+import { handleServerError } from '@/lib/handle-server-error'
+import { accountPasswordSchema } from '@/lib/password-policy'
+import { requireServerSuccess } from '@/lib/server-error-message'
 import { cn } from '@/lib/utils'
 
 import { buildSetupPayload, getSetupStatus, submitSetup } from './api'
@@ -97,7 +99,7 @@ export function SetupWizard() {
     refetch,
   } = useQuery({
     queryKey: ['setup-status'],
-    queryFn: getSetupStatus,
+    queryFn: async () => requireServerSuccess(await getSetupStatus()),
     retry: false,
   })
 
@@ -112,13 +114,14 @@ export function SetupWizard() {
           navigate({ to: '/' })
         }, 1200)
       } else {
-        toast.error(
-          response.message || t('Initialization failed, please try again.')
+        handleServerError(
+          response,
+          t('Initialization failed, please try again.')
         )
       }
     },
-    onError: () => {
-      toast.error(t('Failed to initialize system'))
+    onError: (error) => {
+      handleServerError(error, t('Failed to initialize system'))
     },
   })
 
@@ -126,7 +129,7 @@ export function SetupWizard() {
     if (!statusResponse) return
 
     if (!statusResponse.success) {
-      toast.error(statusResponse.message || t('Failed to load setup status'))
+      handleServerError(statusResponse, t('Failed to load setup status'))
       return
     }
 
@@ -209,8 +212,8 @@ export function SetupWizard() {
     if (setupStatus?.root_init) return true
 
     const username = form.getValues('username')?.trim()
-    const password = form.getValues('password')?.trim()
-    const confirmPassword = form.getValues('confirmPassword')?.trim()
+    const password = form.getValues('password')
+    const confirmPassword = form.getValues('confirmPassword')
 
     if (!username) {
       form.setError('username', {
@@ -221,12 +224,12 @@ export function SetupWizard() {
       return false
     }
 
-    if (!password || password.length < 8) {
+    if (!accountPasswordSchema.safeParse(password).success) {
       form.setError('password', {
         type: 'manual',
-        message: t('Password must be at least 8 characters'),
+        message: t('Password must contain between 8 and 128 characters.'),
       })
-      toast.error(t('Password must be at least 8 characters'))
+      toast.error(t('Password must contain between 8 and 128 characters.'))
       return false
     }
 
@@ -290,7 +293,7 @@ export function SetupWizard() {
             {systemConfigLoading ? (
               <Skeleton className='absolute inset-0 rounded-full' />
             ) : (
-              <SystemLogoImage
+              <img
                 src={logo}
                 alt={t('System logo')}
                 className='h-12 w-12 rounded-full object-cover shadow-sm'
@@ -326,28 +329,23 @@ export function SetupWizard() {
               {STEPS.map((step, index) => {
                 const isActive = currentStep === index
                 const isCompleted = currentStep > index
-                let stepClassName = 'border-muted bg-card'
-                if (isActive) {
-                  stepClassName = 'border-primary ring-primary/20 ring-2'
-                } else if (isCompleted) {
-                  stepClassName = 'border-primary/40 bg-primary/5'
-                }
-                let numberClassName =
-                  'border-muted-foreground/40 text-muted-foreground'
-                if (isActive || isCompleted) {
-                  numberClassName =
-                    'border-primary bg-primary text-primary-foreground'
-                }
                 return (
                   <li
                     key={step.titleKey}
-                    className={cn('rounded-xl border p-3', stepClassName)}
+                    className={cn('rounded-xl border p-3', {
+                      'border-primary ring-primary/20 ring-2': isActive,
+                      'border-primary/40 bg-primary/5':
+                        !isActive && isCompleted,
+                      'border-muted bg-card': !isActive && !isCompleted,
+                    })}
                   >
                     <div className='flex items-start gap-3'>
                       <span
                         className={cn(
                           'flex size-6 items-center justify-center rounded-md border text-xs font-semibold',
-                          numberClassName
+                          isActive || isCompleted
+                            ? 'border-primary bg-primary text-primary-foreground'
+                            : 'border-muted-foreground/40 text-muted-foreground'
                         )}
                       >
                         {index + 1}

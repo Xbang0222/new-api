@@ -2,11 +2,14 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -176,6 +179,35 @@ func RelayErrorHandler(ctx context.Context, resp *http.Response, showBodyWhenFai
 		newApiErr.Err = buildErrWithBody(newApiErr.Error())
 	}
 	return
+}
+
+func ResetStatusCode(newApiErr *types.NewAPIError, statusCodeMappingStr string) {
+	if newApiErr == nil || statusCodeMappingStr == "" || statusCodeMappingStr == "{}" || newApiErr.StatusCode == http.StatusOK {
+		return
+	}
+	statusCodeMapping := make(map[string]any)
+	if err := common.Unmarshal([]byte(statusCodeMappingStr), &statusCodeMapping); err != nil {
+		return
+	}
+	value, ok := statusCodeMapping[strconv.Itoa(newApiErr.StatusCode)]
+	if !ok {
+		return
+	}
+	switch value := value.(type) {
+	case string:
+		code, err := strconv.Atoi(value)
+		if err == nil {
+			newApiErr.StatusCode = code
+		}
+	case float64:
+		if value == math.Trunc(value) {
+			newApiErr.StatusCode = int(value)
+		}
+	case json.Number:
+		if code, err := strconv.Atoi(value.String()); err == nil {
+			newApiErr.StatusCode = code
+		}
+	}
 }
 
 func TaskErrorWrapperLocal(err error, code string, statusCode int) *taskdto.TaskError {

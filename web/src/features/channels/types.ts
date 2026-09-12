@@ -54,6 +54,7 @@ export const channelSchema = z.object({
   group: z.string().default('default'),
   used_quota: z.number().default(0),
   model_mapping: z.string().nullish(),
+  status_code_mapping: z.string().nullish(),
   priority: z.number().nullish(),
   auto_ban: z.number().nullish(),
   other_info: z.string().default(''),
@@ -79,6 +80,7 @@ export type Channel = z.infer<typeof channelSchema>
 // ============================================================================
 
 export interface ChannelSettings {
+  task_plugin_key?: string
   force_format?: boolean
   thinking_to_content?: boolean
   proxy?: string
@@ -421,6 +423,7 @@ export interface ChannelFormData {
   test_model?: string
   auto_ban?: number
   status: number
+  status_code_mapping?: string
   tag?: string
   remark?: string
   setting?: string

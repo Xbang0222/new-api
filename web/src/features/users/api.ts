@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import type { PermissionCatalog } from '@/lib/admin-permissions'
 import { api } from '@/lib/api'
 import type { CustomOAuthBinding } from '@/lib/oauth'
+import { requireServerSuccess } from '@/lib/server-error-message'
 
 import type {
   User,
@@ -163,12 +164,18 @@ export async function getUserGroups(): Promise<ApiResponse<string[]>> {
   return res.data
 }
 
+export async function getGroups(): Promise<ApiResponse<string[]>> {
+  const res = await api.get('/api/group/')
+  return res.data
+}
+
 /**
  * Get the permission catalog (resources, actions, and role baselines).
  * Source of truth lives in the backend authz package.
  */
 export async function getPermissionCatalog(): Promise<PermissionCatalog> {
   const res = await api.get('/api/authz/catalog')
+  requireServerSuccess(res.data)
   return {
     resources: res.data?.data?.resources ?? [],
     roles: res.data?.data?.roles ?? [],

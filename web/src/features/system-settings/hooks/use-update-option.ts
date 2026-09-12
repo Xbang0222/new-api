@@ -21,10 +21,15 @@ import i18next from 'i18next'
 import { useCallback, useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 
+import { handleServerError } from '@/lib/handle-server-error'
+import { requireServerSuccess } from '@/lib/server-error-message'
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
-import { updateSystemOption } from '../api'
-import type { UpdateOptionRequest } from '../types'
+import { updatePasskeyDomains, updateSystemOption } from '../api'
+import type {
+  UpdateOptionRequest,
+  UpdatePasskeyDomainsRequest,
+} from '../types'
 
 // Configuration keys that require status refresh
 const STATUS_RELATED_KEYS = new Set([
@@ -202,5 +207,26 @@ export function useUpdateOption(options: UseUpdateOptionOptions = {}) {
     onError: (error: Error) => {
       toast.error(error.message || i18next.t('Failed to update setting'))
     },
+  })
+}
+
+export function useUpdatePasskeyDomains() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (request: UpdatePasskeyDomainsRequest) =>
+      requireServerSuccess(await updatePasskeyDomains(request)),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['system-options'] })
+      void queryClient.invalidateQueries({ queryKey: ['status'] })
+      try {
+        window.localStorage.removeItem('status')
+      } catch {
+        /* Storage may be disabled. */
+      }
+      toast.success(i18next.t('Setting updated successfully'))
+    },
+    onError: (error: Error) =>
+      handleServerError(error, i18next.t('Failed to update setting')),
   })
 }

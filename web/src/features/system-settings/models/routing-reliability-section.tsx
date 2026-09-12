@@ -63,7 +63,11 @@ const numericString = z.string().refine((value) => {
   return !Number.isNaN(Number(trimmed)) && Number(trimmed) >= 0
 }, 'Enter a non-negative number or leave empty')
 
-const channelTestModes = ['scheduled_all', 'auto_ban_only'] as const
+const channelTestModes = [
+  'scheduled_all',
+  'auto_ban_only',
+  'passive_recovery',
+] as const
 type ChannelTestMode = (typeof channelTestModes)[number]
 const MAX_CHANNEL_TEST_CONCURRENCY = 32
 
@@ -165,7 +169,7 @@ type NormalizedRoutingReliabilityValues = {
 }
 
 function normalizeChannelTestMode(value?: string): ChannelTestMode {
-  if (value === 'auto_ban_only') {
+  if (value === 'auto_ban_only' || value === 'passive_recovery') {
     return value
   }
   return 'scheduled_all'
@@ -282,6 +286,11 @@ export function RoutingReliabilitySection({
     case 'auto_ban_only':
       channelTestModeDescription = t(
         'Periodically checks only channels with auto-disable enabled, excluding manually disabled channels.'
+      )
+      break
+    case 'passive_recovery':
+      channelTestModeDescription = t(
+        'Scheduled full test probes non-manually-disabled channels; passive recovery only checks auto-disabled channels after real request failures.'
       )
       break
     default:
@@ -438,6 +447,10 @@ export function RoutingReliabilitySection({
                             'Actively check auto-disable-enabled channels'
                           ),
                         },
+                        {
+                          value: 'passive_recovery',
+                          label: t('Passive recovery only'),
+                        },
                       ]}
                       value={field.value}
                       onValueChange={field.onChange}
@@ -454,6 +467,9 @@ export function RoutingReliabilitySection({
                           </SelectItem>
                           <SelectItem value='auto_ban_only'>
                             {t('Actively check auto-disable-enabled channels')}
+                          </SelectItem>
+                          <SelectItem value='passive_recovery'>
+                            {t('Passive recovery only')}
                           </SelectItem>
                         </SelectGroup>
                       </SelectContent>

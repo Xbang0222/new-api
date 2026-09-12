@@ -103,7 +103,7 @@ export function SubscriptionOrderEditor(props: SubscriptionOrderEditorProps) {
       setDraftOrder(null)
       toast.success(t('Subscription debit order saved'))
     },
-    onError: handleServerError,
+    onError: (error) => handleServerError(error),
   })
 
   const handleMove = (index: number, offset: number) => {

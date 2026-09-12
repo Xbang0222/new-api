@@ -61,6 +61,7 @@ import {
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import dayjs from '@/lib/dayjs'
+import { handleServerError } from '@/lib/handle-server-error'
 
 import { SettingsSwitchField } from '../components/settings-form-layout'
 import { SettingsSection } from '../components/settings-section'
@@ -184,8 +185,8 @@ export function AnnouncementsSection({
       if (!result.success) return
       setIsEnabled(checked)
       toast.success(t('Setting saved'))
-    } catch {
-      toast.error(t('Failed to update setting'))
+    } catch (error) {
+      handleServerError(error, t('Failed to update setting'))
     }
   }
 
@@ -275,8 +276,8 @@ export function AnnouncementsSection({
       if (!result.success) return
       setHasChanges(false)
       toast.success(t('Announcements saved successfully'))
-    } catch {
-      toast.error(t('Failed to save announcements'))
+    } catch (error) {
+      handleServerError(error, t('Failed to save announcements'))
     }
   }
 

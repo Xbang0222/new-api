@@ -806,6 +806,11 @@ func RelayNotImplemented(c *gin.Context) {
 }
 
 func RelayNotFound(c *gin.Context) {
+	// The web fallback may already have applied static-asset cache headers.
+	// A missing API or asset can appear after an upgrade; never cache its 404.
+	c.Header("Cache-Control", "no-store, no-cache, must-revalidate, private, max-age=0")
+	c.Header("Pragma", "no-cache")
+	c.Header("Expires", "0")
 	err := types.OpenAIError{
 		Message: fmt.Sprintf("Invalid URL (%s %s)", c.Request.Method, c.Request.URL.Path),
 		Type:    "invalid_request_error",
@@ -1249,7 +1254,7 @@ func respondTaskError(c *gin.Context, taskErr *taskdto.TaskError) {
 }
 
 func shouldRetryTaskRelay(c *gin.Context, relayInfo *relaycommon.RelayInfo, channelId int, taskErr *taskdto.TaskError, retryTimes int) bool {
-	if taskErr == nil || taskErr.LocalError || retryTimes <= 0 || errors.Is(taskErr.Error, context.Canceled) || !canRetryRelayResponse(c, relayInfo) {
+	if taskErr == nil || taskErr.LocalError || taskErr.NoRetry || retryTimes <= 0 || errors.Is(taskErr.Error, context.Canceled) || !canRetryRelayResponse(c, relayInfo) {
 		return false
 	}
 	if _, specificChannel := c.Get("specific_channel_id"); specificChannel {
