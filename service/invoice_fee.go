@@ -134,15 +134,27 @@ type invoicePaidOrderQuote struct {
 }
 
 // quoteInvoicePaidOrder converts a verified cash payment to the invoice's
-// frozen currency. Money and Amount are intentionally not a fallback: providers
-// may store nominal wallet credit there instead of the amount actually paid.
+// frozen currency. Only successful legacy Epay orders have a known CNY Money
+// contract; other providers may store nominal wallet credit in that field.
 func quoteInvoicePaidOrder(topUp model.TopUp, policy invoiceFeePolicy, legacy model.SubscriptionOrder) (invoicePaidOrderQuote, error) {
 	quote := invoicePaidOrderQuote{
 		TopUpId: topUp.Id, OriginalPaidAmountCents: topUp.PaidAmountMinor,
 		OriginalCurrency: strings.ToUpper(strings.TrimSpace(topUp.PaidCurrency)),
 		EvidenceSource:   "payment_receipt_snapshot",
 	}
-	if topUp.PaidAmountMinor == 0 && topUp.PaidCurrency == "" {
+	if topUp.PaidAmountMinor == 0 && topUp.PaidCurrency == "" &&
+		topUp.PaymentProvider == model.PaymentProviderEpay && topUp.Status == common.TopUpStatusSuccess {
+		// Before receipt snapshots, Epay stored the original CNY payable amount
+		// in Money. Completion came from a verified callback or admin completion.
+		// Retain that historical invoice contract without changing the order.
+		amount, err := invoiceMoneyCents(topUp.Money)
+		if err != nil || amount <= 0 {
+			return quote, ErrInvoicePaidAmountUnverifiable
+		}
+		quote.OriginalPaidAmountCents, quote.OriginalCurrency = amount, "CNY"
+		quote.EvidenceSource = "legacy_epay_completed_order"
+	}
+	if quote.OriginalPaidAmountCents == 0 && quote.OriginalCurrency == "" {
 		if legacy.UserId != topUp.UserId || legacy.TradeNo != topUp.TradeNo || legacy.Status != common.TopUpStatusSuccess {
 			return quote, ErrInvoicePaidAmountUnverifiable
 		}

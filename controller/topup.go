@@ -452,11 +452,17 @@ func EpayNotify(c *gin.Context) {
 	logger.LogInfo(c.Request.Context(), fmt.Sprintf("易支付 webhook 验签成功 trade_no=%s callback_type=%s trade_status=%s client_ip=%s verify_info=%q", verifyInfo.ServiceTradeNo, verifyInfo.Type, verifyInfo.TradeStatus, c.ClientIP(), common.GetJsonString(verifyInfo)))
 
 	if verifyInfo.TradeStatus == epay.StatusTradeSuccess {
+		var receipts []model.TopUpPaymentReceipt
+		if receipt, receiptErr := model.ParseTopUpPaymentReceipt(verifyInfo.Money, "CNY"); receiptErr == nil {
+			receipts = append(receipts, receipt)
+		} else {
+			logger.LogWarn(c.Request.Context(), fmt.Sprintf("易支付付款凭证不可用 trade_no=%s error=%q", verifyInfo.ServiceTradeNo, receiptErr.Error()))
+		}
 		// 进程内锁只是优化；重复/并发回调的正确性由 RechargeEpay 的
 		// 数据库行锁 + 事务内状态校验保证（多实例部署下同样安全）。
 		LockOrder(verifyInfo.ServiceTradeNo)
 		defer UnlockOrder(verifyInfo.ServiceTradeNo)
-		alreadyDone, err := model.RechargeEpay(verifyInfo.ServiceTradeNo, verifyInfo.Type, c.ClientIP())
+		alreadyDone, err := model.RechargeEpay(verifyInfo.ServiceTradeNo, verifyInfo.Type, c.ClientIP(), receipts...)
 		if err != nil {
 			switch {
 			case errors.Is(err, model.ErrTopUpNotFound):
