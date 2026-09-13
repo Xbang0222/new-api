@@ -280,8 +280,8 @@ func appendBillingInfo(relayInfo *relaycommon.RelayInfo, other *model.LogOther) 
 		if consumed > 0 {
 			other.SetPublic("subscription_consumed", consumed)
 		}
-		// Wallet quota is not deducted when billed from subscription.
-		other.SetPublic("wallet_quota_deducted", 0)
+		// A subscription settlement may charge its excess to the wallet.
+		other.SetPublic("wallet_quota_deducted", relayInfo.SubscriptionWalletConsumed)
 	}
 }
 
