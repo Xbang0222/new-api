@@ -188,7 +188,10 @@ func (s *BillingSession) Reserve(targetQuota int) error {
 		}
 		if err := model.TransferSubscriptionReservationToWallet(sub.requestId, sub.userId, sub.subscriptionId, targetQuota, s.extraReserved); err != nil {
 			if !s.relayInfo.IsPlayground {
-				if rollbackErr := model.IncreaseTokenQuota(s.relayInfo.TokenId, s.relayInfo.TokenKey, delta); rollbackErr != nil {
+				if rollbackErr := model.RestoreTokenReservation(s.relayInfo.TokenId, s.relayInfo.TokenKey, delta); rollbackErr != nil {
+					// The extra token reservation still exists. Keep it in the
+					// final request refund even though the funding switch failed.
+					s.tokenConsumed += delta
 					common.SysError(fmt.Sprintf("failed to roll back token reservation after wallet transfer failure: %s", rollbackErr))
 				}
 			}

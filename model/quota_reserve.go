@@ -238,3 +238,25 @@ func TryReserveTokenQuota(id int, key string, quota int, unlimited bool) (bool, 
 	}
 	return true, nil
 }
+
+// RestoreTokenReservation returns a reservation after a failed funding switch.
+// Persist first: failed compensation must not credit Redis or disappear from
+// the session's pending refund. A cache failure after persistence is not a
+// retryable financial error.
+func RestoreTokenReservation(id int, key string, quota int) error {
+	if id <= 0 || quota < 0 || quota > common.MaxWalletQuota {
+		return errors.New("invalid token reservation refund")
+	}
+	if quota == 0 {
+		return nil
+	}
+	if err := persistTokenQuotaDelta(id, quota); err != nil {
+		return err
+	}
+	if common.RedisEnabled {
+		if _, err := cacheApplyTokenQuotaDelta(id, key, int64(quota)); err != nil {
+			common.SysError(fmt.Sprintf("failed to sync token reservation refund cache for token %d: %s", id, err))
+		}
+	}
+	return nil
+}
