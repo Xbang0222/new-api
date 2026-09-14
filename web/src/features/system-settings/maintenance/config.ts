@@ -89,6 +89,7 @@ export const SIDEBAR_MODULES_DEFAULT: SidebarModulesAdminConfig = {
     dashboard: true,
     token: true,
     log: true,
+    audit: true,
     task: true,
   },
   personal: {
@@ -96,12 +97,12 @@ export const SIDEBAR_MODULES_DEFAULT: SidebarModulesAdminConfig = {
     invoice: true,
     topup: true,
     personal: true,
+    security: true,
   },
   admin: {
     enabled: true,
     channel: true,
     channelScheduling: true,
-    smartProtection: true,
     models: true,
     redemption: true,
     user: true,

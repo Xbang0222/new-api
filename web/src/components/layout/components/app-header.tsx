@@ -20,6 +20,7 @@ import { ConfigDrawer } from '@/components/config-drawer'
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { NotificationPopover } from '@/components/notification-popover'
 import { ProfileDropdown } from '@/components/profile-dropdown'
+import { Search } from '@/components/search'
 import { useNotifications } from '@/hooks/use-notifications'
 import { useTopNavLinks } from '@/hooks/use-top-nav-links'
 
@@ -31,7 +32,7 @@ import { TopNav } from './top-nav'
 
 /**
  * General application Header component
- * Integrates navigation bar, configuration and profile functions
+ * Integrates navigation bar, search, configuration and profile functions
  *
  * @example
  * // Basic usage
@@ -58,6 +59,8 @@ type AppHeaderProps = {
    * @default true
    */
   showTopNav?: boolean
+  /** Whether to show the command search box. */
+  showSearch?: boolean
   /**
    * Left content, overrides TopNav if provided
    */
@@ -86,6 +89,7 @@ type AppHeaderProps = {
 export function AppHeader({
   navLinks = defaultTopNavLinks,
   showTopNav = true,
+  showSearch = true,
   leftContent,
   rightContent,
   showNotifications = true,
@@ -101,18 +105,23 @@ export function AppHeader({
 
   return (
     <Header>
-      <SystemBrand variant='inline' />
+      <div className='@container/system-brand flex min-w-0 flex-1 items-center gap-1'>
+        <SystemBrand variant='inline' />
+      </div>
 
       {leftContent ? (
         <div className='ms-2 flex items-center'>{leftContent}</div>
       ) : null}
 
       {rightContent ?? (
-        <div className='ms-auto flex items-center gap-1 sm:gap-2'>
+        <div className='ms-auto flex shrink-0 items-center gap-1 sm:gap-2'>
           {showTopNav && (
             <div className='me-1 hidden lg:block'>
               <TopNav links={links} />
             </div>
+          )}
+          {showSearch && (
+            <Search className='w-8 flex-none [&>span]:hidden sm:[&>span]:inline' />
           )}
           {showNotifications && (
             <NotificationPopover

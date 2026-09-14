@@ -79,11 +79,14 @@ describe('security sidebar visibility', () => {
       { personal: { enabled: true, personal: true, topup: true } },
       { personal: { enabled: true, personal: true } }
     )
-    expect(
+    const personalItems =
       result.current
         .find((group) => group.id === 'personal')
-        ?.items.map((item) => item.title)
-    ).toEqual(['Wallet', 'Profile', 'Security & Access'])
+        ?.items.map((item) => item.title) ?? []
+    expect(personalItems).toContain('Security & Access')
+    expect(personalItems.indexOf('Security & Access')).toBe(
+      personalItems.indexOf('Profile') + 1
+    )
     expect(
       result.current
         .flatMap((group) => group.items)

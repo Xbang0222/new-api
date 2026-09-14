@@ -52,26 +52,6 @@ func TestRelayInfoQueueTimeIsTrackedSeparatelyFromUpstreamTTFT(t *testing.T) {
 	assert.Equal(t, int64(3), info.ElapsedRequestSeconds(start.Add(8*time.Second)))
 }
 
-func TestRelayInfoSmartProtectionTimeIsExcludedFromRequestDurationAndUpstreamTTFT(t *testing.T) {
-	start := time.Unix(100, 0)
-	info := &RelayInfo{
-		StartTime:                start,
-		UpstreamStartTime:        start.Add(7 * time.Second),
-		UpstreamFirstContentTime: start.Add(8 * time.Second),
-		IsStream:                 true,
-	}
-
-	info.AddChannelRateLimitQueueTime(3 * time.Second)
-	info.AddSmartProtectionReviewTime(4 * time.Second)
-
-	ttft, ok := info.UpstreamFirstResponseDuration()
-	require.True(t, ok)
-	assert.Equal(t, int64(1000), ttft)
-	assert.Equal(t, 5*time.Second, info.ElapsedRequestDuration(start.Add(12*time.Second)))
-	assert.Equal(t, int64(5), info.ElapsedRequestSeconds(start.Add(12*time.Second)))
-	assert.Zero(t, info.ElapsedRequestDuration(start.Add(6*time.Second)))
-}
-
 func TestGenBaseRelayInfoBlankTokenGroupUsesServiceGroup(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())

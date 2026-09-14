@@ -155,7 +155,6 @@ func ChargeViolationFeeIfNeeded(ctx *gin.Context, relayInfo *relaycommon.RelayIn
 		"violation_fee_marker": CSAMViolationMarker,
 	})
 	attachChannelRateLimitQueueTime(other, relayInfo)
-	attachSmartProtectionReviewTime(other, relayInfo)
 
 	model.RecordConsumeLog(ctx, relayInfo.UserId, model.RecordConsumeLogParams{
 		ChannelId:      relayInfo.ChannelId,

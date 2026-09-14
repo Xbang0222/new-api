@@ -78,7 +78,6 @@ func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo, task *model
 		other.SetPublic("upstream_model_name", info.UpstreamModelName)
 	}
 	attachChannelRateLimitQueueTime(other, info)
-	attachSmartProtectionReviewTime(other, info)
 	attachTaskUpstreamDiagnostics(other, info.TaskUpstreamDiagnostics)
 	if snap := info.TieredBillingSnapshot; snap != nil {
 		other.SetPublic("billing_mode", "tiered_expr")
@@ -171,7 +170,6 @@ func RecordTaskSubmissionFailure(c *gin.Context, info *relaycommon.RelayInfo, pl
 		}
 	}
 	attachChannelRateLimitQueueTime(other, info)
-	attachSmartProtectionReviewTime(other, info)
 	attachTaskUpstreamDiagnostics(other, info.TaskUpstreamDiagnostics)
 	model.RecordTaskBillingLog(model.RecordTaskBillingLogParams{
 		UserId:            info.UserId,

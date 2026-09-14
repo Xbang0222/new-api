@@ -24,7 +24,6 @@ import { useTranslation } from 'react-i18next'
 import { GroupBadge } from '@/components/group-badge'
 import { StatusBadge, type StatusBadgeProps } from '@/components/status-badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Badge } from '@/components/ui/badge'
 import {
   Popover,
   PopoverContent,
@@ -68,8 +67,6 @@ import type { LogOtherData } from '../../types'
 import { DetailsDialog } from '../dialogs/details-dialog'
 import { LogCostDisplay } from '../log-cost-display'
 import { ModelBadge } from '../model-badge'
-import { SmartProtectionReviewError } from '../smart-protection-review-error'
-import { SmartProtectionReviewRaw } from '../smart-protection-review-raw'
 import { TimingMetricsCell, StreamTpsCell } from '../timing-metrics-cell'
 import { useUsageLogsContext } from '../usage-logs-provider'
 import { createIpColumn } from './column-helpers'
@@ -786,90 +783,6 @@ export function useCommonLogsColumns(
       size: 110,
     })
 
-    columns.push({
-      id: 'smart_protection_safeties',
-      header: t('Review Safety'),
-      accessorFn: (log) =>
-        parseLogOther(log.other)?.admin_info?.smart_protection_safeties ?? [],
-      cell: ({ row }) => {
-        if (!isTimingLogType(row.original.type)) return null
-        const other = parseLogOther(row.original.other)
-        const reviewError = other?.admin_info?.smart_protection_review_error
-        const reviewRaw = other?.admin_info?.smart_protection_review_raw
-        const safeties = row.getValue('smart_protection_safeties') as string[]
-        if (safeties.length === 0) {
-          return reviewError ? (
-            <SmartProtectionReviewError error={reviewError} />
-          ) : (
-            <span className='text-muted-foreground/40'>—</span>
-          )
-        }
-        const safetyBadges = (
-          <span className='flex max-w-48 flex-wrap gap-1'>
-            {safeties.map((safety) => (
-              <Badge key={safety} variant='outline'>
-                {t(`Smart protection safety: ${safety}`, {
-                  defaultValue: safety,
-                })}
-              </Badge>
-            ))}
-          </span>
-        )
-        return (
-          <div className='flex flex-wrap items-center gap-1'>
-            {reviewRaw ? (
-              <SmartProtectionReviewRaw raw={reviewRaw}>
-                {safetyBadges}
-              </SmartProtectionReviewRaw>
-            ) : (
-              safetyBadges
-            )}
-            {reviewError && <SmartProtectionReviewError error={reviewError} />}
-          </div>
-        )
-      },
-      size: 125,
-    })
-
-    columns.push({
-      id: 'smart_protection_categories',
-      header: t('Review Categories'),
-      accessorFn: (log) =>
-        parseLogOther(log.other)?.admin_info?.smart_protection_categories ?? [],
-      cell: ({ row }) => {
-        if (!isTimingLogType(row.original.type)) return null
-        const other = parseLogOther(row.original.other)
-        const reviewError = other?.admin_info?.smart_protection_review_error
-        const categories = row.getValue(
-          'smart_protection_categories'
-        ) as string[]
-        if (categories.length === 0) {
-          if (reviewError) {
-            return <Badge variant='destructive'>{t('Error')}</Badge>
-          }
-          if (
-            other?.admin_info?.smart_protection_safeties ||
-            other?.admin_info?.smart_protection_review_ms != null
-          ) {
-            return <Badge variant='secondary'>{t('None')}</Badge>
-          }
-          return <span className='text-muted-foreground/40'>—</span>
-        }
-        return (
-          <div className='flex max-w-64 flex-wrap gap-1'>
-            {categories.map((category) => (
-              <Badge key={category} variant='secondary'>
-                {t(`Smart protection category: ${category}`, {
-                  defaultValue: category,
-                })}
-              </Badge>
-            ))}
-            {reviewError && <Badge variant='destructive'>{t('Error')}</Badge>}
-          </div>
-        )
-      },
-      size: 220,
-    })
   }
 
   columns.push({

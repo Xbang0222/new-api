@@ -73,30 +73,6 @@ func AppendChannelRateLimitQueueAdminInfo(adminInfo map[string]interface{}, rela
 	adminInfo["channel_rate_limit_queue_ms"] = relayInfo.ChannelRateLimitQueueTime.Milliseconds()
 }
 
-// AppendSmartProtectionReviewAdminInfo exposes safety-model diagnostics only to admins.
-func AppendSmartProtectionReviewAdminInfo(adminInfo map[string]interface{}, relayInfo *relaycommon.RelayInfo) {
-	if adminInfo == nil || relayInfo == nil {
-		return
-	}
-	reviewed := relayInfo.SmartProtectionReviewTime > 0 || len(relayInfo.SmartProtectionSafeties) > 0 || len(relayInfo.SmartProtectionCategories) > 0 || len(relayInfo.SmartProtectionMatchedRules) > 0 || relayInfo.SmartProtectionReviewRaw != "" || relayInfo.SmartProtectionReviewError != "" || relayInfo.SmartProtectionReviewStatus != "" || relayInfo.SmartProtectionReviewReason != ""
-	if relayInfo.SmartProtectionReviewTime > 0 {
-		adminInfo["smart_protection_review_ms"] = relayInfo.SmartProtectionReviewTime.Milliseconds()
-	}
-	if reviewed {
-		adminInfo["smart_protection_review_status"] = relayInfo.SmartProtectionReviewStatus
-		adminInfo["smart_protection_review_reason"] = relayInfo.SmartProtectionReviewReason
-		adminInfo["smart_protection_safeties"] = append([]string{}, relayInfo.SmartProtectionSafeties...)
-		adminInfo["smart_protection_categories"] = append([]string{}, relayInfo.SmartProtectionCategories...)
-		if relayInfo.SmartProtectionReviewRaw != "" {
-			adminInfo["smart_protection_review_raw"] = relayInfo.SmartProtectionReviewRaw
-		}
-		adminInfo["smart_protection_matched_rules"] = append([]string{}, relayInfo.SmartProtectionMatchedRules...)
-		if relayInfo.SmartProtectionReviewError != "" {
-			adminInfo["smart_protection_review_error"] = relayInfo.SmartProtectionReviewError
-		}
-	}
-}
-
 func attachChannelRateLimitQueueTime(other interface{}, relayInfo *relaycommon.RelayInfo) {
 	if relayInfo == nil || relayInfo.ChannelRateLimitQueueTime <= 0 {
 		return
@@ -112,22 +88,6 @@ func attachChannelRateLimitQueueTime(other interface{}, relayInfo *relaycommon.R
 			target["admin_info"] = adminInfo
 		}
 		AppendChannelRateLimitQueueAdminInfo(adminInfo, relayInfo)
-	}
-}
-
-func attachSmartProtectionReviewTime(other interface{}, relayInfo *relaycommon.RelayInfo) {
-	if relayInfo == nil {
-		return
-	}
-	adminInfo := map[string]interface{}{}
-	AppendSmartProtectionReviewAdminInfo(adminInfo, relayInfo)
-	switch target := other.(type) {
-	case *model.LogOther:
-		for key, value := range adminInfo {
-			target.SetAdmin(key, value)
-		}
-	case map[string]interface{}:
-		target["admin_info"] = adminInfo
 	}
 }
 
@@ -159,7 +119,6 @@ func AppendRelayLogAdminInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo,
 
 	AppendChannelAffinityAdminInfo(ctx, other)
 	attachChannelRateLimitQueueTime(other, relayInfo)
-	attachSmartProtectionReviewTime(other, relayInfo)
 }
 
 func GenerateTextOtherInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, modelRatio, groupRatio, completionRatio float64,
@@ -377,7 +336,6 @@ func GenerateMjOtherInfo(relayInfo *relaycommon.RelayInfo, priceData hosttypes.P
 		other.SetPublic("user_group_ratio", priceData.GroupRatioInfo.GroupSpecialRatio)
 	}
 	attachChannelRateLimitQueueTime(other, relayInfo)
-	attachSmartProtectionReviewTime(other, relayInfo)
 	appendRequestPath(nil, relayInfo, other)
 	return other
 }

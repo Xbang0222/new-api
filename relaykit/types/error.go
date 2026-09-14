@@ -40,7 +40,6 @@ type ErrorCode string
 const (
 	ErrorCodeInvalidRequest         ErrorCode = "invalid_request"
 	ErrorCodeSensitiveWordsDetected ErrorCode = "sensitive_words_detected"
-	ErrorCodeSmartProtectionBlocked ErrorCode = "smart_protection_blocked"
 	ErrorCodeViolationFeeGrokCSAM   ErrorCode = "violation_fee.grok.csam"
 
 	// new api error

@@ -157,25 +157,6 @@ export interface LogOtherData {
     }
     // Channel request-rate-limit queue time, in milliseconds. Admin-only.
     channel_rate_limit_queue_ms?: number
-    // Smart-protection safety review time, in milliseconds. Admin-only.
-    smart_protection_review_ms?: number
-    smart_protection_review_status?:
-      | 'safe'
-      | 'observed'
-      | 'blocked'
-      | 'partial'
-      | 'failed'
-    smart_protection_review_reason?:
-      | 'safe_classification'
-      | 'non_blocking_risk'
-      | 'blocking_rule_matched'
-      | 'partial_failure'
-      | 'guard_unavailable'
-    smart_protection_safeties?: string[]
-    smart_protection_categories?: string[]
-    smart_protection_review_raw?: string
-    smart_protection_matched_rules?: string[]
-    smart_protection_review_error?: string
     task_upstream?: {
       http_status?: number
       upstream_status?: string

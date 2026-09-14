@@ -54,7 +54,6 @@ import { useTranslation } from 'react-i18next'
 
 import { Dialog } from '@/components/dialog'
 import { StatusBadge, type StatusBadgeProps } from '@/components/status-badge'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { IconBadge, type IconBadgeTone } from '@/components/ui/icon-badge'
 import { Label } from '@/components/ui/label'
@@ -939,61 +938,6 @@ export function DetailsDialog(props: DetailsDialogProps) {
             />
           )}
 
-          {showTiming && props.isAdmin && adminInfo && (
-            <>
-              {adminInfo.smart_protection_review_error &&
-                !adminInfo.smart_protection_safeties?.length && (
-                  <DetailRow
-                    label={t('Review Safety')}
-                    value={<Badge variant='destructive'>{t('Error')}</Badge>}
-                  />
-                )}
-              {adminInfo.smart_protection_safeties &&
-                adminInfo.smart_protection_safeties.length > 0 && (
-                  <DetailRow
-                    label={t('Review Safety')}
-                    value={
-                      <span className='flex flex-wrap gap-1'>
-                        {adminInfo.smart_protection_safeties.map((safety) => (
-                          <Badge key={safety} variant='outline'>
-                            {t(`Smart protection safety: ${safety}`)}
-                          </Badge>
-                        ))}
-                      </span>
-                    }
-                  />
-                )}
-              {adminInfo.smart_protection_categories && (
-                <DetailRow
-                  label={t('Review Categories')}
-                  value={
-                    <span className='flex flex-wrap gap-1'>
-                      {adminInfo.smart_protection_review_error &&
-                        adminInfo.smart_protection_categories.length === 0 &&
-                        (adminInfo.smart_protection_review_status ===
-                          'failed' ||
-                          adminInfo.smart_protection_review_status ===
-                            'partial') && (
-                          <Badge variant='destructive'>{t('Error')}</Badge>
-                        )}
-                      {!adminInfo.smart_protection_review_error &&
-                        adminInfo.smart_protection_categories.length === 0 && (
-                          <Badge variant='secondary'>{t('None')}</Badge>
-                        )}
-                      {adminInfo.smart_protection_categories.length > 0 &&
-                        adminInfo.smart_protection_categories.map(
-                          (category) => (
-                            <Badge key={category} variant='secondary'>
-                              {t(`Smart protection category: ${category}`)}
-                            </Badge>
-                          )
-                        )}
-                    </span>
-                  }
-                />
-              )}
-            </>
-          )}
         </div>
 
         {/* Request conversion (admin only, not for refund) */}

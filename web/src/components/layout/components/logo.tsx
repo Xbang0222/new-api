@@ -24,7 +24,6 @@ import { cn } from '@/lib/utils'
 export interface LogoProps extends React.HTMLAttributes<HTMLDivElement> {
   image: React.ComponentType<React.SVGProps<SVGSVGElement>>
   name: string
-  version?: string
   width?: number
   height?: number
   showName?: boolean
@@ -35,7 +34,6 @@ export function Logo({
   className,
   image: SvgImage,
   name,
-  version,
   width = 24,
   height = 24,
   showName = true,
@@ -55,7 +53,6 @@ export function Logo({
         className='max-h-full max-w-full opacity-70'
       />
       <span className={cn(!showName && 'sr-only')}>{name}</span>
-      {version && <span className='text-muted-foreground'>{version}</span>}
       {badge && <Badge variant='secondary'>{badge}</Badge>}
     </div>
   )

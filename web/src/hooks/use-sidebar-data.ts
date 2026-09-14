@@ -21,6 +21,7 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import {
   Activity,
   Box,
+  ClipboardList,
   CreditCard,
   FileText,
   FlaskConical,
@@ -66,7 +67,6 @@ export const SIDEBAR_ROUTE_URLS = {
   profile: '/profile',
   channels: '/channels',
   channelScheduling: '/channel-scheduling',
-  smartProtection: '/smart-protection',
   models: '/models/metadata',
   users: '/users',
   redemptionCodes: '/redemption-codes',
@@ -131,6 +131,11 @@ export function useSidebarData(): SidebarData {
             icon: FileText,
           },
           {
+            title: t('Audit Logs'),
+            url: '/usage-logs/audit',
+            icon: ClipboardList,
+          },
+          {
             title: t('Task Logs'),
             url: SIDEBAR_ROUTE_URLS.usageTask,
             activeUrls: [SIDEBAR_ROUTE_URLS.usageDrawing],
@@ -162,6 +167,11 @@ export function useSidebarData(): SidebarData {
             url: SIDEBAR_ROUTE_URLS.profile,
             icon: User,
           },
+          {
+            title: t('Security & Access'),
+            url: '/security',
+            icon: ShieldCheck,
+          },
         ],
       },
       {
@@ -177,11 +187,6 @@ export function useSidebarData(): SidebarData {
             title: t('Intelligent Scheduling'),
             url: SIDEBAR_ROUTE_URLS.channelScheduling,
             icon: GitBranch,
-          },
-          {
-            title: t('Smart Protection'),
-            url: SIDEBAR_ROUTE_URLS.smartProtection,
-            icon: ShieldCheck,
           },
           {
             title: t('Models'),

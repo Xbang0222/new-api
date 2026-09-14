@@ -170,11 +170,10 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	}
 
 	needSensitiveCheck := setting.ShouldCheckPromptSensitive()
-	needSmartProtection := service.SmartProtectionEnabled()
 	needCountToken := constant.CountToken
 	// Avoid building huge CombineText (strings.Join) when token counting and sensitive check are both disabled.
 	var meta *types.TokenCountMeta
-	if needSensitiveCheck || needSmartProtection || needCountToken {
+	if needSensitiveCheck || needCountToken {
 		meta = request.GetTokenCountMeta()
 	} else {
 		meta = fastTokenCountMetaForPricing(request)
@@ -234,8 +233,6 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	}
 	relayInfo.RetryIndex = 0
 	relayInfo.LastError = nil
-	smartProtectionReviewed := false
-
 	attemptLimit := service.GetRelayAttemptLimit(retryParam)
 	for attempt := 0; attempt < attemptLimit; attempt++ {
 		retryParam.ResetRateLimitState()
@@ -326,16 +323,6 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			newAPIError = billingErr
 			break
 		}
-		if !smartProtectionReviewed && service.ShouldProtectChannel(channel.Id) {
-			if smartProtectionErr := service.CheckSmartProtection(c, relayInfo, channel.Id, channel.Name, meta); smartProtectionErr != nil {
-				service.ReleaseChannelRequestReservation(reservation)
-				newAPIError = smartProtectionErr
-				processChannelError(c, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, common.GetContextKeyString(c, constant.ContextKeyChannelKey), channel.GetAutoBan()), smartProtectionErr, relayInfo)
-				break
-			}
-			smartProtectionReviewed = true
-		}
-
 		bodyStorage, bodyErr := common.GetBodyStorage(c)
 		if bodyErr != nil {
 			service.ReleaseChannelRequestReservation(reservation)
@@ -673,8 +660,7 @@ func processChannelError(c *gin.Context, channelError types.ChannelError, err *t
 		})
 	}
 
-	isSmartProtectionBlock := err.GetErrorCode() == types.ErrorCodeSmartProtectionBlocked
-	if (constant.ErrorLogEnabled || isSmartProtectionBlock) && types.IsRecordErrorLog(err) {
+	if constant.ErrorLogEnabled && types.IsRecordErrorLog(err) {
 		// 保存错误日志到mysql中
 		userId := c.GetInt("id")
 		tokenName := c.GetString("token_name")

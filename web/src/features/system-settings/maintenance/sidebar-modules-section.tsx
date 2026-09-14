@@ -114,6 +114,10 @@ export function SidebarModulesSection({
         title: t('Usage logs'),
         description: t('Detailed request logs for investigations.'),
       },
+      audit: {
+        title: t('Audit Logs'),
+        description: t('Login, security and access records'),
+      },
       task: {
         title: t('Task logs'),
         description: t('Drawing and background task records.'),
@@ -132,6 +136,10 @@ export function SidebarModulesSection({
         title: t('Profile'),
         description: t('Personal settings and profile management.'),
       },
+      security: {
+        title: t('Security & Access'),
+        description: t('Manage your security settings and account access'),
+      },
     },
     admin: {
       channel: {
@@ -141,10 +149,6 @@ export function SidebarModulesSection({
       channelScheduling: {
         title: t('Intelligent Scheduling'),
         description: t('Configure channel scheduling and routing priorities.'),
-      },
-      smartProtection: {
-        title: t('Smart Protection'),
-        description: t('Monitor and configure automatic protection policies.'),
       },
       models: {
         title: t('Models'),

@@ -260,17 +260,6 @@ func SetApiRouter(router *gin.Engine) {
 			optionRoute.GET("/waffo-pancake/subscription-product-options", controller.ListWaffoPancakeSubscriptionProductOptions)
 		}
 
-		smartProtectionRoute := apiRouter.Group("/smart-protection")
-		smartProtectionRoute.Use(middleware.RootAuth())
-		{
-			smartProtectionRoute.GET("/settings", controller.GetSmartProtectionSettings)
-			smartProtectionRoute.PUT("/settings", controller.UpdateSmartProtectionSettings)
-			smartProtectionRoute.GET("/channels", controller.ListSmartProtectionChannels)
-			smartProtectionRoute.GET("/events", controller.ListSmartProtectionEvents)
-			smartProtectionRoute.DELETE("/events", middleware.CriticalRateLimit(), controller.DeleteAllSmartProtectionEvents)
-			smartProtectionRoute.GET("/events/:id", controller.GetSmartProtectionEvent)
-		}
-
 		// Custom OAuth provider management (root only)
 		customOAuthRoute := apiRouter.Group("/custom-oauth-provider")
 		customOAuthRoute.Use(middleware.RootAuth())
