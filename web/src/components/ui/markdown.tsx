@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import DOMPurify from 'dompurify'
+import DOMPurify, { type Config } from 'dompurify'
 import * as katex from 'katex'
 
 import 'katex/dist/katex.min.css'
@@ -131,7 +131,8 @@ const allowedTags = [
 const sanitizeOptions = {
   ADD_ATTR: allowedAttributes,
   ADD_TAGS: allowedTags,
-} as const
+  FORBID_TAGS: ['script'],
+} satisfies Config
 
 type FlowNode = {
   id: string
@@ -720,13 +721,17 @@ const markdownParser = new Marked({
 
 markdownParser.use(...markdownExtensions)
 
-function addExternalLinkAttributes(html: string, baseUrl?: string): string {
+function hardenRenderedHtml(html: string, baseUrl?: string): string {
   if (typeof window === 'undefined') {
     return html
   }
 
   const template = document.createElement('template')
   template.innerHTML = html
+
+  template.content.querySelectorAll('script').forEach((script) => {
+    script.remove()
+  })
 
   template.content.querySelectorAll('a[href]').forEach((link) => {
     if (baseUrl) {
@@ -759,7 +764,7 @@ function renderMarkdown(
   })
   const html = DOMPurify.sanitize(parsedHtml, sanitizeOptions)
 
-  return addExternalLinkAttributes(html, baseUrl)
+  return hardenRenderedHtml(html, baseUrl)
 }
 
 export function Markdown(props: MarkdownProps) {

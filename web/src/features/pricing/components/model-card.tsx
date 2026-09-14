@@ -21,6 +21,7 @@ import { memo, useMemo, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { CopyButton } from '@/components/copy-button'
+import { ModelDescription } from '@/components/model-description'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 import { getLobeIcon } from '@/lib/lobe-icon'
@@ -291,9 +292,17 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
       </CardHeader>
       <CardContent className='flex flex-1 flex-col gap-3'>
         <div className='flex min-w-0 flex-col gap-1.5'>
-          <p className='text-muted-foreground line-clamp-2 text-[13px] leading-5 break-words'>
-            {props.model.description || t('No description available.')}
-          </p>
+          {props.model.description ? (
+            <ModelDescription
+              content={props.model.description}
+              variant='preview'
+              className='text-muted-foreground min-h-[2.5rem] flex-1 text-[13px] leading-5'
+            />
+          ) : (
+            <p className='text-muted-foreground min-h-[2.5rem] flex-1 text-[13px] leading-5 break-words'>
+              {t('No description available.')}
+            </p>
+          )}
           {tags.length > 0 && (
             <div
               role='group'

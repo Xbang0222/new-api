@@ -183,10 +183,6 @@ import {
   supportsChannelPluginExtensions,
 } from '../../lib/channel-plugin-extensions'
 import {
-  collectInvalidStatusCodeEntries,
-  collectNewDisallowedStatusCodeRedirects,
-} from '../../lib/status-code-risk-guard'
-import {
   assessBaseUrlTrust,
   nextTaskPluginBaseUrl,
 } from '../../lib/task-plugin-base-url'
@@ -201,7 +197,6 @@ import {
   type MissingModelsAction,
 } from '../dialogs/missing-models-confirmation-dialog'
 import { ParamOverrideEditorDialog } from '../dialogs/param-override-editor-dialog'
-import { StatusCodeRiskDialog } from '../dialogs/status-code-risk-dialog'
 import { ModelMappingEditor } from '../model-mapping-editor'
 import { UpstreamModelSelection } from '../upstream-model-selection'
 import {
@@ -393,14 +388,6 @@ export function ChannelMutateDrawer({
     useState(false)
   const initialModelsRef = useRef<string[]>([])
   const initialModelMappingRef = useRef<string>('')
-  const initialStatusCodeMappingRef = useRef<string>('')
-  const [statusCodeRiskOpen, setStatusCodeRiskOpen] = useState(false)
-  const [statusCodeRiskDetailItems, setStatusCodeRiskDetailItems] = useState<
-    string[]
-  >([])
-  const statusCodeRiskResolveRef = useRef<
-    ((confirmed: boolean) => void) | null
-  >(null)
   const [missingModelsDialogOpen, setMissingModelsDialogOpen] = useState(false)
   const [missingModelsList, setMissingModelsList] = useState<string[]>([])
   const missingModelsResolveRef = useRef<
@@ -963,13 +950,10 @@ export function ChannelMutateDrawer({
         channelData.data.models || ''
       )
       initialModelMappingRef.current = channelData.data.model_mapping || ''
-      initialStatusCodeMappingRef.current =
-        channelData.data.status_code_mapping || ''
     } else if (!isEditing) {
       form.reset(CHANNEL_FORM_DEFAULT_VALUES)
       initialModelsRef.current = []
       initialModelMappingRef.current = ''
-      initialStatusCodeMappingRef.current = ''
     }
   }, [isEditing, channelId, channelData, form, open])
 
@@ -1255,34 +1239,6 @@ export function ChannelMutateDrawer({
     []
   )
 
-  const confirmStatusCodeRisk = useCallback(
-    (detailItems: string[]): Promise<boolean> =>
-      new Promise((resolve) => {
-        statusCodeRiskResolveRef.current = resolve
-        setStatusCodeRiskDetailItems(detailItems)
-        setStatusCodeRiskOpen(true)
-      }),
-    []
-  )
-
-  const handleStatusCodeRiskAction = useCallback((confirmed: boolean) => {
-    setStatusCodeRiskOpen(false)
-    setStatusCodeRiskDetailItems([])
-    if (statusCodeRiskResolveRef.current) {
-      statusCodeRiskResolveRef.current(confirmed)
-      statusCodeRiskResolveRef.current = null
-    }
-  }, [])
-
-  useEffect(() => {
-    return () => {
-      if (statusCodeRiskResolveRef.current) {
-        statusCodeRiskResolveRef.current(false)
-        statusCodeRiskResolveRef.current = null
-      }
-    }
-  }, [])
-
   const channelMutation = useChannelMutateForm({
     currentRow,
     isEditing,
@@ -1320,35 +1276,6 @@ export function ChannelMutateDrawer({
             t('You do not have permission to edit sensitive channel settings.')
           )
           return
-        }
-      }
-
-      // Validate status_code_mapping entries
-      if (data.status_code_mapping?.trim()) {
-        const invalidEntries = collectInvalidStatusCodeEntries(
-          data.status_code_mapping
-        )
-        if (invalidEntries.length > 0) {
-          const message = t(
-            'Invalid status code mapping entries: {{entries}}',
-            {
-              entries: invalidEntries.join(', '),
-            }
-          )
-          form.setError('status_code_mapping', { type: 'manual', message })
-          setConfigurationSection('request')
-          setPendingErrorFocus('status_code_mapping')
-          toast.error(message)
-          return
-        }
-
-        const riskyRedirects = collectNewDisallowedStatusCodeRedirects(
-          initialStatusCodeMappingRef.current,
-          data.status_code_mapping
-        )
-        if (riskyRedirects.length > 0) {
-          const confirmed = await confirmStatusCodeRisk(riskyRedirects)
-          if (!confirmed) return
         }
       }
 
@@ -1423,7 +1350,6 @@ export function ChannelMutateDrawer({
       channelData,
       form,
       confirmMissingModelMappings,
-      confirmStatusCodeRisk,
       channelMutation,
       t,
     ]
@@ -2319,36 +2245,6 @@ export function ChannelMutateDrawer({
           />
         </div>
       </div>
-
-      <FormField
-        control={form.control}
-        name='status_code_mapping'
-        render={({ field }) => (
-          <FormItem className='space-y-3'>
-            <div className='space-y-1'>
-              <FormLabel>{t('Status Code Mapping')}</FormLabel>
-              <FormDescription>
-                {t('Map upstream status codes to different codes')}
-              </FormDescription>
-            </div>
-            <FormControl>
-              <JsonEditor
-                value={field.value || ''}
-                onChange={field.onChange}
-                disabled={isSubmitting}
-                keyPlaceholder='400'
-                valuePlaceholder='500'
-                keyLabel='Original Code'
-                valueLabel='Mapped Code'
-                emptyMessage={t('No status code mappings configured.')}
-                template={{ '400': '500', '429': '503' }}
-                valueType='string'
-              />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
 
       {sensitiveLocked && (
         <p className='text-muted-foreground text-xs'>
@@ -4527,14 +4423,6 @@ export function ChannelMutateDrawer({
         onOpenChange={setMissingModelsDialogOpen}
       />
 
-      <StatusCodeRiskDialog
-        open={statusCodeRiskOpen}
-        onOpenChange={(v) => {
-          if (!v) handleStatusCodeRiskAction(false)
-        }}
-        detailItems={statusCodeRiskDetailItems}
-        onConfirm={() => handleStatusCodeRiskAction(true)}
-      />
     </>
   )
 }

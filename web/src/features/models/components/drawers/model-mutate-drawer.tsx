@@ -36,6 +36,7 @@ import { ErrorState } from '@/components/error-state'
 import { JsonEditor } from '@/components/json-editor'
 import { LoadingState } from '@/components/loading-state'
 import { LobeIconField } from '@/components/lobe-icon-field'
+import { ModelDescription } from '@/components/model-description'
 import { TagInput } from '@/components/tag-input'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -118,7 +119,7 @@ export function ModelMutateDrawer(props: {
     defaultValues: transformModelToFormDefaults({
       model_name: '',
       status: 1,
-      sync_official: 1,
+      sync_official: 0,
       name_rule: 0,
     } as Model),
   })
@@ -178,7 +179,7 @@ export function ModelMutateDrawer(props: {
           : {
               model_name: currentRow?.model_name ?? '',
               status: 1,
-              sync_official: 1,
+              sync_official: 0,
               name_rule: 0,
             }) as Model
       )
@@ -357,10 +358,25 @@ export function ModelMutateDrawer(props: {
                             <FormControl>
                               <Textarea
                                 placeholder={t('Describe this model...')}
-                                rows={3}
+                                rows={6}
                                 {...field}
                               />
                             </FormControl>
+                            {field.value.trim() && (
+                              <div
+                                role='region'
+                                aria-label={t('Preview')}
+                                className='bg-muted/20 max-h-48 overflow-y-auto rounded-md border p-3'
+                              >
+                                <div className='text-muted-foreground mb-2 text-xs font-medium'>
+                                  {t('Preview')}
+                                </div>
+                                <ModelDescription
+                                  content={field.value}
+                                  className='text-foreground text-sm'
+                                />
+                              </div>
+                            )}
                             <FormMessage />
                           </FormItem>
                         )}

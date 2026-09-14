@@ -350,10 +350,23 @@ async function renderKeysPage(status = 1, overrides: Partial<ApiKey> = {}) {
 }
 
 it('combines creation and last use while keeping expiry, models and IP restrictions separate', async () => {
-  await renderKeysPage()
+  await renderKeysPage(1, {
+    usage: {
+      today: { quota: 1_500_000 },
+      last_30_days: { quota: 4_500_000 },
+    },
+  })
   for (const name of ['Name', 'API Key', 'Group', 'Models', 'IP Restriction']) {
     expect(screen.getByRole('columnheader', { name })).toBeInTheDocument()
   }
+  expect(
+    screen.getByRole('columnheader', { name: 'Usage' })
+  ).toBeInTheDocument()
+  const usage = screen.getByRole('cell', {
+    name: /Today.*3.*Last 30 days.*9/,
+  })
+  expect(within(usage).getByText('Today')).toBeInTheDocument()
+  expect(within(usage).getByText('Last 30 days')).toBeInTheDocument()
   expect(screen.getByRole('columnheader', { name: 'Time' })).toBeInTheDocument()
   expect(
     screen.getByRole('columnheader', { name: 'Expires' })
@@ -455,13 +468,22 @@ it('keeps full mobile information without group or quota section headings', asyn
   i18n.addResourceBundle('zh', 'translation', zh.translation)
   await i18n.changeLanguage('zh')
   try {
-    await renderKeysPage()
+    await renderKeysPage(1, {
+      usage: {
+        today: { quota: 1_500_000 },
+        last_30_days: { quota: 4_500_000 },
+      },
+    })
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
     expect(screen.queryByText('额度 ($)')).not.toBeInTheDocument()
     expect(screen.getByText('($)')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /剩余 80;/ })).toBeInTheDocument()
     expect(screen.getByText('80')).toBeInTheDocument()
     expect(screen.getByText('120')).toBeInTheDocument()
+    const usage = document.querySelector('[data-slot="api-key-usage-stats"]')
+    expect(usage).toBeInTheDocument()
+    expect(within(usage as HTMLElement).getByText('$3')).toBeInTheDocument()
+    expect(within(usage as HTMLElement).getByText('$9')).toBeInTheDocument()
     expect(screen.getByText(zh.translation['Created'])).toBeInTheDocument()
     expect(screen.getByText(zh.translation['Last Used'])).toBeInTheDocument()
     expect(screen.getByText(zh.translation['Expires'])).toBeInTheDocument()

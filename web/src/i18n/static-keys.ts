@@ -545,20 +545,6 @@ export const STATIC_I18N_KEYS = [
   'Generate New Codes',
   'Audio Preview',
 
-  // Status-code risk dialog
-  'High-risk status code retry risk check 1',
-  'High-risk status code retry risk check 2',
-  'High-risk status code retry risk check 3',
-  'High-risk status code retry risk check 4',
-  'High-risk operation confirmation',
-  'High-risk status code retry risk disclaimer',
-  'Detected high-risk status code redirect rules',
-  'Action confirmation',
-  'High-risk status code retry confirmation text',
-  'High-risk status code retry input placeholder',
-  'High-risk status code retry input mismatch',
-  'I confirm enabling high-risk retry',
-
   // Subscription management
   'Subscription Management',
   'Subscriptions',

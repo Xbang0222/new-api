@@ -54,6 +54,7 @@ import {
 import type { ApiKey } from '../types'
 import { ApiKeyQuotaCell } from './api-key-quota-cell'
 import { ApiKeyActivityCell } from './api-key-timestamp-cell'
+import { ApiKeyUsageStats } from './api-key-usage-stats'
 import {
   ApiKeyCell,
   ModelLimitsCell,
@@ -92,6 +93,7 @@ function ApiKeysMobileSkeleton() {
             <Skeleton className='h-8 w-16' />
           </div>
           <Skeleton className='h-3 w-28' />
+          <Skeleton className='h-12 w-full rounded-md' />
         </div>
       ))}
     </div>
@@ -184,6 +186,7 @@ function ApiKeysMobileList({
                   )}
               </div>
               <ApiKeyQuotaCell apiKey={apiKey} now={now} variant='card' />
+              <ApiKeyUsageStats usage={apiKey.usage} className='min-w-0' />
             </div>
 
             <div className='flex flex-wrap items-center gap-x-5 gap-y-1'>

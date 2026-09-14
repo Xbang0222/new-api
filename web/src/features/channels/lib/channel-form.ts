@@ -136,28 +136,6 @@ function isOptionalModelMapping(value: string | undefined): boolean {
   }
 }
 
-function isOptionalStatusCodeMapping(value: string | undefined): boolean {
-  try {
-    const parsed = parseOptionalJson(value)
-    if (parsed === undefined) return true
-    if (!isJsonObjectValue(parsed)) return false
-    return Object.entries(parsed).every(([from, to]) => {
-      const fromCode = Number(from)
-      const toCode = Number(to)
-      return (
-        Number.isInteger(fromCode) &&
-        Number.isInteger(toCode) &&
-        fromCode >= 100 &&
-        fromCode <= 599 &&
-        toCode >= 100 &&
-        toCode <= 599
-      )
-    })
-  } catch {
-    return false
-  }
-}
-
 function isCodexCredential(value: string | undefined): boolean {
   try {
     const parsed = parseOptionalJson(value)
@@ -239,13 +217,6 @@ export const channelFormSchema = z
       )
       .optional(),
     status: z.number(),
-    status_code_mapping: z
-      .string()
-      .optional()
-      .refine(
-        isOptionalStatusCodeMapping,
-        'Status code mapping must use valid HTTP status codes'
-      ),
     tag: z.string().optional(),
     remark: z
       .string()
@@ -466,7 +437,6 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   request_rate_limit_max: undefined,
   request_rate_limit_window_seconds: undefined,
   status: CHANNEL_STATUS.ENABLED,
-  status_code_mapping: '',
   tag: '',
   remark: '',
   setting: '',
@@ -631,7 +601,6 @@ export function transformChannelToFormDefaults(
     request_rate_limit_max: requestRateLimitMax,
     request_rate_limit_window_seconds: requestRateLimitWindowSeconds,
     status: channel.status,
-    status_code_mapping: channel.status_code_mapping || '',
     tag: channel.tag || '',
     remark: channel.remark || '',
     setting: channel.setting || '',
@@ -878,7 +847,6 @@ export function transformFormDataToCreatePayload(formData: ChannelFormValues): {
     test_model: formData.test_model || null,
     auto_ban: formData.auto_ban ?? 1,
     status: formData.status,
-    status_code_mapping: formData.status_code_mapping || null,
     tag: formData.tag || null,
     remark: formData.remark || '',
     setting: buildSettingJSON(formData),
@@ -925,7 +893,6 @@ export function transformFormDataToUpdatePayload(
     weight: formData.weight ?? 0,
     test_model: formData.test_model || null,
     auto_ban: formData.auto_ban ?? 1,
-    status_code_mapping: formData.status_code_mapping || null,
     tag: formData.tag || null,
     remark: formData.remark || '',
     setting: buildSettingJSON(formData),
@@ -954,7 +921,6 @@ export function transformFormDataToUpdatePayload(
   payload.tag = formData.tag || ''
   payload.remark = formData.remark || ''
   payload.model_mapping = formData.model_mapping || ''
-  payload.status_code_mapping = formData.status_code_mapping || ''
   payload.param_override = formData.param_override || ''
   payload.header_override = formData.header_override || ''
 

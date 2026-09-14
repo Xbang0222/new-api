@@ -1,0 +1,13 @@
+[    5747ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://127.0.0.1:3000/api/user/auth/refresh:0
+[    7019ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "current-password"): (More info: https://goo.gl/9p2vKq) %o @ http://127.0.0.1:3000/sign-in:0
+[   32075ms] [VERBOSE] [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq) %o @ http://127.0.0.1:3000/prompt-security:0
+[   33001ms] TypeError: Cannot read properties of null (reading 'includes')
+    at onCheckedChange (http://127.0.0.1:3000/static/js/async/7756.ed008bb652.js:1:12035)
+    at onChange (http://127.0.0.1:3000/static/js/vendor-ui-primitives.c8435d7d7e.js:1:9510)
+    at http://127.0.0.1:3000/static/js/vendor-ui-primitives.c8435d7d7e.js:1:177555
+    at u8 (http://127.0.0.1:3000/static/js/lib-react.064bab1680.js:2:136864)
+    at http://127.0.0.1:3000/static/js/lib-react.064bab1680.js:2:142950
+    at tx (http://127.0.0.1:3000/static/js/lib-react.064bab1680.js:2:19070)
+    at st (http://127.0.0.1:3000/static/js/lib-react.064bab1680.js:2:138097)
+    at cc (http://127.0.0.1:3000/static/js/lib-react.064bab1680.js:2:165074)
+    at cu (http://127.0.0.1:3000/static/js/lib-react.064bab1680.js:2:164896)

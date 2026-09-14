@@ -37,6 +37,7 @@ import {
   ApiKeyActivityCell,
   ApiKeyTimestampCell,
 } from './api-key-timestamp-cell'
+import { ApiKeyUsageStats } from './api-key-usage-stats'
 import {
   ApiKeyCell,
   IpRestrictionsCell,
@@ -140,6 +141,13 @@ export function useApiKeysColumns(now: number): ColumnDef<ApiKey>[] {
       cell: ({ row }) => <ApiKeyQuotaCell apiKey={row.original} now={now} />,
       size: 260,
       minSize: 260,
+    },
+    {
+      id: 'usage',
+      header: t('Usage'),
+      cell: ({ row }) => <ApiKeyUsageStats usage={row.original.usage} />,
+      enableSorting: false,
+      size: 240,
     },
     {
       accessorKey: 'group',

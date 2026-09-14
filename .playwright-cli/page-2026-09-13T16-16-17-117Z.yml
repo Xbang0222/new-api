@@ -1,0 +1,219 @@
+- generic [ref=e2]:
+  - generic [ref=e6]:
+    - banner:
+      - navigation [ref=e8]:
+        - link "logo Axis Api" [ref=e10] [cursor=pointer]:
+          - /url: /
+          - img "logo" [ref=e12]
+          - generic "Axis Api" [ref=e13]
+        - generic [ref=e14]:
+          - button "切换主题" [ref=e15] [cursor=pointer]
+          - button "切换导航菜单" [ref=e17] [cursor=pointer]
+    - generic:
+      - generic:
+        - navigation:
+          - link "主页":
+            - /url: /
+          - link "控制台":
+            - /url: /dashboard
+          - link "模型广场":
+            - /url: /pricing
+          - link "排行榜":
+            - /url: /rankings
+          - link "使用教程":
+            - /url: https://doc.axisapi.cn
+          - link "画布":
+            - /url: https://canvas.axisapi.cn
+          - link "Cursor-Key":
+            - /url: https://github.com/jince-boy/cursor-key
+        - generic:
+          - link "登录":
+            - /url: /sign-in
+    - generic [ref=e24]:
+      - generic [ref=e25]:
+        - generic [ref=e26]: 人工智能应用基座
+        - heading "统一 API 网关，服务于 海量 AI 模型" [level=1] [ref=e31]: 统一 API 网关，服务于海量 AI 模型
+        - paragraph [ref=e32]: 通过统一、标准的接口协议接入海量模型。承载 AI 应用，高效管理数字资产，连接未来。
+        - generic [ref=e33]:
+          - button "开始使用" [ref=e34] [cursor=pointer]
+          - button "查看定价" [ref=e35] [cursor=pointer]
+          - button "文档" [ref=e36] [cursor=pointer]
+        - generic [ref=e38]:
+          - generic [ref=e39]:
+            - generic [ref=e40]: 常用应用支持
+            - paragraph [ref=e41]: 支持一键配置并完美适配 NewAPI 多协议配置
+          - generic [ref=e42]:
+            - link "CherryStudio Cherry Studio" [ref=e43] [cursor=pointer]:
+              - /url: https://cherry-ai.com
+              - img "CherryStudio" [ref=e44]
+              - generic [ref=e48]: Cherry Studio
+            - link "CC Switch CC Switch" [ref=e49] [cursor=pointer]:
+              - /url: https://ccswitch.io
+              - img "CC Switch" [ref=e50]
+              - generic [ref=e51]: CC Switch
+            - generic [ref=e52]: 更多
+      - generic [ref=e60]:
+        - generic [ref=e61]:
+          - button "Chat" [ref=e62] [cursor=pointer]
+          - button "Responses" [ref=e63] [cursor=pointer]
+          - button "Claude" [ref=e64] [cursor=pointer]
+          - button "Gemini" [ref=e65] [cursor=pointer]
+          - generic [ref=e66]: 200 ok
+        - generic [ref=e69]:
+          - generic [ref=e70]: POST
+          - code [ref=e71]: /v1/chat/completions
+        - generic [ref=e72]:
+          - generic [ref=e73]:
+            - text: Request
+            - generic [ref=e74]:
+              - generic [ref=e75]:
+                - text: curl -X POST
+                - generic [ref=e76]: "\"/v1/chat/completions\""
+                - text: \
+              - generic [ref=e77]: "-H \"Authorization: Bearer sk-••••\" \\"
+              - generic [ref=e78]:
+                - text: "-d"
+                - generic [ref=e79]: "'{"
+              - generic [ref=e80]: "\"model\": \"your-model\","
+              - generic [ref=e81]: "\"messages\": ["
+              - generic [ref=e82]: "{ \"role\": \"user\", \"content\": \"...\" }"
+              - generic [ref=e83]: "]"
+              - generic [ref=e84]: "}'"
+          - generic [ref=e86]:
+            - text: Response
+            - generic [ref=e87]:
+              - generic [ref=e88]: "{"
+              - generic [ref=e89]:
+                - generic [ref=e90]: "\"choices\": [{ \"message\": { \"content\":"
+                - text: "\"Chat request routed.\""
+                - generic [ref=e91]: "} }],"
+              - generic [ref=e92]:
+                - generic [ref=e93]: "\"usage\": { \"total_tokens\":"
+                - text: "27"
+                - generic [ref=e94]: "}"
+              - generic [ref=e95]: "}"
+        - generic [ref=e96]:
+          - generic [ref=e97]:
+            - generic [ref=e98]:
+              - generic [ref=e99]: "142"
+              - generic [ref=e100]: ms
+            - generic [ref=e102]:
+              - generic [ref=e103]: "27"
+              - generic [ref=e104]: tokens
+            - generic [ref=e106]:
+              - generic [ref=e107]: cost
+              - generic [ref=e108]: $0.00081
+          - generic [ref=e109]: stream · sse
+    - generic [ref=e112]:
+      - generic [ref=e113]:
+        - generic [ref=e114]: 0+
+        - generic [ref=e116]: 上游服务适配
+      - generic [ref=e117]:
+        - generic [ref=e118]: 0+
+        - generic [ref=e120]: 模型计费支持
+      - generic [ref=e121]:
+        - generic [ref=e122]: 0+
+        - generic [ref=e124]: 兼容 API 路由
+      - generic [ref=e125]:
+        - generic [ref=e126]: 0+
+        - generic [ref=e128]: 调度控制能力
+    - generic [ref=e130]:
+      - generic [ref=e131]:
+        - paragraph [ref=e132]: 核心功能
+        - heading "为开发者打造， 为规模而设计" [level=2] [ref=e133]: 为开发者打造，为规模而设计
+      - generic [ref=e134]:
+        - generic [ref=e135]:
+          - generic [ref=e136]:
+            - generic [ref=e137]: "01"
+            - heading "极速" [level=3] [ref=e138]
+          - paragraph [ref=e139]: 优化的网络架构，确保毫秒级响应时间
+          - generic [ref=e140]:
+            - generic [ref=e141]: OpenAI
+            - generic [ref=e142]: Claude
+            - generic [ref=e143]: Gemini
+            - generic [ref=e144]: DeepSeek
+            - generic [ref=e145]: Qwen
+            - generic [ref=e146]: Llama
+        - generic [ref=e147]:
+          - generic [ref=e148]:
+            - generic [ref=e149]: "02"
+            - heading "安全可靠" [level=3] [ref=e150]
+          - paragraph [ref=e151]: 企业级安全性，提供全面的权限管理
+        - generic [ref=e160]:
+          - generic [ref=e161]:
+            - generic [ref=e162]: "03"
+            - heading "全球覆盖" [level=3] [ref=e163]
+          - paragraph [ref=e164]: 多区域部署，实现稳定的全球访问
+          - generic [ref=e165]:
+            - generic [ref=e166]:
+              - generic [ref=e167]: "1"
+              - generic [ref=e169]: 负载均衡
+            - generic [ref=e170]:
+              - generic [ref=e171]: "2"
+              - generic [ref=e173]: 速率限制
+            - generic [ref=e174]:
+              - generic [ref=e175]: "3"
+              - generic [ref=e177]: 成本跟踪
+        - generic [ref=e178]:
+          - generic [ref=e179]:
+            - generic [ref=e180]: "04"
+            - heading "开发者友好" [level=3] [ref=e181]
+          - paragraph [ref=e182]: 兼容常见 AI 应用工作流的 API 路由
+          - generic [ref=e183]:
+            - generic [ref=e184]:
+              - generic [ref=e185]: API
+              - generic [ref=e186]: SDK
+              - generic [ref=e187]: CLI
+              - generic [ref=e188]: Docs
+            - generic [ref=e189]: 兼容多协议
+      - generic [ref=e193]:
+        - generic [ref=e194]:
+          - heading "高性能" [level=3] [ref=e199]
+          - paragraph [ref=e200]: 支持高并发和自动负载均衡
+        - generic [ref=e201]:
+          - heading "透明计费" [level=3] [ref=e205]
+          - paragraph [ref=e206]: 按量付费，实时监控使用情况
+        - generic [ref=e207]:
+          - heading "团队协作" [level=3] [ref=e214]
+          - paragraph [ref=e215]: 多用户管理，灵活分配权限
+        - generic [ref=e216]:
+          - heading "开源项目" [level=3] [ref=e220]
+          - paragraph [ref=e221]: 社区驱动、可自托管、易于扩展
+    - generic [ref=e223]:
+      - generic [ref=e224]:
+        - paragraph [ref=e225]: 工作流程
+        - heading "三步快速上手" [level=2] [ref=e226]
+      - generic [ref=e227]:
+        - generic [ref=e228]:
+          - generic [ref=e229]: "1"
+          - heading "配置" [level=3] [ref=e235]
+          - paragraph [ref=e236]: 添加 API 密钥，设置渠道并配置访问权限
+        - generic [ref=e237]:
+          - generic [ref=e238]: "2"
+          - heading "连接" [level=3] [ref=e243]
+          - paragraph [ref=e244]: 通过 OpenAI、Claude、Gemini 以及其他兼容 API 路由接入
+        - generic [ref=e245]:
+          - generic [ref=e246]: "3"
+          - heading "监控" [level=3] [ref=e251]
+          - paragraph [ref=e252]: 通过实时分析跟踪用量、成本和性能
+    - generic [ref=e255]:
+      - heading "准备好简化 你的 AI 集成了吗？" [level=2] [ref=e256]: 准备好简化你的 AI 集成了吗？
+      - paragraph [ref=e257]: 部署你自己的网关，并通过已配置的上游服务开始转发请求。
+      - generic [ref=e258]:
+        - button "开始使用" [ref=e259] [cursor=pointer]
+        - button "查看定价" [ref=e260] [cursor=pointer]
+    - contentinfo [ref=e261]:
+      - generic [ref=e263]:
+        - generic [ref=e264]: © 2026 Axis Api. 保留所有权利
+        - generic [ref=e265]:
+          - link "用户协议" [ref=e266] [cursor=pointer]:
+            - /url: /user-agreement
+          - generic [aria-hidden] [ref=e267]: ·
+          - link "隐私政策" [ref=e268] [cursor=pointer]:
+            - /url: /privacy-policy
+          - generic [ref=e269]:
+            - text: © 2026
+            - link "New API" [ref=e270] [cursor=pointer]:
+              - /url: https://github.com/QuantumNous/new-api
+            - text: . 版权所有，由项目贡献者设计与开发。
+  - region "Notifications alt+T"

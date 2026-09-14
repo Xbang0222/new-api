@@ -25,6 +25,7 @@ import { toast } from 'sonner'
 
 import { ErrorState } from '@/components/error-state'
 import { LanguageSwitcher } from '@/components/language-switcher'
+import { SystemLogoImage } from '@/components/layout/components/system-logo-image'
 import { LoadingState } from '@/components/loading-state'
 import {
   Card,
@@ -293,7 +294,7 @@ export function SetupWizard() {
             {systemConfigLoading ? (
               <Skeleton className='absolute inset-0 rounded-full' />
             ) : (
-              <img
+              <SystemLogoImage
                 src={logo}
                 alt={t('System logo')}
                 className='h-12 w-12 rounded-full object-cover shadow-sm'

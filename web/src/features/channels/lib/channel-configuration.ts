@@ -49,7 +49,7 @@ const CONFIGURATION_BLOCKS = {
   },
   overrideRules: {
     section: 'request',
-    fields: ['status_code_mapping', 'param_override', 'header_override'],
+    fields: ['param_override', 'header_override'],
   },
   requestProcessing: {
     section: 'request',
@@ -141,7 +141,6 @@ export function getChannelConfigurationState(
       (values.auto_ban ?? 1) !== 1
     ),
     overrideRules:
-      hasConfiguredJson(values.status_code_mapping) ||
       hasConfiguredJson(values.param_override) ||
       hasConfiguredJson(values.header_override),
     requestProcessing: Boolean(

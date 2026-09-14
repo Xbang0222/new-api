@@ -35,6 +35,7 @@ import { useAuthStore } from '@/stores/auth-store'
 
 import { defaultTopNavLinks } from '../config/top-nav.config'
 import type { TopNavLink } from '../types'
+import { CustomNavMenu } from './custom-nav-menu'
 import { HeaderLogo } from './header-logo'
 
 const AUTH_PROMPT_SECONDS = 5
@@ -97,6 +98,9 @@ export function PublicHeader(props: PublicHeaderProps) {
   const isAuthenticated = !!user
   const displaySiteName = customSiteName || systemName
   const links = dynamicLinks.length > 0 ? dynamicLinks : navLinks
+  const customLinks = links.filter((link) => link.isCustom)
+  const desktopLinks =
+    customLinks.length > 1 ? links.filter((link) => !link.isCustom) : links
 
   let logoContent: ReactNode = (
     <HeaderLogo
@@ -237,7 +241,7 @@ export function PublicHeader(props: PublicHeaderProps) {
 
             {/* Desktop nav */}
             <div className='hidden min-w-0 items-center gap-0.5 lg:flex'>
-              {links.map((link) => {
+              {desktopLinks.map((link) => {
                 const isActive = pathname === link.href
                 if (link.external) {
                   return (
@@ -278,6 +282,7 @@ export function PublicHeader(props: PublicHeaderProps) {
                   </Link>
                 )
               })}
+              {customLinks.length > 1 && <CustomNavMenu links={customLinks} />}
 
               {(showLanguageSwitcher ||
                 showThemeSwitch ||

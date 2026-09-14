@@ -69,6 +69,40 @@ function renderModelActions(currentModel: Model = model, role = 100) {
 }
 
 describe('model pricing entry', () => {
+  it('keeps metadata sync disabled by default and previews new descriptions', async () => {
+    vi.spyOn(api, 'get').mockResolvedValue({
+      data: { success: true, data: { items: [] } },
+    })
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    })
+    render(
+      <QueryClientProvider client={client}>
+        <ModelsProvider>
+          <ModelMutateDrawer
+            open
+            onOpenChange={() => {}}
+            currentRow={{ ...model, id: 0, model_name: 'new-model' }}
+          />
+        </ModelsProvider>
+      </QueryClientProvider>
+    )
+
+    expect(
+      await screen.findByRole('switch', { name: 'Allow metadata sync' })
+    ).not.toBeChecked()
+    const description = screen.getByLabelText('Description')
+    await userEvent.type(
+      description,
+      '<p>First line</p><p>Second line</p><script>bad()</script>'
+    )
+    const preview = screen.getByRole('region', { name: 'Preview' })
+    expect(preview).toHaveTextContent('First line')
+    expect(preview).toHaveTextContent('Second line')
+    expect(preview).not.toHaveTextContent('bad()')
+    client.clear()
+  })
+
   it('saves pricing and opens connections for a channel model without creating metadata', async () => {
     const channelModel = { ...model, id: 0, model_name: 'channel-only' }
     let storedPrice = 1.5
