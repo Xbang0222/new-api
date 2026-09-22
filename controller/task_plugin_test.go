@@ -79,7 +79,7 @@ func TestDeleteThirdPartyPluginReportsAssociatedChannelsAndInFlightTasks(t *test
 	loaded, err := jsplugin.DefaultRegistry.Register(lifecyclePluginSource, jsplugin.Options{})
 	require.NoError(t, err)
 	t.Cleanup(func() { jsplugin.DefaultRegistry.Unregister("lifecycle-only") })
-	require.NoError(t, model.SaveTaskPlugin(&model.TaskPlugin{Key: loaded.Meta.Key, APIVersion: 1, Version: "1", Source: lifecyclePluginSource, SourceHash: "hash", Enabled: true}))
+	require.NoError(t, model.SaveTaskPlugin(&model.TaskPlugin{Key: loaded.Meta.Key, APIVersion: 1, Version: "1", Source: model.LongText(lifecyclePluginSource), SourceHash: "hash", Enabled: true}))
 	baseURL := "https://example.com"
 	setting := `{"task_plugin_key":"lifecycle-only"}`
 	channel := model.Channel{Type: constant.ChannelTypeTaskPlugin, Status: common.ChannelStatusEnabled, Name: "linked", Models: "doc", Group: "default", BaseURL: &baseURL, Setting: &setting}
@@ -101,7 +101,7 @@ func TestDisableThirdPartyPluginSupportsCascadeAndForce(t *testing.T) {
 	loaded, err := jsplugin.DefaultRegistry.Register(lifecyclePluginSource, jsplugin.Options{})
 	require.NoError(t, err)
 	t.Cleanup(func() { jsplugin.DefaultRegistry.Unregister("lifecycle-only") })
-	require.NoError(t, model.SaveTaskPlugin(&model.TaskPlugin{Key: loaded.Meta.Key, APIVersion: 1, Version: "1", Source: lifecyclePluginSource, SourceHash: "hash", Enabled: true}))
+	require.NoError(t, model.SaveTaskPlugin(&model.TaskPlugin{Key: loaded.Meta.Key, APIVersion: 1, Version: "1", Source: model.LongText(lifecyclePluginSource), SourceHash: "hash", Enabled: true}))
 	baseURL := "https://example.com"
 	setting := `{"task_plugin_key":"lifecycle-only"}`
 	channel := model.Channel{Type: constant.ChannelTypeTaskPlugin, Status: common.ChannelStatusEnabled, Name: "linked", Models: "doc", Group: "default", BaseURL: &baseURL, Setting: &setting}
@@ -263,7 +263,7 @@ func TestDisableFactoryOverrideRowSuppressesBothLayers(t *testing.T) {
 	t.Cleanup(func() { jsplugin.DefaultRegistry.Unregister("kling") })
 	plugin := model.TaskPlugin{
 		Key: "kling", APIVersion: loaded.Meta.APIVersion, Version: loaded.Meta.Version,
-		Source: overrideSource, SourceHash: "test-hash", Enabled: true,
+		Source: model.LongText(overrideSource), SourceHash: "test-hash", Enabled: true,
 	}
 	require.NoError(t, model.SaveTaskPlugin(&plugin))
 	require.NoError(t, syncTaskPluginsOnce())
@@ -431,7 +431,7 @@ func TestDeleteActiveOverrideFallsBackToFactoryAndDeletesRecord(t *testing.T) {
 	t.Cleanup(func() { jsplugin.DefaultRegistry.Unregister("kling") })
 	plugin := model.TaskPlugin{
 		Key: "kling", APIVersion: loaded.Meta.APIVersion, Version: loaded.Meta.Version,
-		Source: overrideSource, SourceHash: "test-hash", Enabled: true,
+		Source: model.LongText(overrideSource), SourceHash: "test-hash", Enabled: true,
 	}
 	require.NoError(t, model.SaveTaskPlugin(&plugin))
 	recorder := httptest.NewRecorder()
@@ -457,10 +457,10 @@ func TestDeleteActiveTaskPluginPromotesEnabledVersionInRuntime(t *testing.T) {
 	v1Source := taskPluginControllerTestSource(key, "1.0.0")
 	v2Source := taskPluginControllerTestSource(key, "2.0.0")
 	require.NoError(t, model.SaveTaskPlugin(&model.TaskPlugin{
-		Key: key, APIVersion: 1, Version: "1.0.0", Source: v1Source, SourceHash: "hash-v1", Enabled: true,
+		Key: key, APIVersion: 1, Version: "1.0.0", Source: model.LongText(v1Source), SourceHash: "hash-v1", Enabled: true,
 	}))
 	require.NoError(t, model.SaveTaskPlugin(&model.TaskPlugin{
-		Key: key, APIVersion: 1, Version: "2.0.0", Source: v2Source, SourceHash: "hash-v2", Enabled: true,
+		Key: key, APIVersion: 1, Version: "2.0.0", Source: model.LongText(v2Source), SourceHash: "hash-v2", Enabled: true,
 	}))
 	_, err := jsplugin.DefaultRegistry.Register(v1Source, jsplugin.Options{Key: key, Version: "1.0.0"})
 	require.NoError(t, err)
@@ -526,10 +526,10 @@ func TestActivateTaskPluginRefreshesRuntimeSyncState(t *testing.T) {
 	v1Source := taskPluginControllerTestSource(key, "1.0.0")
 	v2Source := taskPluginControllerTestSource(key, "2.0.0")
 	require.NoError(t, model.SaveTaskPlugin(&model.TaskPlugin{
-		Key: key, APIVersion: 1, Version: "1.0.0", Source: v1Source, SourceHash: "hash-v1", Enabled: true,
+		Key: key, APIVersion: 1, Version: "1.0.0", Source: model.LongText(v1Source), SourceHash: "hash-v1", Enabled: true,
 	}))
 	require.NoError(t, model.SaveTaskPlugin(&model.TaskPlugin{
-		Key: key, APIVersion: 1, Version: "2.0.0", Source: v2Source, SourceHash: "hash-v2", Enabled: true,
+		Key: key, APIVersion: 1, Version: "2.0.0", Source: model.LongText(v2Source), SourceHash: "hash-v2", Enabled: true,
 	}))
 	_, err := jsplugin.DefaultRegistry.Register(v1Source, jsplugin.Options{Key: key, Version: "1.0.0"})
 	require.NoError(t, err)
@@ -566,10 +566,10 @@ func TestSyncTaskPluginsPublishesOneGenerationForWholeBatch(t *testing.T) {
 	firstSource := taskPluginControllerTestSource(firstKey, "1.0.0")
 	secondSource := taskPluginControllerTestSource(secondKey, "1.0.0")
 	require.NoError(t, model.SaveTaskPlugin(&model.TaskPlugin{
-		Key: firstKey, APIVersion: 1, Version: "1.0.0", Source: firstSource, SourceHash: "first-hash", Enabled: true,
+		Key: firstKey, APIVersion: 1, Version: "1.0.0", Source: model.LongText(firstSource), SourceHash: "first-hash", Enabled: true,
 	}))
 	require.NoError(t, model.SaveTaskPlugin(&model.TaskPlugin{
-		Key: secondKey, APIVersion: 1, Version: "1.0.0", Source: secondSource, SourceHash: "second-hash", Enabled: true,
+		Key: secondKey, APIVersion: 1, Version: "1.0.0", Source: model.LongText(secondSource), SourceHash: "second-hash", Enabled: true,
 	}))
 	before := jsplugin.DefaultRegistry.Generation().Number
 
@@ -602,7 +602,7 @@ func TestTaskPluginRuntimeExposesDatabaseRevisionAheadOfLocalGeneration(t *testi
 	v1Source := taskPluginControllerTestSource(key, "1.0.0")
 	require.NoError(t, model.SaveTaskPlugin(&model.TaskPlugin{
 		Key: key, APIVersion: 1, Version: "1.0.0",
-		Source: v1Source, SourceHash: "runtime-v1", Enabled: true,
+		Source: model.LongText(v1Source), SourceHash: "runtime-v1", Enabled: true,
 	}))
 	require.NoError(t, syncTaskPluginsOnce())
 	localGeneration := jsplugin.DefaultRegistry.Generation().Number
@@ -613,7 +613,7 @@ func TestTaskPluginRuntimeExposesDatabaseRevisionAheadOfLocalGeneration(t *testi
 	v2Source := taskPluginControllerTestSource(key, "2.0.0")
 	require.NoError(t, model.SaveTaskPlugin(&model.TaskPlugin{
 		Key: key, APIVersion: 1, Version: "2.0.0",
-		Source: v2Source, SourceHash: "runtime-v2", Enabled: true,
+		Source: model.LongText(v2Source), SourceHash: "runtime-v2", Enabled: true,
 	}))
 	require.NoError(t, model.ActivateTaskPlugin(key, "2.0.0"))
 
@@ -693,7 +693,7 @@ func TestTaskPluginRuntimeSurvivesDatabaseSyncFailure(t *testing.T) {
 	source := taskPluginControllerTestSource(key, "1.0.0")
 	require.NoError(t, model.SaveTaskPlugin(&model.TaskPlugin{
 		Key: key, APIVersion: 1, Version: "1.0.0",
-		Source: source, SourceHash: "runtime-database-v1", Enabled: true,
+		Source: model.LongText(source), SourceHash: "runtime-database-v1", Enabled: true,
 	}))
 	require.NoError(t, syncTaskPluginsOnce())
 	generation := jsplugin.DefaultRegistry.Generation().Number
@@ -735,17 +735,17 @@ func TestSyncTaskPluginsCachesRejectedDesiredSourceWithoutLosingIncumbent(t *tes
 	v2Source := taskPluginControllerChannelSource(pluginKey, "2.0.0", 9002)
 	ownerSource := taskPluginControllerChannelSource(ownerKey, "1.0.0", 9002)
 	require.NoError(t, model.SaveTaskPlugin(&model.TaskPlugin{
-		Key: pluginKey, APIVersion: 1, Version: "1.0.0", Source: v1Source, SourceHash: "retained-v1", Enabled: true,
+		Key: pluginKey, APIVersion: 1, Version: "1.0.0", Source: model.LongText(v1Source), SourceHash: "retained-v1", Enabled: true,
 	}))
 	require.NoError(t, model.SaveTaskPlugin(&model.TaskPlugin{
-		Key: ownerKey, APIVersion: 1, Version: "1.0.0", Source: ownerSource, SourceHash: "owner-v1", Enabled: true,
+		Key: ownerKey, APIVersion: 1, Version: "1.0.0", Source: model.LongText(ownerSource), SourceHash: "owner-v1", Enabled: true,
 	}))
 	require.NoError(t, syncTaskPluginsOnce())
 
 	incumbent, ok := jsplugin.DefaultRegistry.Get(pluginKey)
 	require.True(t, ok)
 	require.NoError(t, model.SaveTaskPlugin(&model.TaskPlugin{
-		Key: pluginKey, APIVersion: 1, Version: "2.0.0", Source: v2Source, SourceHash: "retained-v2", Enabled: true,
+		Key: pluginKey, APIVersion: 1, Version: "2.0.0", Source: model.LongText(v2Source), SourceHash: "retained-v2", Enabled: true,
 	}))
 	require.NoError(t, model.ActivateTaskPlugin(pluginKey, "2.0.0"))
 
@@ -767,7 +767,7 @@ func TestSyncTaskPluginsCachesRejectedDesiredSourceWithoutLosingIncumbent(t *tes
 
 	require.NoError(t, model.SaveTaskPlugin(&model.TaskPlugin{
 		Key: ownerKey, APIVersion: 1, Version: "2.0.0",
-		Source: taskPluginControllerChannelSource(ownerKey, "2.0.0", 9003), SourceHash: "owner-v2", Enabled: true,
+		Source: model.LongText(taskPluginControllerChannelSource(ownerKey, "2.0.0", 9003)), SourceHash: "owner-v2", Enabled: true,
 	}))
 	require.NoError(t, model.ActivateTaskPlugin(ownerKey, "2.0.0"))
 	require.NoError(t, syncTaskPluginsOnce())
@@ -802,7 +802,7 @@ func runTaskPluginDryRun(t *testing.T, body string) *httptest.ResponseRecorder {
 
 func TestDryRunTaskPluginExecutesHookAndRendererMember(t *testing.T) {
 	setupTaskPluginControllerTest(t)
-	require.NoError(t, model.SaveTaskPlugin(&model.TaskPlugin{Key: "dryrun-probe", APIVersion: 1, Version: "1.0.0", Source: dryRunPluginSource, SourceHash: "hash", Enabled: true}))
+	require.NoError(t, model.SaveTaskPlugin(&model.TaskPlugin{Key: "dryrun-probe", APIVersion: 1, Version: "1.0.0", Source: model.LongText(dryRunPluginSource), SourceHash: "hash", Enabled: true}))
 
 	hookRecorder := runTaskPluginDryRun(t, `{"hook":"buildSubmitRequest","args":[{"model":"doc-1"}]}`)
 	assert.Contains(t, hookRecorder.Body.String(), `"success":true`)
@@ -815,7 +815,7 @@ func TestDryRunTaskPluginExecutesHookAndRendererMember(t *testing.T) {
 
 func TestDryRunTaskPluginReportsUnknownHook(t *testing.T) {
 	setupTaskPluginControllerTest(t)
-	require.NoError(t, model.SaveTaskPlugin(&model.TaskPlugin{Key: "dryrun-probe", APIVersion: 1, Version: "1.0.0", Source: dryRunPluginSource, SourceHash: "hash", Enabled: true}))
+	require.NoError(t, model.SaveTaskPlugin(&model.TaskPlugin{Key: "dryrun-probe", APIVersion: 1, Version: "1.0.0", Source: model.LongText(dryRunPluginSource), SourceHash: "hash", Enabled: true}))
 
 	recorder := runTaskPluginDryRun(t, `{"hook":"missingHook"}`)
 
@@ -825,7 +825,7 @@ func TestDryRunTaskPluginReportsUnknownHook(t *testing.T) {
 
 func TestDryRunTaskPluginSurfacesBadArgumentErrors(t *testing.T) {
 	setupTaskPluginControllerTest(t)
-	require.NoError(t, model.SaveTaskPlugin(&model.TaskPlugin{Key: "dryrun-probe", APIVersion: 1, Version: "1.0.0", Source: dryRunPluginSource, SourceHash: "hash", Enabled: true}))
+	require.NoError(t, model.SaveTaskPlugin(&model.TaskPlugin{Key: "dryrun-probe", APIVersion: 1, Version: "1.0.0", Source: model.LongText(dryRunPluginSource), SourceHash: "hash", Enabled: true}))
 
 	malformedRecorder := runTaskPluginDryRun(t, `{"hook":"buildSubmitRequest","args":[{`)
 	assert.Contains(t, malformedRecorder.Body.String(), `"success":false`)
@@ -1186,7 +1186,7 @@ func TestTaskPluginDisplayOrderAndMetadata(t *testing.T) {
 		_, err := jsplugin.DefaultRegistry.Register(source, jsplugin.Options{})
 		require.NoError(t, err)
 		cleanupTaskPluginControllerRuntime(t, key)
-		require.NoError(t, model.SaveTaskPlugin(&model.TaskPlugin{Key: key, Version: "1.0.0", APIVersion: 1, Source: source, Enabled: true}))
+		require.NoError(t, model.SaveTaskPlugin(&model.TaskPlugin{Key: key, Version: "1.0.0", APIVersion: 1, Source: model.LongText(source), Enabled: true}))
 	}
 	for _, endpoint := range []string{"list", "options"} {
 		t.Run(endpoint, func(t *testing.T) {

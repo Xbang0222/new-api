@@ -26,7 +26,6 @@ import {
 
 const defaultBillingSettings: BillingSettings = {
   QuotaForNewUser: 0,
-  PreConsumedQuota: 0,
   QuotaForInviter: 0,
   QuotaForInvitee: 0,
   InviterRewardType: '',
@@ -34,6 +33,8 @@ const defaultBillingSettings: BillingSettings = {
   MinAffTransferQuota: 0,
   TopUpLink: '',
   'quota_setting.enable_free_model_pre_consume': true,
+  'quota_setting.trust_quota_usd': 10,
+  'quota_setting.pre_consume_multiplier': 1,
   QuotaPerUnit: 500000,
   USDExchangeRate: 7,
   'general_setting.quota_display_type': 'USD',

@@ -362,7 +362,7 @@ export function ModelMutateDrawer(props: {
                                 {...field}
                               />
                             </FormControl>
-                            {field.value.trim() && (
+                            {field.value?.trim() && (
                               <div
                                 role='region'
                                 aria-label={t('Preview')}
@@ -372,7 +372,7 @@ export function ModelMutateDrawer(props: {
                                   {t('Preview')}
                                 </div>
                                 <ModelDescription
-                                  content={field.value}
+                                  content={field.value ?? ''}
                                   className='text-foreground text-sm'
                                 />
                               </div>

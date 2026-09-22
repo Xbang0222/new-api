@@ -62,7 +62,6 @@ import {
 import { EmptyState } from '@/components/empty-state'
 import { ErrorState } from '@/components/error-state'
 import { JsonCodeEditor } from '@/components/json-code-editor'
-import { JsonEditor } from '@/components/json-editor'
 import { LearnMore } from '@/components/learn-more'
 import { LoadingState } from '@/components/loading-state'
 import { MultiSelect } from '@/components/multi-select'
@@ -4075,6 +4074,7 @@ export function ChannelMutateDrawer({
           </>
         }
         models={modelsSection}
+        quickOptions={null}
         routing={
           <>
             {modelMappingFields}

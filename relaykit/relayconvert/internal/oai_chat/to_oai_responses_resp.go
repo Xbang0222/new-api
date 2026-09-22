@@ -24,8 +24,10 @@ const (
 	responsesEventOutputItemDone            = "response.output_item.done"
 	responsesEventFunctionArgsDelta         = "response.function_call_arguments.delta"
 	responsesEventFunctionArgsDone          = "response.function_call_arguments.done"
+	responsesEventReasoningSummaryPartAdded = "response.reasoning_summary_part.added"
 	responsesEventReasoningSummaryDelta     = "response.reasoning_summary_text.delta"
 	responsesEventReasoningSummaryDone      = "response.reasoning_summary_text.done"
+	responsesEventReasoningSummaryPartDone  = "response.reasoning_summary_part.done"
 	responsesOutputTypeFunctionCall         = "function_call"
 	responsesOutputTypeMessage              = "message"
 	responsesOutputTypeReasoning            = "reasoning"
@@ -42,7 +44,7 @@ func ChatCompletionsResponseToResponsesResponse(resp *dto.OpenAITextResponse, id
 	out := &dto.OpenAIResponsesResponse{
 		ID:        id,
 		Object:    "response",
-		CreatedAt: chatCreatedAt(resp.Created),
+		CreatedAt: dto.IntValue(chatCreatedAt(resp.Created)),
 		Status:    []byte(`"completed"`),
 		Model:     resp.Model,
 		Output:    make([]dto.ResponsesOutput, 0),

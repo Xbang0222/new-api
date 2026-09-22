@@ -121,6 +121,10 @@ function serializeRules(rules: AffinityRule[]): string {
 
 interface Props {
   defaultValues: ChannelAffinitySettings
+  rulesJson?: string
+  onRulesChange?: (rules: string) => void
+  enabled?: boolean
+  globalSessionMode?: import('./types').SessionMode | ''
 }
 
 export function ChannelAffinitySection(props: Props) {

@@ -1167,6 +1167,17 @@ func respondTaskError(c *gin.Context, taskErr *taskdto.TaskError) {
 	c.JSON(taskErr.StatusCode, taskErr)
 }
 
+func taskSubmissionAPIError(taskErr *taskdto.TaskError) *types.NewAPIError {
+	if taskErr == nil {
+		return types.NewError(errors.New("task submission failed"), types.ErrorCodeBadResponse)
+	}
+	err := taskErr.Error
+	if err == nil {
+		err = errors.New(taskErr.Message)
+	}
+	return types.NewOpenAIError(err, types.ErrorCodeBadResponseStatusCode, taskErr.StatusCode)
+}
+
 func shouldRetryTaskRelay(c *gin.Context, relayInfo *relaycommon.RelayInfo, channelId int, taskErr *taskdto.TaskError, retryTimes int) bool {
 	if taskErr == nil || taskErr.LocalError || taskErr.NoRetry || retryTimes <= 0 || errors.Is(taskErr.Error, context.Canceled) || !canRetryRelayResponse(c, relayInfo) {
 		return false

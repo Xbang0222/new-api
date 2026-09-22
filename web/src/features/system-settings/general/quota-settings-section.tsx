@@ -75,6 +75,11 @@ const createQuotaSchema = (t: (key: string) => string) =>
       TopUpLink: z.string(),
       quota_setting: z.object({
         enable_free_model_pre_consume: z.boolean(),
+        trust_quota_usd: z.preprocess(
+          (value) => (value === '' ? undefined : value),
+          z.coerce.number().min(0)
+        ),
+        pre_consume_multiplier: z.coerce.number().positive(),
       }),
     })
     .superRefine((data, ctx) => {
@@ -99,7 +104,8 @@ function formatQuotaInputValue(value: QuotaInputValue): string {
 }
 
 type QuotaSettingsSectionProps = {
-  defaultValues: QuotaFormValues
+  defaultValues: Partial<QuotaFormValues> &
+    Pick<QuotaFormValues, 'QuotaForNewUser' | 'TopUpLink' | 'quota_setting'>
   complianceConfirmed?: boolean
 }
 
@@ -117,12 +123,17 @@ export function QuotaSettingsSection({
       : 'disabled'
   const formDefaultValues: QuotaFormValues = {
     ...defaultValues,
+    PreConsumedQuota: defaultValues.PreConsumedQuota ?? 0,
+    QuotaForInviter: defaultValues.QuotaForInviter ?? 0,
+    QuotaForInvitee: defaultValues.QuotaForInvitee ?? 0,
     InviterRewardType: rewardTypeDefault,
     InviterRewardValue:
       rewardTypeDefault === 'fixed'
-        ? quotaUnitsToDollars(defaultValues.InviterRewardValue)
-        : defaultValues.InviterRewardValue,
-    MinAffTransferQuota: quotaUnitsToDollars(defaultValues.MinAffTransferQuota),
+        ? quotaUnitsToDollars(defaultValues.InviterRewardValue ?? 0)
+        : (defaultValues.InviterRewardValue ?? 0),
+    MinAffTransferQuota: quotaUnitsToDollars(
+      defaultValues.MinAffTransferQuota ?? 0
+    ),
   }
   const handleNumberChange =
     (onChange: (value: QuotaInputValue) => void) =>
@@ -508,6 +519,64 @@ export function QuotaSettingsSection({
                 )}
               />
             </SettingsFormGridItem>
+
+            <FormField
+              control={form.control}
+              name='quota_setting.trust_quota_usd'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>
+                    {t('Wallet pre-consume bypass threshold (USD)')}
+                  </FormLabel>
+                  <FormControl>
+                    <Input
+                      type='number'
+                      min={0}
+                      step='any'
+                      value={field.value ?? ''}
+                      onChange={field.onChange}
+                      name={field.name}
+                      onBlur={field.onBlur}
+                      ref={field.ref}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    {t(
+                      'Skip pre-consumption when the wallet balance and limited API key balance both exceed this amount. Set to 0 to always pre-consume. Subscriptions and asynchronous tasks always reserve quota.'
+                    )}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name='quota_setting.pre_consume_multiplier'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Input pre-consume multiplier')}</FormLabel>
+                  <FormControl>
+                    <Input
+                      type='number'
+                      min={0}
+                      step='any'
+                      value={field.value ?? ''}
+                      onChange={field.onChange}
+                      name={field.name}
+                      onBlur={field.onBlur}
+                      ref={field.ref}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    {t(
+                      'Reserve the estimated input cost multiplied by this value, without estimating output tokens. Defaults to 1; positive decimals such as 0.5 and 1.5 are supported. Final charges use actual usage. Per-request and task prices are unaffected.'
+                    )}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <FormField
               control={form.control}

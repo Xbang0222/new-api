@@ -667,3 +667,6 @@ export function RoutingReliabilitySection({
     </SettingsSection>
   )
 }
+
+// Compatibility export for callers and deep links that still use the former name.
+export const ChannelHealthSection = RoutingReliabilitySection

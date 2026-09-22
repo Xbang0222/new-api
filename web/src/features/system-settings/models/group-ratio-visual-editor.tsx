@@ -74,14 +74,18 @@ import { safeJsonParse } from '../utils/json-parser'
 type GroupRatioVisualEditorProps = {
   groupRatio: string
   topupGroupRatio: string
-  userGroups: string
-  groupDescriptions: string
+  userGroups?: string
+  groupDescriptions?: string
   userUsableGroups: string
   groupGroupRatio: string
   autoGroups: string
   maxTokenAutoGroupsField: ReactNode
   groupSpecialUsableGroup: string
   onChange: (field: string, value: string) => void
+  /** Legacy callers may supply section controls; the visual editor is always rendered. */
+  section?: string
+  onSectionChange?: (section: string) => void
+  defaultUseAutoGroupField?: ReactNode
 }
 
 type GroupPricingRow = {
@@ -311,8 +315,8 @@ function GroupNameSelect(props: GroupNameSelectProps) {
 export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
   groupRatio,
   topupGroupRatio,
-  userGroups,
-  groupDescriptions,
+  userGroups = '{}',
+  groupDescriptions = '{}',
   userUsableGroups,
   groupGroupRatio,
   autoGroups,

@@ -229,6 +229,17 @@ func Distribute() func(c *gin.Context) {
 	}
 }
 
+// TokenModelLimitAllows accepts exact, formatted, and routing-normalized model names.
+func TokenModelLimitAllows(limit map[string]bool, model string) bool {
+	if limit[model] {
+		return true
+	}
+	if formatted := ratio_setting.FormatMatchingModelName(model); limit[formatted] {
+		return true
+	}
+	return limit[ratio_setting.RoutingMatchModelName(model)]
+}
+
 // noAvailableChannelMessage explains a 503 for a task-plugin-claimed model.
 // It identifies all candidate plugins whose channels could serve the request.
 func noAvailableChannelMessage(c *gin.Context, group, modelName string) string {

@@ -269,6 +269,13 @@ export interface LogOtherData {
   fee_quota?: number
   // Task-related fields (for refund logs, type=6)
   is_task?: boolean
+  task_sync?: boolean
+  result_discarded?: boolean
+  response_model?: {
+    requested_model: string
+    upstream_model: string
+    returned_model: string
+  }
   task_id?: string
   reason?: string
   // Subscription billing fields
@@ -351,6 +358,7 @@ export interface TaskLog {
   fail_reason?: string
   result_url?: string
   legacy_video_available?: boolean
+  result_discarded?: boolean
   status: string // NOT_START, SUBMITTED, IN_PROGRESS, SUCCESS, FAILURE, QUEUED, UNKNOWN
   admin_info?: {
     request_id?: string
@@ -394,9 +402,22 @@ export interface TaskArtifact {
   content_url: string
 }
 
+export interface AudioClip {
+  clip_id?: string
+  id?: string
+  title?: string
+  tags?: string
+  duration?: number
+  audio_url?: string
+  image_url?: string
+  image_large_url?: string
+  metadata?: { tags?: string; duration?: number }
+}
+
 export interface TaskArtifactProjection {
   artifacts: TaskArtifact[]
   legacyContentUrl?: string
+  legacyAudioClips?: AudioClip[]
 }
 
 export interface TaskArtifactsResponse {
@@ -406,6 +427,7 @@ export interface TaskArtifactsResponse {
   data?: {
     artifacts?: unknown
     legacy_content_url?: unknown
+    legacy_audio_clips?: unknown
   }
 }
 

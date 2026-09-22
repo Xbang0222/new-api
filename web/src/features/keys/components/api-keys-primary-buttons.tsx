@@ -31,7 +31,7 @@ import { useAuthStore } from '@/stores/auth-store'
 import { useApiKeys } from './api-keys-provider'
 
 type ApiKeysPrimaryButtonsProps = {
-  onOpenTour: () => void
+  onOpenTour?: () => void
 }
 
 export function ApiKeysPrimaryButtons(props: ApiKeysPrimaryButtonsProps) {

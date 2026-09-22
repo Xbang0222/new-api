@@ -77,17 +77,26 @@ type GroupFormValues = {
   GroupSpecialUsableGroup: string
 }
 
+type LegacyGroupFormValues = Omit<
+  GroupFormValues,
+  'UserGroups' | 'GroupDescriptions'
+>
+
 type GroupRatioFormProps = {
-  form: UseFormReturn<GroupFormValues>
-  onSave: (values: GroupFormValues) => Promise<void>
+  form: UseFormReturn<GroupFormValues> | UseFormReturn<LegacyGroupFormValues>
+  onSave:
+    | ((values: GroupFormValues) => Promise<void>)
+    | ((values: LegacyGroupFormValues) => Promise<void>)
   isSaving: boolean
 }
 
 export const GroupRatioForm = memo(function GroupRatioForm({
-  form,
-  onSave,
+  form: rawForm,
+  onSave: rawOnSave,
   isSaving,
 }: GroupRatioFormProps) {
+  const form = rawForm as unknown as UseFormReturn<GroupFormValues>
+  const onSave = rawOnSave as (values: GroupFormValues) => Promise<void>
   const { t } = useTranslation()
   const [editMode, setEditMode] = useState<'visual' | 'json'>('visual')
   const [guideOpen, setGuideOpen] = useState(false)
@@ -107,8 +116,8 @@ export const GroupRatioForm = memo(function GroupRatioForm({
   }, [])
 
   const watchedGroupRatio = form.watch('GroupRatio')
-  const watchedGroupDescriptions = form.watch('GroupDescriptions')
-  const watchedUserGroups = form.watch('UserGroups')
+  const watchedGroupDescriptions = form.watch('GroupDescriptions') ?? '{}'
+  const watchedUserGroups = form.watch('UserGroups') ?? '{}'
   const watchedUserUsableGroups = form.watch('UserUsableGroups')
   const watchedTopupGroupRatio = form.watch('TopupGroupRatio')
   const serviceGroupNames = useMemo(() => {
@@ -186,8 +195,8 @@ export const GroupRatioForm = memo(function GroupRatioForm({
             <GroupRatioVisualEditor
               groupRatio={form.watch('GroupRatio')}
               topupGroupRatio={form.watch('TopupGroupRatio')}
-              userGroups={form.watch('UserGroups')}
-              groupDescriptions={form.watch('GroupDescriptions')}
+              userGroups={form.watch('UserGroups') ?? '{}'}
+              groupDescriptions={form.watch('GroupDescriptions') ?? '{}'}
               userUsableGroups={form.watch('UserUsableGroups')}
               groupGroupRatio={form.watch('GroupGroupRatio')}
               autoGroups={form.watch('AutoGroups')}
@@ -267,7 +276,7 @@ export const GroupRatioForm = memo(function GroupRatioForm({
                   <FormLabel>{t('Group ratios')}</FormLabel>
                   <FormControl>
                     <JsonCodeEditor
-                      value={field.value}
+                      value={field.value ?? '{}'}
                       onChange={field.onChange}
                       name={field.name}
                       onBlur={field.onBlur}
@@ -292,7 +301,7 @@ export const GroupRatioForm = memo(function GroupRatioForm({
                   <FormLabel>{t('User groups')}</FormLabel>
                   <FormControl>
                     <JsonCodeEditor
-                      value={field.value}
+                      value={field.value ?? '{}'}
                       onChange={field.onChange}
                       name={field.name}
                       onBlur={field.onBlur}
@@ -317,7 +326,7 @@ export const GroupRatioForm = memo(function GroupRatioForm({
                   <FormLabel>{t('Top-up group ratios')}</FormLabel>
                   <FormControl>
                     <JsonCodeEditor
-                      value={field.value}
+                      value={field.value ?? '{}'}
                       onChange={field.onChange}
                       name={field.name}
                       onBlur={field.onBlur}
@@ -344,7 +353,7 @@ export const GroupRatioForm = memo(function GroupRatioForm({
                   <FormLabel>{t('Service group descriptions')}</FormLabel>
                   <FormControl>
                     <JsonCodeEditor
-                      value={field.value}
+                      value={field.value ?? '{}'}
                       onChange={field.onChange}
                       name={field.name}
                       onBlur={field.onBlur}

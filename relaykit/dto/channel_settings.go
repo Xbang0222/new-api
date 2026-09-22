@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 
@@ -15,20 +16,41 @@ import (
 )
 
 type ChannelSettings struct {
-	TaskPluginKey             string `json:"task_plugin_key,omitempty"`
-	ForceFormat               bool   `json:"force_format,omitempty"`
-	ThinkingToContent         bool   `json:"thinking_to_content,omitempty"`
-	Proxy                     string `json:"proxy"`
-	PassThroughBodyEnabled    bool   `json:"pass_through_body_enabled,omitempty"`
-	ResponsesWebSocketEnabled bool   `json:"responses_websocket_enabled,omitempty"`
-	SystemPrompt              string `json:"system_prompt,omitempty"`
-	SystemPromptOverride      bool   `json:"system_prompt_override,omitempty"`
+	TaskPluginKey             string   `json:"task_plugin_key,omitempty"`
+	ForceFormat               bool     `json:"force_format,omitempty"`
+	ThinkingToContent         bool     `json:"thinking_to_content,omitempty"`
+	Proxy                     string   `json:"proxy"`
+	PassThroughBodyEnabled    bool     `json:"pass_through_body_enabled,omitempty"`
+	ResponsesWebSocketEnabled bool     `json:"responses_websocket_enabled,omitempty"`
+	SystemPrompt              string   `json:"system_prompt,omitempty"`
+	SystemPromptOverride      bool     `json:"system_prompt_override,omitempty"`
+	TaskExtendPluginKeys      []string `json:"task_extend_plugin_keys,omitempty"`
 	// HTTPProtocol controls outbound HTTP version negotiation for this channel.
 	// Accepted values: "", "auto" (default), "http1".
 	HTTPProtocol string `json:"http_protocol,omitempty"`
 	// HTTP2ConnectionShards spreads HTTP/2 traffic across N independent transports
 	// (1-8). Zero/unset means 1. Ignored when HTTPProtocol is "http1".
 	HTTP2ConnectionShards int `json:"http2_connection_shards,omitempty"`
+}
+
+// BindsTaskPlugin reports whether the channel is bound to the task plugin.
+func (s ChannelSettings) BindsTaskPlugin(key string) bool {
+	return key != "" && (s.TaskPluginKey == key || slices.Contains(s.TaskExtendPluginKeys, key))
+}
+
+// TaskPluginBindings returns the sorted, de-duplicated task plugin bindings.
+func (s ChannelSettings) TaskPluginBindings() []string {
+	bindings := make([]string, 0, len(s.TaskExtendPluginKeys)+1)
+	if s.TaskPluginKey != "" {
+		bindings = append(bindings, s.TaskPluginKey)
+	}
+	for _, key := range s.TaskExtendPluginKeys {
+		if key != "" && !slices.Contains(bindings, key) {
+			bindings = append(bindings, key)
+		}
+	}
+	slices.Sort(bindings)
+	return bindings
 }
 
 const (
@@ -112,6 +134,7 @@ type ChannelOtherSettings struct {
 	UpstreamModelUpdateLastRemovedModels  []string                 `json:"upstream_model_update_last_removed_models,omitempty"`  // 上次检测到的可删除模型
 	UpstreamModelUpdateIgnoredModels      []string                 `json:"upstream_model_update_ignored_models,omitempty"`       // 手动忽略的模型
 	AdvancedCustom                        *AdvancedCustomConfig    `json:"advanced_custom,omitempty"`
+	OllamaOpenAIChat                      bool                     `json:"ollama_openai_chat,omitempty"`
 	// ToolLossPolicy is a channel-level opt-in for request-phase conversion
 	// rejection. Empty follows the default allow policy. Accepted values:
 	// "", "allow", "safe", "strict".
@@ -141,6 +164,7 @@ func (s *ChannelOtherSettings) ValidateToolLossPolicy() error {
 
 const (
 	advancedCustomConverterNone                        = "none"
+	AdvancedCustomConverterSGLangRerank                = "jina_rerank_to_sglang"
 	advancedCustomConverterClaudeMessagesToOpenAIChat  = "anthropic_messages_to_openai_chat_completions"
 	advancedCustomConverterOpenAIChatToClaudeMessages  = "openai_chat_completions_to_anthropic_messages"
 	advancedCustomConverterOpenAIChatToOpenAIResponses = "openai_chat_completions_to_openai_responses"
@@ -161,16 +185,33 @@ type AdvancedCustomConfig struct {
 }
 
 type AdvancedCustomRoute struct {
-	IncomingPath         string                   `json:"incoming_path,omitempty"`
-	UpstreamPath         string                   `json:"upstream_path,omitempty"`
-	Method               string                   `json:"method,omitempty"`
-	Converter            string                   `json:"converter,omitempty"`
-	Models               []string                 `json:"models,omitempty"`
-	Auth                 *AdvancedCustomRouteAuth `json:"auth,omitempty"`
-	Headers              map[string]string        `json:"headers,omitempty"`
-	RequestBodyTemplate  json.RawMessage          `json:"request_body_template,omitempty"`
-	ResponseBodyTemplate json.RawMessage          `json:"response_body_template,omitempty"`
-	Task                 *AdvancedCustomTask      `json:"task,omitempty"`
+	IncomingPath           string                   `json:"incoming_path,omitempty"`
+	UpstreamPath           string                   `json:"upstream_path,omitempty"`
+	Method                 string                   `json:"method,omitempty"`
+	Converter              string                   `json:"converter,omitempty"`
+	Models                 []string                 `json:"models,omitempty"`
+	Auth                   *AdvancedCustomRouteAuth `json:"auth,omitempty"`
+	Headers                map[string]string        `json:"headers,omitempty"`
+	RequestBodyTemplate    json.RawMessage          `json:"request_body_template,omitempty"`
+	ResponseBodyTemplate   json.RawMessage          `json:"response_body_template,omitempty"`
+	Task                   *AdvancedCustomTask      `json:"task,omitempty"`
+	PassThroughBodyEnabled bool                     `json:"pass_through_body_enabled,omitempty"`
+}
+
+// IsNative reports whether the route forwards without protocol conversion.
+func (r AdvancedCustomRoute) IsNative() bool {
+	converter := strings.TrimSpace(r.Converter)
+	return converter == "" || converter == advancedCustomConverterNone
+}
+
+// SupportsPassThroughBody reports whether the route converter leaves the body untouched.
+func (r AdvancedCustomRoute) SupportsPassThroughBody() bool {
+	switch strings.TrimSpace(r.Converter) {
+	case "", advancedCustomConverterNone, AdvancedCustomConverterSGLangRerank:
+		return true
+	default:
+		return false
+	}
 }
 
 type AdvancedCustomRouteAuth struct {

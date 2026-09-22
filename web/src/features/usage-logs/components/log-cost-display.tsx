@@ -36,6 +36,7 @@ import type { LogOtherData } from '../types'
 interface LogCostDisplayProps {
   quota: number
   other: LogOtherData | null
+  showBillingSource?: boolean
 }
 
 function splitQuotaDisplay(value: string): { prefix: string; amount: string } {
