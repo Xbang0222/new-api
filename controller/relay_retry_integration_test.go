@@ -16,6 +16,7 @@ import (
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
+	perfmetrics "github.com/QuantumNous/new-api/pkg/perf_metrics"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
@@ -49,8 +50,9 @@ func TestRelayHTTPFailoverUsesAnotherChannelAndStopsAfterStreamContent(t *testin
 		activeSubscription   bool
 		wantWalletQuota      *int
 		wantSubscriptionUsed int64
+		checkSuccessMetric   bool
 	}{
-		{name: "legacy same group next priority", retries: 1, wantFallback: 1, wantStatus: 200},
+		{name: "legacy same group next priority", retries: 1, wantFallback: 1, wantStatus: 200, checkSuccessMetric: true},
 		{name: "legacy auto next group with zero retries", auto: true, crossGroup: true, wantFallback: 1, wantStatus: 200},
 		{name: "legacy auto respects cross group off", auto: true, retries: 3, wantStatus: 500},
 		{name: "intelligent auto respects cross group off", auto: true, intelligent: true, wantStatus: 500},
@@ -90,7 +92,7 @@ func TestRelayHTTPFailoverUsesAnotherChannelAndStopsAfterStreamContent(t *testin
 			initModelListColumnNames(t)
 			db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 			require.NoError(t, err)
-			require.NoError(t, db.AutoMigrate(&model.Channel{}, &model.Ability{}, &model.User{}, &model.Token{}, &model.SubscriptionPlan{}, &model.UserSubscription{}, &model.SubscriptionPreConsumeRecord{}))
+			require.NoError(t, db.AutoMigrate(&model.Channel{}, &model.Ability{}, &model.User{}, &model.Token{}, &model.SubscriptionPlan{}, &model.UserSubscription{}, &model.SubscriptionPreConsumeRecord{}, &model.PerfMetric{}))
 			model.DB = db
 			common.SetDatabaseTypes(common.DatabaseTypeSQLite, common.DatabaseTypeSQLite)
 			common.MemoryCacheEnabled = true
@@ -244,6 +246,14 @@ func TestRelayHTTPFailoverUsesAnotherChannelAndStopsAfterStreamContent(t *testin
 			assert.Equal(t, int32(1), firstCalls.Load(), recorder.Body.String())
 			assert.Equal(t, test.wantFallback, fallbackCalls.Load(), recorder.Body.String())
 			assert.Equal(t, test.wantStatus, recorder.Code, recorder.Body.String())
+			if test.checkSuccessMetric {
+				metrics, err := perfmetrics.QuerySummaryAll(24, []string{"default"})
+				require.NoError(t, err)
+				require.NotNil(t, metrics.Summary)
+				assert.Equal(t, 100.0, metrics.Summary.SuccessRate, "a successful fallback must count once as a successful request")
+				require.Len(t, metrics.Models, 1)
+				assert.Equal(t, int64(1), metrics.Models[0].RequestCount)
+			}
 			if test.wantFallback > 0 {
 				assert.Contains(t, recorder.Body.String(), "fallback success")
 			} else if test.stream {
