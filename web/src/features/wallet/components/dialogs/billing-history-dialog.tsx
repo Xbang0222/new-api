@@ -226,7 +226,11 @@ export function BillingHistoryDialog({
                           </div>
                         </div>
                         <StatusBadge
-                          label={statusConfig.label}
+                          label={
+                            record.status === 'pending'
+                              ? t('Pending', { context: 'payment' })
+                              : t(statusConfig.label)
+                          }
                           variant={statusConfig.variant}
                           showDot
                           copyable={false}

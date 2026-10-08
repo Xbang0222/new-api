@@ -13,6 +13,7 @@ import (
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
+	"github.com/QuantumNous/new-api/tokenkit"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
@@ -494,8 +495,6 @@ func TestGeminiChatHandlerMissingUsageMetadataBuildsEstimatedBillingUsage(t *tes
 
 func TestGeminiStreamHandlerPromptOnlyUsageMetadataEstimatesCompletionTokens(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	c, _ := gin.CreateTestContext(httptest.NewRecorder())
-	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
 
 	oldStreamingTimeout := constant.StreamingTimeout
 	constant.StreamingTimeout = 300
@@ -503,53 +502,67 @@ func TestGeminiStreamHandlerPromptOnlyUsageMetadataEstimatesCompletionTokens(t *
 		constant.StreamingTimeout = oldStreamingTimeout
 	})
 
-	info := &relaycommon.RelayInfo{
-		OriginModelName: "gemini-3-flash-preview",
-		ChannelMeta: &relaycommon.ChannelMeta{
-			UpstreamModelName: "gemini-3-flash-preview",
-		},
-	}
-	info.SetEstimatePromptTokens(20)
+	for _, tc := range []struct {
+		name      string
+		part      dto.GeminiPart
+		usageText string
+	}{
+		{"text", dto.GeminiPart{Text: "partial streamed answer before disconnect"}, "partial streamed answer before disconnect"},
+		// An agent turn that only calls a tool still produced output tokens.
+		{"function call", dto.GeminiPart{FunctionCall: &dto.FunctionCall{FunctionName: "read_file", Arguments: map[string]any{"path": "main.go"}}}, `read_file{"path":"main.go"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c, _ := gin.CreateTestContext(httptest.NewRecorder())
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
 
-	// Simulates a client aborting the stream before the final chunk: text was
-	// streamed but the last observed usageMetadata only carries prompt tokens.
-	chunk := dto.GeminiChatResponse{
-		Candidates: []dto.GeminiChatCandidate{
-			{
-				Content: dto.GeminiChatContent{
-					Role: "model",
-					Parts: []dto.GeminiPart{
-						{Text: "partial streamed answer before disconnect"},
+			info := &relaycommon.RelayInfo{
+				OriginModelName: "gemini-3-flash-preview",
+				ChannelMeta: &relaycommon.ChannelMeta{
+					UpstreamModelName: "gemini-3-flash-preview",
+				},
+			}
+			info.SetEstimatePromptTokens(20)
+
+			// Simulates a client aborting the stream before the final chunk: output was
+			// streamed but the last observed usageMetadata only carries prompt tokens.
+			chunk := dto.GeminiChatResponse{
+				Candidates: []dto.GeminiChatCandidate{
+					{
+						Content: dto.GeminiChatContent{
+							Role:  "model",
+							Parts: []dto.GeminiPart{tc.part},
+						},
 					},
 				},
-			},
-		},
-		UsageMetadata: dto.GeminiUsageMetadata{
-			PromptTokenCount: 151,
-			TotalTokenCount:  151,
-		},
+				UsageMetadata: dto.GeminiUsageMetadata{
+					PromptTokenCount: 151,
+					TotalTokenCount:  151,
+				},
+			}
+
+			chunkData, err := common.Marshal(chunk)
+			require.NoError(t, err)
+
+			streamBody := []byte("data: " + string(chunkData) + "\n" + "data: [DONE]\n")
+			resp := &http.Response{
+				Body: io.NopCloser(bytes.NewReader(streamBody)),
+			}
+
+			usage, newAPIError := geminiStreamHandler(c, info, resp, func(_ string, _ *dto.GeminiChatResponse) bool {
+				return true
+			})
+			require.Nil(t, newAPIError)
+			require.NotNil(t, usage)
+			require.Equal(t, 151, usage.PromptTokens)
+			require.Equal(t, tokenkit.Estimate("gemini-3-flash-preview", tc.usageText), usage.CompletionTokens)
+			require.Greater(t, usage.CompletionTokens, 0)
+			require.Equal(t, usage.PromptTokens+usage.CompletionTokens, usage.TotalTokens)
+			require.NotNil(t, usage.BillingUsage)
+			require.True(t, usage.BillingUsage.Estimated)
+			require.NotNil(t, usage.BillingUsage.GeminiUsageMetadata)
+			require.Equal(t, usage.CompletionTokens, usage.BillingUsage.GeminiUsageMetadata.CandidatesTokenCount)
+		})
 	}
-
-	chunkData, err := common.Marshal(chunk)
-	require.NoError(t, err)
-
-	streamBody := []byte("data: " + string(chunkData) + "\n" + "data: [DONE]\n")
-	resp := &http.Response{
-		Body: io.NopCloser(bytes.NewReader(streamBody)),
-	}
-
-	usage, newAPIError := geminiStreamHandler(c, info, resp, func(_ string, _ *dto.GeminiChatResponse) bool {
-		return true
-	})
-	require.Nil(t, newAPIError)
-	require.NotNil(t, usage)
-	require.Equal(t, 151, usage.PromptTokens)
-	require.Greater(t, usage.CompletionTokens, 0)
-	require.Equal(t, usage.PromptTokens+usage.CompletionTokens, usage.TotalTokens)
-	require.NotNil(t, usage.BillingUsage)
-	require.True(t, usage.BillingUsage.Estimated)
-	require.NotNil(t, usage.BillingUsage.GeminiUsageMetadata)
-	require.Equal(t, usage.CompletionTokens, usage.BillingUsage.GeminiUsageMetadata.CandidatesTokenCount)
 }
 
 func TestGeminiChatHandlerPromptOnlyUsageMetadataEstimatesCompletionTokens(t *testing.T) {

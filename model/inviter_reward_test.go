@@ -171,7 +171,13 @@ func TestDeletingInvitedUserRefreshesAffCount(t *testing.T) {
 	require.NoError(t, DB.Model(&User{}).Where("id = ?", 51).Update("aff_count", 1).Error)
 
 	invitee := User{Id: 52}
-	require.NoError(t, invitee.Delete())
+	require.NoError(t, DB.Create(&UserAccessToken{UserId: invitee.Id, TokenHash: AccessTokenFingerprint("nap_delete-invitee")}).Error)
+	revoked, err := invitee.Delete()
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, revoked)
+	var remainingTokens int64
+	require.NoError(t, DB.Model(&UserAccessToken{}).Where("user_id = ?", invitee.Id).Count(&remainingTokens).Error)
+	assert.Zero(t, remainingTokens)
 
 	inviter := loadInviterRewardUser(t, 51)
 	assert.Equal(t, 0, inviter.AffCount)
@@ -189,7 +195,13 @@ func TestHardDeletingInvitedUserRefreshesAffCount(t *testing.T) {
 	insertInviterRewardUser(t, 62, "hard_delete_invitee", 61)
 	require.NoError(t, DB.Model(&User{}).Where("id = ?", 61).Update("aff_count", 1).Error)
 
-	require.NoError(t, HardDeleteUserById(62))
+	require.NoError(t, DB.Create(&UserAccessToken{UserId: 62, TokenHash: AccessTokenFingerprint("nap_hard-delete-invitee")}).Error)
+	revoked, err := HardDeleteUserById(62)
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, revoked)
+	var remainingTokens int64
+	require.NoError(t, DB.Model(&UserAccessToken{}).Where("user_id = ?", 62).Count(&remainingTokens).Error)
+	assert.Zero(t, remainingTokens)
 
 	inviter := loadInviterRewardUser(t, 61)
 	assert.Equal(t, 0, inviter.AffCount)

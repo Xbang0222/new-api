@@ -379,7 +379,7 @@ func (s *responsesWSSession) runCall(c *gin.Context, state *responsesWSCallState
 				if strings.HasPrefix(event.Type, "response.") {
 					accepted = true
 				}
-				accumulator.Observe(&event)
+				accumulator.Observe(&event, incoming.body)
 			}
 			switch event.Type {
 			case "response.completed", "response.done", "response.incomplete", "response.failed", "response.cancelled", "response.canceled":

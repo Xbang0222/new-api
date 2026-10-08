@@ -27,6 +27,6 @@ func TestChatCompletionsRequestToResponsesRequestAddsWebSearchTool(t *testing.T)
 	var tools []map[string]any
 	require.NoError(t, kitutil.Unmarshal(got.Tools, &tools))
 	require.Len(t, tools, 1)
-	assert.Equal(t, dto.BuildInToolWebSearchPreview, tools[0]["type"])
+	assert.Equal(t, dto.BuildInToolWebSearch, tools[0]["type"])
 	assert.Equal(t, "high", tools[0]["search_context_size"])
 }

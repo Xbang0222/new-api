@@ -230,6 +230,7 @@ export function useSidebarData(): SidebarData {
             url: SIDEBAR_ROUTE_URLS.systemSettings,
             activeUrls: ['/system-settings'],
             icon: Settings,
+            requiredRole: ROLE.SUPER_ADMIN,
           },
         ],
       },

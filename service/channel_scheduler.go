@@ -309,7 +309,11 @@ func selectLegacyChannel(param *RetryParam, group string, retry int) (*model.Cha
 		return nil, err
 	}
 	available := make([]*model.Channel, 0, len(candidates))
+	filters := GetChannelConstraints(param.Ctx).Filters
 	for _, channel := range candidates {
+		if ok, _ := model.ChannelSatisfiesFilters(channel, param.ModelName, filters); !ok {
+			continue
+		}
 		if isChannelModelSchedulingDisabled(channel.Id, normalizedModel) || param.HasRateLimited(channel.Id) {
 			continue
 		}
@@ -494,7 +498,11 @@ func selectIntelligentChannel(param *RetryParam, group string) (*model.Channel, 
 	}
 	normalizedModel := ratio_setting.FormatMatchingModelName(param.ModelName)
 	active := make([]*model.Channel, 0, len(candidates))
+	filters := GetChannelConstraints(param.Ctx).Filters
 	for _, channel := range candidates {
+		if ok, _ := model.ChannelSatisfiesFilters(channel, param.ModelName, filters); !ok {
+			continue
+		}
 		if isChannelSchedulingDisabled(channel.Id, normalizedModel) {
 			continue
 		}

@@ -789,7 +789,6 @@ export function useCommonLogsColumns(
       },
       size: 110,
     })
-
   }
 
   columns.push({

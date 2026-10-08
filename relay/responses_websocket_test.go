@@ -19,6 +19,7 @@ import (
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -105,6 +106,18 @@ func TestSelectResponsesWSChannelHonorsPinsAndFilters(t *testing.T) {
 
 func TestResponsesWSChannelRoutingRequiresExplicitOptIn(t *testing.T) {
 	database := setupRelayChannelDB(t)
+	previousScheduling := operation_setting.GetChannelSchedulingSetting()
+	previousGroups, err := common.Marshal(previousScheduling.GroupStrategies)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, operation_setting.ApplyChannelSchedulingConfig(map[string]string{
+			"default_strategy": previousScheduling.DefaultStrategy,
+			"group_strategies": string(previousGroups),
+		}))
+	})
+	require.NoError(t, operation_setting.ApplyChannelSchedulingConfig(map[string]string{
+		"default_strategy": "legacy", "group_strategies": `{}`,
+	}))
 	require.NoError(t, database.AutoMigrate(&model.Ability{}))
 	legacy := &model.Channel{Name: "legacy-http", Key: "sk-test", Type: constant.ChannelTypeOpenAI, Status: common.ChannelStatusEnabled, Group: "default", Models: "ws-model", Priority: common.GetPointer(int64(10))}
 	enabled := &model.Channel{Name: "websocket", Key: "sk-test", Type: constant.ChannelTypeCodex, Status: common.ChannelStatusEnabled, Group: "default", Models: "ws-model", Priority: common.GetPointer(int64(0))}
@@ -136,6 +149,11 @@ func TestResponsesWSChannelRoutingRequiresExplicitOptIn(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, httpChannel)
 	assert.Equal(t, legacy.Id, httpChannel.Id)
+	require.NoError(t, operation_setting.ApplyChannelSchedulingConfig(map[string]string{"default_strategy": "intelligent"}))
+	channel, apiErr = selectResponsesWSChannel(c, "ws-model", params)
+	require.Nil(t, apiErr)
+	require.NotNil(t, channel)
+	assert.Equal(t, enabled.Id, channel.Id, "intelligent scheduling also filters HTTP-only channels")
 
 	// Disabling the saved setting takes effect for the next create on an existing session.
 	enabled.SetSetting(dto.ChannelSettings{ResponsesWebSocketEnabled: false})

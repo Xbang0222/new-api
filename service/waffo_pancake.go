@@ -106,6 +106,9 @@ func CreateWaffoPancakeCheckoutSession(ctx context.Context, params *WaffoPancake
 	if strings.TrimSpace(params.OrderMerchantExternalID) == "" {
 		return nil, fmt.Errorf("missing order merchant external id")
 	}
+	if strings.TrimSpace(setting.WaffoPancakeStoreID) == "" {
+		return nil, fmt.Errorf("missing Waffo Pancake store id")
+	}
 	client, err := newWaffoPancakeClient()
 	if err != nil {
 		return nil, fmt.Errorf("build Waffo Pancake client: %w", err)
