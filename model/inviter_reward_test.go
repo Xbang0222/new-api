@@ -241,6 +241,6 @@ func TestTransferAffQuotaToQuota_UsesConfiguredMinimum(t *testing.T) {
 	var logs []Log
 	require.NoError(t, LOG_DB.Where("user_id = ? AND type = ?", 31, LogTypeTopup).Find(&logs).Error)
 	require.Len(t, logs, 1)
-	assert.Contains(t, logs[0].Content, "划转邀请额度到余额")
-	assert.Contains(t, logs[0].Content, logger.LogQuota(500))
+	assert.Contains(t, logs[0].Content, "Transferred invitation quota to balance")
+	assert.Contains(t, logs[0].Content, logger.FormatQuota(500))
 }

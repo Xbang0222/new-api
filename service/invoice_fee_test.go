@@ -425,8 +425,8 @@ func runInvoiceFeeDatabaseContracts(t *testing.T) {
 			var logs []model.Log
 			require.NoError(t, model.LOG_DB.Where("user_id = ?", user.Id).Order("id asc").Find(&logs).Error)
 			require.Len(t, logs, 2)
-			assert.Contains(t, logs[0].Content, "额度变动 -100000")
-			assert.Contains(t, logs[1].Content, "额度变动 +100000")
+			assert.Contains(t, logs[0].Content, "quota change -100000")
+			assert.Contains(t, logs[1].Content, "quota change +100000")
 		})
 	}
 

@@ -14,6 +14,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	appdto "github.com/QuantumNous/new-api/dto"
+	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relaykit/dto"
@@ -26,6 +27,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func normalizeResponsesWSMessageForTest(message []byte) (responsesWSCreateRequest, string, error) {
+	envelope, streamID, err := parseResponsesWSEnvelope(message)
+	if err != nil {
+		return responsesWSCreateRequest{}, envelope.EventID, err
+	}
+	create, err := normalizeResponsesWSCreateEvent(message, envelope, streamID)
+	return create, envelope.EventID, err
+}
 
 func TestNormalizeResponsesWSMaxOutputTokens(t *testing.T) {
 	for _, tc := range []struct {
@@ -45,7 +55,7 @@ func TestNormalizeResponsesWSMaxOutputTokens(t *testing.T) {
 				if wrapped {
 					payload = `{"type":"response.create","response":{` + fields + `}}`
 				}
-				create, _, err := normalizeResponsesWSCreateEvent([]byte(payload))
+				create, _, err := normalizeResponsesWSMessageForTest([]byte(payload))
 				if !tc.valid {
 					require.Error(t, err)
 					assert.Equal(t, http.StatusBadRequest, newResponsesWSInvalidRequestError(err).StatusCode)
@@ -60,6 +70,7 @@ func TestNormalizeResponsesWSMaxOutputTokens(t *testing.T) {
 }
 
 func TestSelectResponsesWSChannelHonorsPinsAndFilters(t *testing.T) {
+	require.NoError(t, i18n.Init())
 	database := setupRelayChannelDB(t)
 	enabled := &model.Channel{Name: "enabled", Key: "sk-test", Status: common.ChannelStatusEnabled, Type: constant.ChannelTypeOpenAI}
 	enabled.SetSetting(dto.ChannelSettings{ResponsesWebSocketEnabled: true})
@@ -182,9 +193,9 @@ func TestNormalizeResponsesWSCreateEventWrapper(t *testing.T) {
 		}
 	}`)
 
-	create, eventID, err := normalizeResponsesWSCreateEvent(message)
+	create, eventID, err := normalizeResponsesWSMessageForTest(message)
 	if err != nil {
-		t.Fatalf("normalizeResponsesWSCreateEvent() error = %v", err)
+		t.Fatalf("normalizeResponsesWSMessageForTest() error = %v", err)
 	}
 	req := create.Request
 	if eventID != "evt_1" {
@@ -219,9 +230,9 @@ func TestNormalizeResponsesWSCreateEventFlat(t *testing.T) {
 		"stream_options": {"include_usage": true}
 	}`)
 
-	create, eventID, err := normalizeResponsesWSCreateEvent(message)
+	create, eventID, err := normalizeResponsesWSMessageForTest(message)
 	if err != nil {
-		t.Fatalf("normalizeResponsesWSCreateEvent() error = %v", err)
+		t.Fatalf("normalizeResponsesWSMessageForTest() error = %v", err)
 	}
 	req := create.Request
 	if eventID != "evt_2" {
@@ -252,7 +263,7 @@ func TestBuildResponsesWSCreateEventIsFlat(t *testing.T) {
 		"stream_options": {"include_usage": true}
 	}`)
 
-	got, err := buildResponsesWSCreateEvent(payload, common.RawMessage(`false`))
+	got, err := buildResponsesWSCreateEvent(payload, common.RawMessage(`false`), "")
 	if err != nil {
 		t.Fatalf("buildResponsesWSCreateEvent() error = %v", err)
 	}
@@ -295,7 +306,7 @@ func TestHTTPResponsesRequestDoesNotMarshalGenerate(t *testing.T) {
 }
 
 func TestBuildResponsesWSErrorPayloadIncludesStatus(t *testing.T) {
-	payload, err := buildResponsesWSErrorPayload("evt_err", types.NewErrorWithStatusCode(
+	payload, err := buildResponsesWSErrorPayload("evt_err", "", types.NewErrorWithStatusCode(
 		errors.New("model is required"),
 		types.ErrorCodeInvalidRequest,
 		http.StatusBadRequest,
@@ -322,7 +333,7 @@ func TestBuildResponsesWSErrorPayloadIncludesStatus(t *testing.T) {
 }
 
 func TestResponsesWSInvalidRequestErrorUsesBadRequestStatus(t *testing.T) {
-	payload, err := buildResponsesWSErrorPayload("", newResponsesWSInvalidRequestError(errors.New("bad event")))
+	payload, err := buildResponsesWSErrorPayload("", "", newResponsesWSInvalidRequestError(errors.New("bad event")))
 	if err != nil {
 		t.Fatalf("buildResponsesWSErrorPayload() error = %v", err)
 	}
@@ -422,28 +433,39 @@ func TestResponsesWSShutdownInterruptsBusyWriter(t *testing.T) {
 	defer cleanupTarget()
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &responsesWSSession{ctx: ctx, cancel: cancel, client: server, target: target}
-	// A blocked network writer owns this lock. Closing the connection must
-	// remain possible so that writer can be interrupted.
+	// Blocked network writers own these locks. Shutdown must not wait for
+	// them: its close frames are bounded control writes, and closing the
+	// sockets is what interrupts those writers.
+	s.clientWriteMu.Lock()
+	defer s.clientWriteMu.Unlock()
 	s.targetWriteMu.Lock()
 	defer s.targetWriteMu.Unlock()
 	done := make(chan struct{})
-	go func() { s.shutdown(); close(done) }()
+	go func() { s.shutdown(websocket.CloseInternalServerErr, "upstream connection closed"); close(done) }()
 	select {
 	case <-done:
 	case <-time.After(5 * time.Second):
-		t.Fatal("shutdown waited for the network writer")
+		t.Fatal("shutdown waited for a network writer")
 	}
-	require.NoError(t, peer.SetReadDeadline(time.Now().Add(time.Second)))
-	_, _, err := peer.ReadMessage()
-	assert.Error(t, err)
-	require.NoError(t, client.SetReadDeadline(time.Now().Add(time.Second)))
-	_, _, err = client.ReadMessage()
-	assert.Error(t, err)
+	// A dropped socket would read as a synthetic 1006; 1011 is the frame.
+	for _, conn := range []*websocket.Conn{client, peer} {
+		require.NoError(t, conn.SetReadDeadline(time.Now().Add(time.Second)))
+		_, _, err := conn.ReadMessage()
+		assert.True(t, websocket.IsCloseError(err, websocket.CloseInternalServerErr), "want a 1011 close frame, got %v", err)
+	}
 	assert.Nil(t, s.getTarget())
+
+	// An upstream dial that completes after shutdown is closed with a frame too.
+	late, latePeer, cleanupLate := newTestWebSocketPair(t)
+	defer cleanupLate()
+	assert.False(t, s.setTarget(late))
+	require.NoError(t, latePeer.SetReadDeadline(time.Now().Add(time.Second)))
+	_, _, err := latePeer.ReadMessage()
+	assert.True(t, websocket.IsCloseError(err, websocket.CloseNormalClosure), "want a 1000 close frame, got %v", err)
 }
 
 func TestResponsesWSPassthroughPreservesRawPricingParameters(t *testing.T) {
-	create, _, err := normalizeResponsesWSCreateEvent([]byte(`{"type":"response.create","generate":false,"response":{"model":"gpt-5.1","input":"hi","vendor":{"tier":"premium"},"stream":true}}`))
+	create, _, err := normalizeResponsesWSMessageForTest([]byte(`{"type":"response.create","generate":false,"response":{"model":"gpt-5.1","input":"hi","vendor":{"tier":"premium"},"stream":true}}`))
 	require.NoError(t, err)
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(string(create.Body)))
@@ -452,7 +474,7 @@ func TestResponsesWSPassthroughPreservesRawPricingParameters(t *testing.T) {
 	common.SetContextKey(c, constant.ContextKeyChannelType, constant.ChannelTypeOpenAI)
 	common.SetContextKey(c, constant.ContextKeyChannelSetting, dto.ChannelSettings{PassThroughBodyEnabled: true})
 	info := relaycommon.GenRelayInfoResponses(c, &create.Request)
-	payload, apiErr := buildResponsesWSCreatePayload(c, info, create.Request, create.Generate)
+	payload, apiErr := buildResponsesWSCreatePayload(c, info, create.Request, create.Generate, create.StreamID)
 	require.Nil(t, apiErr)
 	assert.JSONEq(t, `{"type":"response.create","generate":false,"model":"gpt-5.1","input":"hi","vendor":{"tier":"premium"}}`, string(payload))
 	storage, err := common.GetBodyStorage(c)

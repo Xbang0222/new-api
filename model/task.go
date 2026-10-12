@@ -502,8 +502,8 @@ func (Task *Task) Insert() error {
 	return Task.InsertWithContext(context.Background())
 }
 
-func (Task *Task) InsertWithContext(ctx context.Context) error {
-	return DB.WithContext(ctx).Create(Task).Error
+func (Task *Task) InsertWithContext(ctx context.Context, omits ...string) error {
+	return DB.WithContext(ctx).Omit(omits...).Create(Task).Error
 }
 
 type taskSnapshot struct {

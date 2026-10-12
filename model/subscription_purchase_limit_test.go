@@ -70,7 +70,7 @@ func TestSubscriptionPurchaseLimitAcrossPurchasePaths(t *testing.T) {
 				if source != "balance" && source != "admin" {
 					require.NoError(t, CompleteSubscriptionOrder(order.TradeNo, "repeated callback", source, ""))
 				}
-				require.EqualError(t, purchase(), "已达到该套餐购买上限")
+				require.EqualError(t, purchase(), "Purchase limit for this plan has been reached")
 				var afterRejection User
 				require.NoError(t, DB.First(&afterRejection, user.Id).Error)
 				assert.Equal(t, afterPurchase.Quota, afterRejection.Quota, "a rejected purchase must not debit the wallet")
@@ -119,9 +119,9 @@ func TestSubscriptionPurchaseLimitSerializesConcurrentBalancePurchases(t *testin
 				successes++
 			} else if common.UsingMainDatabase(common.DatabaseTypeSQLite) {
 				// SQLite may reject a competing writer instead of waiting for it.
-				assert.True(t, err.Error() == "已达到该套餐购买上限" || (strings.Contains(err.Error(), "SQLITE_BUSY") || strings.Contains(err.Error(), "database is locked")), "%v", err)
+				assert.True(t, err.Error() == "Purchase limit for this plan has been reached" || (strings.Contains(err.Error(), "SQLITE_BUSY") || strings.Contains(err.Error(), "database is locked")), "%v", err)
 			} else {
-				assert.EqualError(t, err, "已达到该套餐购买上限")
+				assert.EqualError(t, err, "Purchase limit for this plan has been reached")
 			}
 		}
 		assert.Equal(t, 1, successes)

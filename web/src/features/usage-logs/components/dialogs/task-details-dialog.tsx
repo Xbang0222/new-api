@@ -23,6 +23,7 @@ import { Dialog } from '@/components/dialog'
 import { StatusBadge } from '@/components/status-badge'
 import { Label } from '@/components/ui/label'
 import { formatLogQuota, formatTimestampToDate } from '@/lib/format'
+import { translateServerText } from '@/lib/server-error-message'
 import { cn } from '@/lib/utils'
 
 import { taskActionMapper, taskStatusMapper } from '../../lib/mappers'
@@ -307,7 +308,7 @@ export function TaskDetailsDialog(props: {
             danger
           >
             <p className='text-xs leading-relaxed break-all whitespace-pre-wrap'>
-              {props.log.fail_reason}
+              {translateServerText(t, props.log.fail_reason)}
             </p>
           </DetailSection>
         ) : null}

@@ -264,6 +264,7 @@ const SENSITIVE_FORM_FIELDS = [
   'proxy',
   'http_protocol',
   'http2_connection_shards',
+  'tls_insecure_skip_verify',
   'pass_through_body_enabled',
   'responses_websocket_enabled',
   'system_prompt',
@@ -1739,6 +1740,32 @@ export function ChannelMutateDrawer({
           </FormItem>
         )
       }}
+    />
+  )
+
+  const tlsInsecureSkipVerifyFields = (
+    <FormField
+      control={form.control}
+      name='tls_insecure_skip_verify'
+      render={({ field }) => (
+        <FormItem className='flex items-center justify-between px-4 py-3'>
+          <div className='space-y-0.5'>
+            <FormLabel>{t('Skip Upstream TLS Verification')}</FormLabel>
+            <FormDescription>
+              {t(
+                'Accept upstream certificates that fail validation, such as self-signed ones. Only enable for trusted internal upstreams.'
+              )}
+            </FormDescription>
+          </div>
+          <FormControl>
+            <Switch
+              disabled={sensitiveLocked}
+              checked={field.value}
+              onCheckedChange={field.onChange}
+            />
+          </FormControl>
+        </FormItem>
+      )}
     />
   )
 
@@ -4138,6 +4165,7 @@ export function ChannelMutateDrawer({
                 {proxyFields}
                 {httpProtocolFields}
                 {httpShardsFields}
+                {tlsInsecureSkipVerifyFields}
               </fieldset>
             </div>
             {upstreamModelDetectionFields}

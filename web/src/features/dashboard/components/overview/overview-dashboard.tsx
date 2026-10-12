@@ -29,6 +29,7 @@ import { AnnouncementsPanel } from './announcements-panel'
 import { ApiInfoPanel } from './api-info-panel'
 import { CommunityGroupCard } from './community-group-card'
 import { FAQPanel } from './faq-panel'
+import { InvitationRankingPanel } from './invitation-ranking-panel'
 import { OverviewSectionLayout } from './overview-section-layout'
 import { PerformanceHealthPanel } from './performance-health-panel'
 import { SummaryCards } from './summary-cards'
@@ -46,13 +47,6 @@ export function OverviewDashboard() {
   } = useDashboardContentVisibility()
   const isAdmin = Boolean(user?.role && user.role >= ROLE.ADMIN)
 
-  const showContentPanels =
-    isAdmin ||
-    showAnnouncementsPanel ||
-    showApiInfoPanel ||
-    showFAQPanel ||
-    showUptimePanel
-
   return (
     <>
       <OnboardingTour open={tourOpen} onOpenChange={setTourOpen} />
@@ -67,15 +61,14 @@ export function OverviewDashboard() {
         summary={<SummaryCards />}
         community={<CommunityGroupCard />}
         informationPanels={
-          showContentPanels ? (
-            <>
-              {isAdmin && <PerformanceHealthPanel />}
-              {showAnnouncementsPanel && <AnnouncementsPanel />}
-              {showApiInfoPanel && <ApiInfoPanel />}
-              {showFAQPanel && <FAQPanel />}
-              {showUptimePanel && <UptimePanel />}
-            </>
-          ) : null
+          <>
+            <InvitationRankingPanel />
+            {isAdmin && <PerformanceHealthPanel />}
+            {showAnnouncementsPanel && <AnnouncementsPanel />}
+            {showApiInfoPanel && <ApiInfoPanel />}
+            {showFAQPanel && <FAQPanel />}
+            {showUptimePanel && <UptimePanel />}
+          </>
         }
       />
     </>

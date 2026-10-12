@@ -39,6 +39,7 @@ services:
 #      GOOGLE_ANALYTICS_ID: "G-XXXXXXXXXX"
 #      UMAMI_WEBSITE_ID: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 #      UMAMI_SCRIPT_URL: "https://analytics.umami.is/script.js"
+#      DEFAULT_LANGUAGE: zh-CN
 
     networks:
       - my-network

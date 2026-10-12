@@ -20,6 +20,7 @@ import { api } from '@/lib/api'
 
 import type {
   FlowQuotaDataItem,
+  InvitationRankingEntry,
   QuotaDataItem,
   TokenRankingData,
   UptimeGroupResult,
@@ -84,6 +85,18 @@ export async function getTokenRanking(params: {
     '/api/data/token-ranking',
     { params }
   )
+  return res.data
+}
+
+export async function getInvitationRanking() {
+  const res = await api.get<{
+    success: boolean
+    data: InvitationRankingEntry[]
+    message?: string
+  }>('/api/data/invitation-ranking', {
+    // Responses depend on the viewer. React Query deduplicates within that identity.
+    disableDuplicate: true,
+  })
   return res.data
 }
 

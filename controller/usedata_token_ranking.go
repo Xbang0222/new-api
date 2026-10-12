@@ -27,7 +27,7 @@ type TokenRankingEntry struct {
 	IsSelf    bool    `json:"is_self"`
 }
 
-func maskTokenRankingUsername(username string, fallback string) string {
+func maskRankingUsername(username string, fallback string) string {
 	if username == "" {
 		username = fallback
 	}
@@ -105,7 +105,7 @@ func GetTokenRanking(c *gin.Context) {
 		displayName := item.Username
 		responseUserID := item.UserID
 		if !isAdmin && !isSelf {
-			displayName = maskTokenRankingUsername(item.Username, "User")
+			displayName = maskRankingUsername(item.Username, "User")
 			maskedNames[displayName]++
 			if maskedNames[displayName] > 1 {
 				displayName += " #" + strconv.Itoa(maskedNames[displayName])

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
@@ -68,19 +67,19 @@ func subscriptionPaymentRewardQuota(topUp *TopUp) (int, error) {
 	return common.WalletQuotaFromDecimalStrict(quota)
 }
 
-func processSubscriptionInviterRewardTx(tx *gorm.DB, order *SubscriptionOrder, topUp *TopUp, inviterId int) (int, string, error) {
+func processSubscriptionInviterRewardTx(tx *gorm.DB, order *SubscriptionOrder, topUp *TopUp, inviterId int) (int, *common.Message, error) {
 	if topUp.InviterRewardSent || !operation_setting.IsPaymentComplianceConfirmed() ||
 		common.InviterRewardType == "" || common.InviterRewardValue <= 0 ||
 		inviterId <= 0 || inviterId == order.UserId {
-		return 0, "", nil
+		return 0, nil, nil
 	}
 	if _, err := NewTopUpPaymentReceipt(topUp.PaidAmountMinor, topUp.PaidCurrency); err != nil {
-		return 0, "", fmt.Errorf("subscription %s: %w", order.TradeNo, ErrSubscriptionPaymentReceiptRequired)
+		return 0, nil, fmt.Errorf("subscription %s: %w", order.TradeNo, ErrSubscriptionPaymentReceiptRequired)
 	}
 	quota, conversionErr := subscriptionPaymentRewardQuota(topUp)
 	if conversionErr != nil {
 		if common.InviterRewardType != "fixed" {
-			return 0, "", fmt.Errorf("subscription %s: %w", order.TradeNo, conversionErr)
+			return 0, nil, fmt.Errorf("subscription %s: %w", order.TradeNo, conversionErr)
 		}
 		// A fixed rebate needs a positive verified payment, not an FX rate.
 		// Zero records an unavailable basis; the credited reward stays exact.
@@ -88,11 +87,17 @@ func processSubscriptionInviterRewardTx(tx *gorm.DB, order *SubscriptionOrder, t
 	}
 	creditedInviter, message, err := processInviterRewardTx(tx, order.UserId, quota, topUp.Id)
 	if err != nil {
-		return 0, "", err
+		return 0, nil, err
 	}
-	message = strings.ReplaceAll(message, "充值", "订阅购买")
-	if creditedInviter > 0 {
-		message += fmt.Sprintf("，订单号: %s", order.TradeNo)
+	if creditedInviter > 0 && message != nil {
+		params := map[string]any{"reward": message.Params["reward"], "order": order.TradeNo}
+		if message.Key == "Invitation recharge rebate: {{reward}} (fixed reward)" {
+			message = common.NewMessage("Invitation subscription rebate: {{reward}} (fixed reward), order: {{order}}", params)
+		} else {
+			params["quota"] = message.Params["quota"]
+			params["rate"] = message.Params["rate"]
+			message = common.NewMessage("Invitation subscription rebate: {{reward}} (payment quota: {{quota}}, rebate rate: {{rate}}%), order: {{order}}", params)
+		}
 	}
 	return creditedInviter, message, nil
 }

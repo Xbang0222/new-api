@@ -63,6 +63,7 @@ func TestCountBillableToolCallFunctionCallSkipsReservedNames(t *testing.T) {
 		dto.BuildInToolGoogleSearch:     false,
 		dto.BuildInToolImageGeneration:  false,
 		"bing_web_search":               false, // built-in vendor price
+		GoogleSearchGroundedPromptTool:  false, // built-in only for gemini-2.5* and older
 		"web_fetch":                     false, // Anthropic server tool, no built-in price
 		"lookup_order":                  true,  // operator-priced client function
 	}

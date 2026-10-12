@@ -51,6 +51,13 @@ export interface TokenRankingData {
   is_limited: boolean
 }
 
+export interface InvitationRankingEntry {
+  rank: number
+  username: string
+  aff_history_quota: number
+  is_self: boolean
+}
+
 export interface FlowQuotaDataItem {
   user_id?: number
   username?: string

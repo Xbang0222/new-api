@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/service/authz"
@@ -88,6 +89,29 @@ func createMiddlewarePATUser(t *testing.T, username, token string) *model.User {
 	}
 	require.NoError(t, model.DB.Create(user).Error)
 	return user
+}
+
+// Read-only API key routes (/api/usage/token, /api/log/token) are called by
+// scripts, not the web console, so their errors are translated by the backend
+// in the language the request asks for.
+func TestTokenAuthReadOnlyTranslatesErrors(t *testing.T) {
+	require.NoError(t, i18n.Init())
+	for _, tc := range []struct {
+		acceptLanguage string
+		want           string
+	}{
+		{"zh-CN", "未提供令牌"},
+		{"en-US", "Token not provided"},
+	} {
+		recorder := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(recorder)
+		c.Request = httptest.NewRequest(http.MethodGet, "/api/log/token", nil)
+		c.Request.Header.Set("Accept-Language", tc.acceptLanguage)
+		TokenAuthReadOnly()(c)
+		assert.True(t, c.IsAborted(), tc.acceptLanguage)
+		assert.Equal(t, http.StatusUnauthorized, recorder.Code, tc.acceptLanguage)
+		assert.JSONEq(t, `{"success":false,"message":"`+tc.want+`"}`, recorder.Body.String(), tc.acceptLanguage)
+	}
 }
 
 func TestUserAuthAllowsOpaqueDottedPAT(t *testing.T) {
@@ -309,6 +333,10 @@ func TestUserAuthAppliesAccessTokenRouteRules(t *testing.T) {
 	router.GET("/api/pricing", TryUserAuth(), ok)
 	router.GET("/api/invoice/self", UserAuth(), ok)
 	router.GET("/api/data/token-ranking", UserAuth(), ok)
+	router.GET("/api/data/invitation-ranking", UserAuth(), ok)
+	anonymous := httptest.NewRecorder()
+	router.ServeHTTP(anonymous, httptest.NewRequest(http.MethodGet, "/api/data/invitation-ranking", nil))
+	assert.Equal(t, http.StatusUnauthorized, anonymous.Code)
 
 	for _, test := range []struct {
 		name, path, token, code, reason string
@@ -318,6 +346,8 @@ func TestUserAuthAppliesAccessTokenRouteRules(t *testing.T) {
 		{name: "missing scope", path: "/api/user/self", token: channel, status: http.StatusForbidden, code: "ACCESS_TOKEN_SCOPE_DENIED", reason: "scope_denied"},
 		{name: "invoice with wallet scope", path: "/api/invoice/self", token: wallet, status: http.StatusOK},
 		{name: "invoice without wallet scope", path: "/api/invoice/self", token: profile, status: http.StatusForbidden, code: "ACCESS_TOKEN_SCOPE_DENIED", reason: "scope_denied"},
+		{name: "invitation ranking with wallet scope", path: "/api/data/invitation-ranking", token: wallet, status: http.StatusOK},
+		{name: "invitation ranking without wallet scope", path: "/api/data/invitation-ranking", token: profile, status: http.StatusForbidden, code: "ACCESS_TOKEN_SCOPE_DENIED", reason: "scope_denied"},
 		{name: "token ranking with usage scope", path: "/api/data/token-ranking", token: usage, status: http.StatusOK},
 		{name: "token ranking without usage scope", path: "/api/data/token-ranking", token: profile, status: http.StatusForbidden, code: "ACCESS_TOKEN_SCOPE_DENIED", reason: "scope_denied"},
 		{name: "undeclared route", path: "/api/undeclared", token: profile, status: http.StatusForbidden, code: "ACCESS_TOKEN_ROUTE_UNDECLARED", reason: "route_undeclared"},

@@ -99,7 +99,7 @@ func SendEmailWithAttachments(subject string, receiver string, content string, a
 		return err
 	}
 	if SMTPServer == "" && SMTPAccount == "" {
-		return fmt.Errorf("SMTP server is not configured")
+		return NewMessage("SMTP server is not configured")
 	}
 	encodedSubject := fmt.Sprintf("=?UTF-8?B?%s?=", base64.StdEncoding.EncodeToString([]byte(subject)))
 	message, err := buildEmailMessage(receiver, encodedSubject, messageID, content, attachments)
@@ -137,7 +137,7 @@ func SendEmailWithAttachments(subject string, receiver string, content string, a
 		return err
 	}
 	if err = client.Quit(); err != nil {
-		SysError(fmt.Sprintf("failed to send email to %s: %v", receiver, err))
+		SysError(LogText("failed to send email to %s: %v", receiver, err))
 	}
 	return err
 }

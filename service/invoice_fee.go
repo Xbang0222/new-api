@@ -323,12 +323,17 @@ func syncInvoiceFeeBalance(application *model.InvoiceApplication, delta int, upd
 			common.SysError("failed to sync invoice fee balance: " + err.Error())
 		}
 	}
-	direction := "发票扣点扣除余额"
+	messageKey := "Invoice fee deducted: application #{{id}}, amount {{amount}} {{currency}}, quota change {{delta}}."
 	if delta > 0 {
-		direction = "发票扣点退回余额"
+		messageKey = "Invoice fee refunded: application #{{id}}, amount {{amount}} {{currency}}, quota change {{delta}}."
 	}
 	amount := decimal.NewFromInt(application.FinalSupplementCents).Shift(-2).StringFixed(2)
-	model.RecordLog(application.UserId, model.LogTypeSystem, fmt.Sprintf("%s：申请 #%d，金额 %s %s，额度变动 %+d。", direction, application.Id, amount, application.Currency, delta))
+	model.RecordLog(application.UserId, model.LogTypeSystem, common.NewMessage(messageKey, map[string]any{
+		"id":       application.Id,
+		"amount":   amount,
+		"currency": application.Currency,
+		"delta":    fmt.Sprintf("%+d", delta),
+	}))
 }
 
 func CancelInvoiceApplication(applicationId int, userId int) (*model.InvoiceApplication, error) {

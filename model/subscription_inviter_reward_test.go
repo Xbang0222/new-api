@@ -127,7 +127,7 @@ func TestSubscriptionInviterRewardUsesVerifiedPaymentAndFreezesHistory(t *testin
 				var logs []Log
 				require.NoError(t, DB.Where("user_id = ? AND type = ?", fixture.inviter.Id, LogTypeSystem).Find(&logs).Error)
 				require.Len(t, logs, 1)
-				assert.Contains(t, logs[0].Content, "订阅购买")
+				assert.Contains(t, logs[0].Content, "Invitation subscription rebate")
 				assert.Contains(t, logs[0].Content, fixture.order.TradeNo)
 			})
 		}

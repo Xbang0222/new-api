@@ -271,6 +271,7 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"GET /api/data/users":                       accessTokenScopeRule("log:read"),
 	"GET /api/data/self":                        accessTokenScopeRule("usage:read"),
 	"GET /api/data/token-ranking":               accessTokenScopeRule("usage:read"),
+	"GET /api/data/invitation-ranking":          accessTokenScopeRule("wallet:read"),
 	"GET /api/data/flow":                        accessTokenScopeRule("log:read"),
 	"GET /api/data/flow/self":                   accessTokenScopeRule("usage:read"),
 

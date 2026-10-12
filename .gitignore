@@ -14,6 +14,7 @@ logs
 web/dist
 web/node_modules
 .env
+.env.docker-local
 one-api
 new-api
 /__debug_bin*

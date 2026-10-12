@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/helper"
@@ -55,7 +56,7 @@ func cfStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Res
 		var response dto.ChatCompletionsStreamResponse
 		err := json.Unmarshal([]byte(data), &response)
 		if err != nil {
-			logger.LogError(c, "error_unmarshalling_stream_response: "+err.Error())
+			logger.LogError(c, common.LogText("error_unmarshalling_stream_response: %s", err.Error()))
 			continue
 		}
 		for _, choice := range response.Choices {
@@ -66,19 +67,19 @@ func cfStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Res
 		response.Model = info.UpstreamModelName
 		err = helper.ObjectData(c, response)
 		if err != nil {
-			logger.LogError(c, "error_rendering_stream_response: "+err.Error())
+			logger.LogError(c, common.LogText("error_rendering_stream_response: %s", err.Error()))
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
-		logger.LogError(c, "error_scanning_stream_response: "+err.Error())
+		logger.LogError(c, common.LogText("error_scanning_stream_response: %s", err.Error()))
 	}
 	usage := service.ResponseText2Usage(c, responseText, info.UpstreamModelName, info.GetEstimatePromptTokens())
 	if info.ShouldIncludeUsage {
 		response := helper.GenerateFinalUsageResponse(id, info.StartTime.Unix(), info.UpstreamModelName, *usage)
 		err := helper.ObjectData(c, response)
 		if err != nil {
-			logger.LogError(c, "error_rendering_final_usage_response: "+err.Error())
+			logger.LogError(c, common.LogText("error_rendering_final_usage_response: %s", err.Error()))
 		}
 	}
 	helper.Done(c)
