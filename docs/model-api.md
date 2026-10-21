@@ -10,6 +10,29 @@ new-api 是统一的 AI 模型 API 网关。客户端通过一套 API Key，可�
 
 本文档不包含 `/api/...` 管理/面板接口，也不把仅供已登录面板使用的 `/pg/...` Playground 路由视为公共模型 API。
 
+## DeepSeek 网页搜索与抓取
+
+`POST /v1/tools/search` 和 `POST /v1/tools/fetch` 使用本站 API Key 的 Bearer 鉴权，以及 `Content-Type: application/json`。无需填写 `model` 或 `stream`，响应为普通 JSON。模型列表中的 `deepseek-tools-search` 和 `deepseek-tools-fetch` 表示对应接口能力。
+
+| 接口 | 字段 | 要求 |
+| --- | --- | --- |
+| search | `query` | 必填，1–128 个 Unicode 字符，不得全为空白 |
+| search | `count` | 可选整数，1–50，默认 10 |
+| search | `ori_question` | 可选原始问题，1–128 个字符；`null` 表示未提供 |
+| search | `localization` | 可选 IP 地址，用于本地化搜索结果 |
+| search | `need_content` | 可选布尔值，默认 `false`；是否包含网页正文 |
+| fetch | `url` | 必填，带主机名的 HTTP/HTTPS URL，最多 8192 个字符，不得含用户名或密码 |
+
+搜索响应包含 `results` 数组，条目带有 `title`、`url`、`snippet`、`summary`、`content`、`rerank_score`、`authority` 及站点元数据；无结果时数组为空。抓取响应示例：
+
+```json
+{"title":"new-api documentation","content":"# new-api\n\nGateway setup and API reference."}
+```
+
+成功且返回搜索结果或网页正文的请求按次计费，具体价格以本站定价为准。未返回可计费内容时释放预扣额度。上游失败沿用本文的通用错误格式；接口不提供通用幂等键，客户端重试属于独立请求，可能再次计费。
+
+参数限制参考 [DeepSeek Search](https://api-docs.deepseek.com/api/search/) 和 [DeepSeek Fetch](https://api-docs.deepseek.com/api/fetch/)，接口可用性以本站启用的模型能力为准。
+
 ## 1. 接入信息
 
 ### 1.1 基础地址
@@ -92,6 +115,8 @@ Gemini 的 `{action}` 当前请求解析覆盖 `generateContent`、`streamGenera
 | `POST` | `/v1/embeddings` | OpenAI 格式文本向量 | JSON |
 | `POST` | `/v1/engines/{model}/embeddings` | 兼容旧式路径的文本向量 | JSON |
 | `POST` | `/v1/rerank` | 文档重排序 | JSON |
+| `POST` | `/v1/tools/search` | DeepSeek 网页搜索 | JSON，非流式 |
+| `POST` | `/v1/tools/fetch` | DeepSeek 网页抓取 | JSON，非流式 |
 | `POST` | `/v1/images/generations` | 图像生成 | JSON |
 | `POST` | `/v1/images/edits` | 图像编辑 | JSON 或 multipart |
 | `POST` | `/v1/edits` | 兼容图像编辑别名 | JSON 或 multipart |

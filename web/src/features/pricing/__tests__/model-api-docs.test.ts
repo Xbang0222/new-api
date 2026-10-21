@@ -35,6 +35,28 @@ function pricingModel(overrides: Partial<PricingModel> = {}): PricingModel {
 }
 
 describe('model API documentation', () => {
+  test('documents DeepSeek tools without requiring a model in the body', () => {
+    const endpoints = buildModelApiEndpoints(
+      pricingModel({
+        supported_endpoint_types: [
+          'deepseek-tools-search',
+          'deepseek-tools-fetch',
+        ],
+      }),
+      {}
+    )
+    assert.deepEqual(
+      endpoints.map((endpoint) => endpoint.path),
+      ['/v1/tools/search', '/v1/tools/fetch']
+    )
+    for (const endpoint of endpoints) {
+      assert.ok(
+        !endpoint.parameters.some((parameter) => parameter.name === 'model')
+      )
+      assert.ok(!Object.hasOwn(endpoint.requestExample.json ?? {}, 'model'))
+      assert.doesNotThrow(() => JSON.parse(endpoint.responseExample))
+    }
+  })
   test('uses each model configured endpoint instead of the global fallback', () => {
     const model = pricingModel({
       supported_endpoint_types: ['openai'],

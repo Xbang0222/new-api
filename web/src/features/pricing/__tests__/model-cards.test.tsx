@@ -413,6 +413,68 @@ describe('model cards', () => {
     )
   })
 
+  it('shows the cache read price of an expression model after its input and output prices', () => {
+    render(
+      <ModelCard
+        model={pricingModel({
+          billing_mode: 'tiered_expr',
+          billing_expr: 'tier("base", p * 0.15 + c * 0.6 + cr * 0.003)',
+        })}
+        onClick={vi.fn()}
+        tokenUnit='M'
+        selectedGroup='default'
+      />
+    )
+    expect(screen.getByText('Input').parentElement).toHaveTextContent(
+      /\$0.15\s*\/\s*1M/
+    )
+    expect(screen.getByText('Output').parentElement).toHaveTextContent(
+      /\$0.6\s*\/\s*1M/
+    )
+    expect(screen.getByText('Cache Read').parentElement).toHaveTextContent(
+      /\$0.003\s*\/\s*1M/
+    )
+  })
+
+  it('shows the cache read price once when a plugin provider already lists it as a main price', () => {
+    render(
+      <ModelCard
+        model={pricingModel({
+          billing_plugin_variants: [
+            {
+              plugin_key: 'alpha',
+              plugin_name: 'Alpha',
+              billing_mode: 'tiered_expr',
+              billing_expr: 'tier("base", p * 1 + c * 2 + cr * 0.5)',
+              billing_usage_schema: {},
+            },
+          ],
+        })}
+        onClick={vi.fn()}
+        tokenUnit='M'
+        selectedGroup='default'
+      />
+    )
+    expect(screen.getAllByText('Cache Read')).toHaveLength(1)
+  })
+
+  it('shows the cache read price of an expression model that prices nothing else', () => {
+    render(
+      <ModelCard
+        model={pricingModel({
+          billing_mode: 'tiered_expr',
+          billing_expr: 'tier("base", cr * 0.5)',
+        })}
+        onClick={vi.fn()}
+        tokenUnit='M'
+        selectedGroup='default'
+      />
+    )
+    expect(screen.getByText('Cache Read').parentElement).toHaveTextContent(
+      /\$0.5\s*\/\s*1M/
+    )
+  })
+
   it('keeps task price ranges in their actual usage unit instead of the selected token unit', () => {
     render(
       <ModelCard
@@ -432,6 +494,47 @@ describe('model cards', () => {
     expect(screen.getByText(/0.4.*0.8/)).toHaveTextContent(/0.4 – \$0.8/)
     expect(screen.getByText(/^\/\s*s$/)).toBeVisible()
     expect(screen.queryByText(/1K|1M/)).not.toBeInTheDocument()
+  })
+
+  it('hides a task usage price left at zero while another usage price is set', () => {
+    render(
+      <ModelCard
+        model={pricingModel({
+          billing_mode: 'tiered_expr',
+          billing_expr: 'tier("base", u("count") * 0 + u("seconds") * 0.7)',
+          billing_usage_schema: {
+            count: {
+              type: 'number',
+              unit: 'count',
+              description: { en: 'Per-task price' },
+            },
+            seconds: {
+              type: 'number',
+              unit: 'second',
+              description: { en: 'Video generation unit price' },
+            },
+          },
+        })}
+        onClick={vi.fn()}
+      />
+    )
+    expect(screen.getByText('Video generation unit price')).toBeVisible()
+    expect(screen.queryByText('Per-task price')).not.toBeInTheDocument()
+  })
+
+  it('does not show the tier name of a single-tier task price', () => {
+    render(
+      <ModelCard
+        model={pricingModel({
+          billing_mode: 'tiered_expr',
+          billing_expr: 'tier("base", u("seconds") * 0.4)',
+          billing_usage_schema: { seconds: { type: 'number', unit: 'second' } },
+        })}
+        onClick={vi.fn()}
+      />
+    )
+    expect(screen.getByText(/^\$0\.4$/)).toBeVisible()
+    expect(screen.queryByText('(base)')).not.toBeInTheDocument()
   })
 
   it('shows the unconfigured usage message without inventing a token price', () => {

@@ -106,6 +106,8 @@ function SubscriptionBadge(props: { quota: number }) {
             size='sm'
             copyable={false}
             className='cursor-help'
+            tabIndex={0}
+            aria-label={t('Subscription')}
           />
         }
       />
@@ -120,6 +122,9 @@ function SubscriptionBadge(props: { quota: number }) {
 
 export function LogCostDisplay(props: LogCostDisplayProps) {
   const isSubscription = props.other?.billing_source === 'subscription'
+  const quota = isSubscription
+    ? (props.other?.subscription_consumed ?? props.quota)
+    : props.quota
   const showToolSurcharge = hasToolSurcharge(props.other)
 
   if (!isSubscription && !showToolSurcharge) {
@@ -134,7 +139,7 @@ export function LogCostDisplay(props: LogCostDisplayProps) {
     <TooltipProvider>
       <div className='inline-flex items-center gap-1'>
         {isSubscription ? (
-          <SubscriptionBadge quota={props.quota} />
+          <SubscriptionBadge quota={quota} />
         ) : (
           <QuotaBadge quota={props.quota} />
         )}

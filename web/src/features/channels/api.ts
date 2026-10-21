@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { api, type ApiRequestConfig } from '@/lib/api'
 import { requireServerSuccess } from '@/lib/server-error-message'
 
+import type { PriorityMove, PriorityOrder } from './lib/channel-priority-order'
 import type { InferenceStatus } from './lib/inference-status'
 import type {
   AddChannelRequest,
@@ -49,6 +50,24 @@ const channelActionConfig = (
   skipBusinessError: true,
   skipErrorHandler: true,
 })
+
+export async function getChannelPriorityOrder(): Promise<PriorityOrder> {
+  const response = await api.get<{ success: boolean; data: PriorityOrder }>(
+    '/api/channel/priority/order',
+    { disableDuplicate: true }
+  )
+  return requireServerSuccess(response.data).data
+}
+
+export async function reorderChannelPriority(
+  move: PriorityMove
+): Promise<PriorityOrder> {
+  const response = await api.post<{ success: boolean; data: PriorityOrder }>(
+    '/api/channel/priority/reorder',
+    move
+  )
+  return requireServerSuccess(response.data).data
+}
 
 export async function getInferenceStatus(
   channelId: number,

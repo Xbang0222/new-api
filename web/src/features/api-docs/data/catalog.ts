@@ -88,6 +88,126 @@ const guides: ApiDocItem[] = [
 export const apiEndpoints: ApiEndpoint[] = [
   {
     kind: 'endpoint',
+    id: 'deepseek-search',
+    group: 'capabilities',
+    title: 'DeepSeek Search',
+    summary: 'Search the web with DeepSeek.',
+    description: 'Search the web with DeepSeek.',
+    method: 'POST',
+    path: '/v1/tools/search',
+    auth: 'bearer',
+    contentType: 'application/json',
+    parameters: [
+      {
+        name: 'query',
+        location: 'body',
+        type: 'string',
+        required: true,
+        description: 'Search text: 1–128 characters, not only whitespace.',
+      },
+      {
+        name: 'count',
+        location: 'body',
+        type: 'integer',
+        required: false,
+        description: 'Result limit: 1–50; defaults to 10.',
+      },
+      {
+        name: 'ori_question',
+        location: 'body',
+        type: 'string | null',
+        required: false,
+        description: 'Original question: 1–128 characters, or null.',
+      },
+      {
+        name: 'localization',
+        location: 'body',
+        type: 'string',
+        required: false,
+        description: 'Optional IP address for localized results.',
+      },
+      {
+        name: 'need_content',
+        location: 'body',
+        type: 'boolean',
+        required: false,
+        description: 'Include page content; defaults to false.',
+      },
+    ],
+    requestExample: {
+      json: { query: 'new-api documentation', count: 10, need_content: false },
+    },
+    responseExample: `{
+  "results": [{
+    "title": "new-api documentation",
+    "url": "https://docs.newapi.ai/",
+    "snippet": "Documentation for the new-api gateway.",
+    "summary": "Setup and API reference for the new-api gateway.",
+    "content": "",
+    "rerank_score": 2.5,
+    "authority": 3,
+    "site_name": "new-api",
+    "site_icon": null,
+    "date": null
+  }]
+}`,
+    responseDescription:
+      'Returns results with URLs, summaries and relevance scores; results may be empty.',
+    notes: [
+      'Send JSON without model or stream. Retries are separate requests and may be billed again.',
+      'Successful searches with results and fetches with page content are billed per request.',
+      relayRetryNote,
+    ],
+    relatedEndpoints: [
+      {
+        method: 'POST',
+        path: '/v1/tools/fetch',
+        description: 'Fetch a web page as Markdown with DeepSeek.',
+      },
+    ],
+  },
+  {
+    kind: 'endpoint',
+    id: 'deepseek-fetch',
+    group: 'capabilities',
+    title: 'DeepSeek Fetch',
+    summary: 'Fetch a web page as Markdown with DeepSeek.',
+    description: 'Fetch a web page as Markdown with DeepSeek.',
+    method: 'POST',
+    path: '/v1/tools/fetch',
+    auth: 'bearer',
+    contentType: 'application/json',
+    parameters: [
+      {
+        name: 'url',
+        location: 'body',
+        type: 'string',
+        required: true,
+        description:
+          'HTTP or HTTPS URL with a host, up to 8192 characters; no username or password.',
+      },
+    ],
+    requestExample: { json: { url: 'https://docs.newapi.ai/' } },
+    responseExample: `{
+  "title": "new-api documentation",
+  "content": "# new-api\\n\\nGateway setup and API reference."
+}`,
+    responseDescription: 'Returns the page title and Markdown content.',
+    notes: [
+      'Send JSON without model or stream. Retries are separate requests and may be billed again.',
+      'Successful searches with results and fetches with page content are billed per request.',
+      relayRetryNote,
+    ],
+    relatedEndpoints: [
+      {
+        method: 'POST',
+        path: '/v1/tools/search',
+        description: 'Search the web with DeepSeek.',
+      },
+    ],
+  },
+  {
+    kind: 'endpoint',
     id: 'list-models',
     group: 'start',
     title: 'List available models',

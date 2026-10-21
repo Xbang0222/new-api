@@ -52,6 +52,8 @@ describe('customer API catalog', () => {
       '/v1/completions',
       '/v1/embeddings',
       '/v1/rerank',
+      '/v1/tools/search',
+      '/v1/tools/fetch',
       '/v1/moderations',
       '/v1/images',
       '/v1/audio',

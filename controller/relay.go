@@ -53,6 +53,8 @@ func relayHandler(c *gin.Context, info *relaycommon.RelayInfo) *types.NewAPIErro
 		err = relay.ResponsesHelper(c, info)
 	case relayconstant.RelayModeAlphaSearch:
 		err = relay.AlphaSearchHelper(c, info)
+	case relayconstant.RelayModeToolsSearch, relayconstant.RelayModeToolsFetch:
+		err = relay.DeepSeekToolsHelper(c, info)
 	default:
 		err = relay.TextHelper(c, info)
 	}
@@ -76,31 +78,41 @@ func writeRelayError(c *gin.Context, ws *websocket.Conn, relayFormat types.Relay
 		clientErr.SetMessage(common.MessageWithRequestId(clientErr.Error(), requestId))
 	}
 
+	upstreamURLs := common.UpstreamAddresses(c)
 	if relayFormat == types.RelayFormatOpenAIRealtime {
-		helper.WssError(c, ws, clientErr.ToOpenAIError())
+		helper.WssError(c, ws, clientErr.ToOpenAIError(upstreamURLs...))
 		return
 	}
-	if relayErr.IsUpstream() && c.Writer.Written() {
+	if c.Writer.Written() && strings.HasPrefix(c.Writer.Header().Get("Content-Type"), "text/event-stream") {
 		writeRelayStreamError(c, relayFormat, clientErr)
 		return
 	}
+	c.Header("Content-Type", "application/json; charset=utf-8")
 	if relayFormat == types.RelayFormatClaude {
 		c.JSON(clientErr.StatusCode, gin.H{
 			"type":  "error",
-			"error": clientErr.ToClaudeError(),
+			"error": clientErr.ToClaudeError(upstreamURLs...),
 		})
 		return
 	}
 	c.JSON(clientErr.StatusCode, gin.H{
-		"error": clientErr.ToOpenAIError(),
+		"error": clientErr.ToOpenAIError(upstreamURLs...),
 	})
 }
 
 func writeRelayStreamError(c *gin.Context, relayFormat types.RelayFormat, relayErr *types.NewAPIError) {
+	status, _ := common.GetContextKeyType[*relaycommon.StreamStatus](c, constant.ContextKeyResponseStreamStatus)
+	if status == nil {
+		status = relaycommon.NewStreamStatus()
+		common.SetContextKey(c, constant.ContextKeyResponseStreamStatus, status)
+	}
+	status.MarkFailed(string(relayErr.GetErrorCode()), string(relayErr.GetErrorType()), relayErr.StatusCode)
+	upstreamURLs := common.UpstreamAddresses(c)
+	helper.ExtendWriteDeadline(c)
 	if relayFormat == types.RelayFormatClaude {
 		body, err := common.Marshal(gin.H{
 			"type":  "error",
-			"error": relayErr.ToClaudeError(),
+			"error": relayErr.ToClaudeError(upstreamURLs...),
 		})
 		if err == nil {
 			c.Render(-1, common.CustomEvent{Data: "event: error\ndata: " + string(body)})
@@ -108,7 +120,8 @@ func writeRelayStreamError(c *gin.Context, relayFormat types.RelayFormat, relayE
 		}
 		return
 	}
-	_ = helper.ObjectData(c, gin.H{"error": relayErr.ToOpenAIError()})
+	_ = helper.ObjectData(c, gin.H{"error": relayErr.ToOpenAIError(upstreamURLs...)})
+	helper.Done(c)
 }
 
 func geminiRelayHandler(c *gin.Context, info *relaycommon.RelayInfo) *types.NewAPIError {
@@ -180,6 +193,12 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			panic(recovered)
 		}
 	}()
+
+	generalSettings := operation_setting.GetGeneralSetting()
+	if relayFormat == types.RelayFormatClaude && relayInfo.IsStream && generalSettings.PingIntervalEnabled {
+		stopKeepAlive := helper.StartStreamKeepAlive(c, time.Duration(generalSettings.PingIntervalSeconds)*time.Second)
+		defer stopKeepAlive()
+	}
 
 	if newAPIError = relay.PrepareRequestBilling(c, relayInfo); newAPIError != nil {
 		return

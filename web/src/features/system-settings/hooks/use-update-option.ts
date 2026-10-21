@@ -26,10 +26,7 @@ import { requireServerSuccess } from '@/lib/server-error-message'
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import { updatePasskeyDomains, updateSystemOption } from '../api'
-import type {
-  UpdateOptionRequest,
-  UpdatePasskeyDomainsRequest,
-} from '../types'
+import type { UpdateOptionRequest, UpdatePasskeyDomainsRequest } from '../types'
 
 // Configuration keys that require status refresh
 const STATUS_RELATED_KEYS = new Set([
@@ -39,6 +36,8 @@ const STATUS_RELATED_KEYS = new Set([
   'Notice',
   'LogConsumeEnabled',
   'Logo',
+  'log_setting.user_export_enabled',
+  'log_setting.max_range_days',
   'QuotaPerUnit',
   'USDExchangeRate',
   'DisplayInCurrencyEnabled',
@@ -52,6 +51,13 @@ const STATUS_RELATED_KEYS = new Set([
   'general_setting.custom_currency_exchange_rate',
   'general_setting.docs_link',
   'oidc.display_name',
+  'ServerAddress',
+  'passkey.enabled',
+  'passkey.rp_id',
+  'passkey.legacy_rp_ids',
+  'passkey.origins',
+  'QuotaRemindEnabled',
+  'QuotaRemindThreshold',
 ])
 
 const SUCCESS_FLUSH_DELAY_MS = 120
@@ -170,9 +176,9 @@ export function useUpdateOption(options: UseUpdateOptionOptions = {}) {
   }, [flushPendingSuccess])
 
   return useMutation({
-    mutationFn: (request: UpdateOptionMutationRequest) => {
+    mutationFn: async (request: UpdateOptionMutationRequest) => {
       const { meta: _meta, ...payload } = request
-      return updateSystemOption(payload)
+      return requireServerSuccess(await updateSystemOption(payload))
     },
     onSuccess: (data, variables) => {
       if (data.success) {

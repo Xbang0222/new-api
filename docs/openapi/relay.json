@@ -77,6 +77,230 @@
     }
   ],
   "paths": {
+    "/v1/tools/search": {
+      "post": {
+        "summary": "DeepSeek 网页搜索",
+        "description": "使用 Bearer API Key，JSON 请求，无需 model 或 stream。返回普通 JSON；成功且返回搜索结果或网页正文时按本站请求价格计费。无通用幂等键，重试可能再次计费。上游失败沿用通用模型不可用错误。",
+        "operationId": "deepSeekSearch",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "query"
+                ],
+                "properties": {
+                  "query": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128,
+                    "pattern": "\\S",
+                    "description": "搜索文本，不得全为空白"
+                  },
+                  "count": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 50,
+                    "default": 10
+                  },
+                  "ori_question": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128,
+                    "nullable": true
+                  },
+                  "localization": {
+                    "type": "string",
+                    "default": "",
+                    "description": "用于本地化搜索结果的 IP 地址"
+                  },
+                  "need_content": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              },
+              "example": {
+                "query": "new-api documentation",
+                "count": 10
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功；响应正文由 DeepSeek 返回",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "results"
+                  ],
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "title": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string",
+                            "format": "uri"
+                          },
+                          "snippet": {
+                            "type": "string"
+                          },
+                          "summary": {
+                            "type": "string"
+                          },
+                          "content": {
+                            "type": "string"
+                          },
+                          "rerank_score": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 3
+                          },
+                          "authority": {
+                            "type": "integer",
+                            "minimum": -1,
+                            "maximum": 4
+                          },
+                          "site_name": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "site_icon": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "date": {
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "results": [
+                    {
+                      "title": "new-api documentation",
+                      "url": "https://docs.newapi.ai/",
+                      "snippet": "Documentation for the new-api gateway.",
+                      "summary": "Gateway setup and API reference.",
+                      "content": "",
+                      "rerank_score": 2.5,
+                      "authority": 3,
+                      "site_name": "new-api",
+                      "site_icon": null,
+                      "date": null
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "鉴权、请求校验、限流或上游失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tools/fetch": {
+      "post": {
+        "summary": "DeepSeek 网页抓取",
+        "description": "使用 Bearer API Key，JSON 请求，无需 model 或 stream。返回普通 JSON；成功且返回搜索结果或网页正文时按本站请求价格计费。无通用幂等键，重试可能再次计费。上游失败沿用通用模型不可用错误。",
+        "operationId": "deepSeekFetch",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "url"
+                ],
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "format": "uri",
+                    "maxLength": 8192,
+                    "pattern": "^https?://",
+                    "description": "带主机名的 HTTP/HTTPS URL，不得含用户名或密码"
+                  }
+                }
+              },
+              "example": {
+                "url": "https://docs.newapi.ai/"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功；响应正文由 DeepSeek 返回",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "title",
+                    "content"
+                  ],
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "content": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "title": "new-api documentation",
+                  "content": "# new-api\n\nGateway setup and API reference."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "鉴权、请求校验、限流或上游失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/models": {
       "get": {
         "summary": "获取模型列表",

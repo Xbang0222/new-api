@@ -49,6 +49,7 @@ const savedApiKey: ApiKey = {
   model_limits_enabled: false,
   model_limits: '',
   allow_ips: '',
+  allow_user_quota_query: false,
 }
 const queryClients: QueryClient[] = []
 

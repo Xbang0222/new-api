@@ -116,7 +116,7 @@ async function renderLogs(props: {
       </UsageLogsProvider>
     </QueryClientProvider>
   )
-  await screen.findAllByText('$0.01')
+  await screen.findByText('Subscription')
   await waitFor(() => expect(client.isFetching()).toBe(0))
   return client
 }
@@ -140,19 +140,19 @@ test.each([{ enabledPlans: [] }, { enabledPlans: [false] }])(
     expect(
       screen.queryByRole('img', { name: 'Wallet' })
     ).not.toBeInTheDocument()
-    expect(screen.getByRole('img', { name: 'Subscription' })).toBeVisible()
+    expect(screen.getByLabelText('Subscription')).toBeVisible()
   }
 )
 
-test('shows both source icons in admin view when any system plan is enabled', async () => {
+test('keeps custom wallet and subscription presentation when a system plan is enabled', async () => {
   await renderLogs({
     role: ROLE.ADMIN,
     enabledPlans: [false, true],
     activeSubscription: false,
   })
 
-  expect(screen.getByRole('img', { name: 'Wallet' })).toBeVisible()
-  expect(screen.getByRole('img', { name: 'Subscription' })).toBeVisible()
+  expect(screen.queryByRole('img', { name: 'Wallet' })).not.toBeInTheDocument()
+  expect(screen.getByLabelText('Subscription')).toBeVisible()
 })
 
 test('keeps the subscription marker on a subscription-billed log for a user with only expired subscriptions', async () => {
@@ -163,34 +163,35 @@ test('keeps the subscription marker on a subscription-billed log for a user with
   })
 
   expect(screen.queryByRole('img', { name: 'Wallet' })).not.toBeInTheDocument()
-  expect(screen.getByRole('img', { name: 'Subscription' })).toBeVisible()
+  expect(screen.getByLabelText('Subscription')).toBeVisible()
 })
 
-test('shows both source icons for a user with an active subscription', async () => {
+test('keeps custom wallet and subscription presentation for an active subscription', async () => {
   await renderLogs({
     role: ROLE.USER,
     enabledPlans: [],
     activeSubscription: true,
   })
 
-  expect(screen.getByRole('img', { name: 'Wallet' })).toBeVisible()
-  expect(screen.getByRole('img', { name: 'Subscription' })).toBeVisible()
+  expect(screen.queryByRole('img', { name: 'Wallet' })).not.toBeInTheDocument()
+  expect(screen.getByLabelText('Subscription')).toBeVisible()
 })
 
-test('uses personal subscriptions when an admin switches to only-self view', async () => {
+test('keeps billing labels when an admin switches between all-user and only-self logs', async () => {
   const user = userEvent.setup()
   const client = await renderLogs({
     role: ROLE.ADMIN,
     enabledPlans: [true],
     activeSubscription: false,
   })
-  expect(screen.getByRole('img', { name: 'Wallet' })).toBeVisible()
+  expect(screen.queryByRole('img', { name: 'Wallet' })).not.toBeInTheDocument()
 
   await user.click(screen.getByRole('button', { name: 'Switch scope' }))
   await waitFor(() => expect(client.isFetching()).toBe(0))
   expect(screen.queryByRole('img', { name: 'Wallet' })).not.toBeInTheDocument()
-  expect(screen.getByRole('img', { name: 'Subscription' })).toBeVisible()
+  expect(screen.getByLabelText('Subscription')).toBeVisible()
 
   await user.click(screen.getByRole('button', { name: 'Switch scope' }))
-  expect(await screen.findByRole('img', { name: 'Wallet' })).toBeVisible()
+  expect(screen.queryByRole('img', { name: 'Wallet' })).not.toBeInTheDocument()
+  expect(screen.getByLabelText('Subscription')).toBeVisible()
 })

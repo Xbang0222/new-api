@@ -12,6 +12,8 @@ const (
 	EndpointTypeOpenAIResponse                     = types.EndpointTypeOpenAIResponse
 	EndpointTypeOpenAIResponseCompact              = types.EndpointTypeOpenAIResponseCompact
 	EndpointTypeOpenAIAlphaSearch                  = types.EndpointTypeOpenAIAlphaSearch
+	EndpointTypeDeepSeekToolsSearch                = types.EndpointTypeDeepSeekToolsSearch
+	EndpointTypeDeepSeekToolsFetch                 = types.EndpointTypeDeepSeekToolsFetch
 	EndpointTypeAnthropic                          = types.EndpointTypeAnthropic
 	EndpointTypeGemini                             = types.EndpointTypeGemini
 	EndpointTypeJinaRerank                         = types.EndpointTypeJinaRerank
@@ -28,4 +30,11 @@ const (
 	//EndpointTypeSuno           EndpointType = "suno-proxy"
 	//EndpointTypeKling          EndpointType = "kling"
 	//EndpointTypeJimeng         EndpointType = "jimeng"
+)
+
+// Model names the distributor assigns to /v1/tools/search and /v1/tools/fetch,
+// whose bodies carry no model. Channels serve the endpoints by listing them.
+const (
+	DeepSeekSearchModel = "deepseek-search"
+	DeepSeekFetchModel  = "deepseek-fetch"
 )

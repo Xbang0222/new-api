@@ -198,6 +198,6 @@ func TestStripeCreditedQuotaIncludesGroupRatio(t *testing.T) {
 	_, err = validateCreditedQuota(getStripeCreditedQuota(int64(common.MaxWalletQuota), "vip"))
 	require.Error(t, err)
 
-	require.NoError(t, common.UpdateTopupGroupRatioByJSONString(`{"free":0}`))
+	require.Error(t, common.UpdateTopupGroupRatioByJSONString(`{"free":0}`))
 	assert.True(t, decimal.NewFromInt(500000).Equal(getStripeCreditedQuota(1, "free")))
 }

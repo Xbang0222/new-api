@@ -283,9 +283,9 @@ func updateBatchTasks(ctx context.Context, adaptor BatchTaskPollingAdaptor, chan
 		ChannelType:          ch.Type,
 		ChannelId:            ch.Id,
 		ChannelBaseUrl:       baseURL,
-		ApiKey:               ch.Key,
 		ChannelOtherSettings: ch.GetOtherSettings(),
 		ChannelSetting:       ch.GetSetting(),
+		HeadersOverride:      ch.GetHeaderOverride(),
 	}
 	info.ApiKey = ch.Key
 	adaptor.Init(info)
@@ -464,9 +464,9 @@ func updateVideoTasks(ctx context.Context, platform constant.TaskPlatform, chann
 		ChannelType:          cacheGetChannel.Type,
 		ChannelId:            cacheGetChannel.Id,
 		ChannelBaseUrl:       cacheGetChannel.GetBaseURL(),
-		ApiKey:               cacheGetChannel.Key,
 		ChannelOtherSettings: cacheGetChannel.GetOtherSettings(),
 		ChannelSetting:       cacheGetChannel.GetSetting(),
+		HeadersOverride:      cacheGetChannel.GetHeaderOverride(),
 	}
 	info.ApiKey = cacheGetChannel.Key
 	adaptor.Init(info)

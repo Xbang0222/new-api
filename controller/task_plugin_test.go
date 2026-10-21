@@ -1247,7 +1247,7 @@ func TestUploadTaskPluginStoresSidecarIconAndServesIt(t *testing.T) {
 	assert.NotContains(t, accepted.Body.String(), "base64,", "icon bytes never travel inside detail JSON")
 	stored, err := model.GetTaskPluginVersion(key, "1.0.0")
 	require.NoError(t, err)
-	assert.Equal(t, svgIcon, stored.Icon)
+	assert.Equal(t, svgIcon, string(stored.Icon))
 
 	item := listTaskPluginItem(t, key)
 	assert.True(t, item.HasIcon)

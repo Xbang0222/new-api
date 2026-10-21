@@ -33,6 +33,8 @@ export type ModelApiEndpoint = ApiEndpoint & {
 
 const CATALOG_ID_BY_ENDPOINT_TYPE: Record<string, string> = {
   openai: 'chat-completions',
+  'deepseek-tools-search': 'deepseek-search',
+  'deepseek-tools-fetch': 'deepseek-fetch',
   'openai-completions': 'completions',
   'openai-response': 'responses',
   'openai-response-compact': 'responses-compact',
