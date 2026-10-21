@@ -84,7 +84,7 @@
     "yace": "^1.1.1",
     "yaml": "^2.9.0",
     "zod": "^4.4.3",
-    "zustand": "^5.0.14"
+    "zustand": "^5.0.15"
   },
   "devDependencies": {
     "@rsbuild/core": "^2.1.4",
