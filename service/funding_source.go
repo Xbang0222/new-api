@@ -79,12 +79,15 @@ func (w *WalletFunding) Refund() error {
 // ---------------------------------------------------------------------------
 
 type SubscriptionFunding struct {
-	requestId      string
-	userId         int
-	modelName      string
-	amount         int64 // 预扣的订阅额度（subConsume）
-	subscriptionId int
-	preConsumed    int64
+	requestId           string
+	userId              int
+	modelName           string
+	amount              int64 // 预扣的订阅额度（subConsume）
+	subscriptionId      int
+	preConsumed         int64
+	allowWalletOverflow bool
+	subscriptionDelta   int64
+	walletDelta         int64
 	// 以下字段在 PreConsume 成功后填充，供 RelayInfo 同步使用
 	AmountTotal     int64
 	AmountUsedAfter int64
@@ -116,7 +119,13 @@ func (s *SubscriptionFunding) Settle(delta int) error {
 	if delta == 0 {
 		return nil
 	}
-	return model.PostConsumeUserSubscriptionDelta(s.subscriptionId, int64(delta))
+	subscriptionDelta, walletDelta, err := model.SettleSubscriptionQuota(s.subscriptionId, s.userId, int64(delta), s.allowWalletOverflow)
+	if err != nil {
+		return err
+	}
+	s.subscriptionDelta = subscriptionDelta
+	s.walletDelta = walletDelta
+	return nil
 }
 
 func (s *SubscriptionFunding) Refund() error {

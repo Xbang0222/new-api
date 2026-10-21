@@ -50,6 +50,9 @@ func (s *BillingSession) Settle(actualQuota int) error {
 	if s.settled {
 		return nil
 	}
+	if actualQuota < 0 || actualQuota > common.MaxWalletQuota {
+		return errors.New("invalid actual quota for settlement")
+	}
 	delta := actualQuota - s.preConsumedQuota
 	if delta == 0 {
 		s.settled = true
@@ -77,8 +80,9 @@ func (s *BillingSession) Settle(actualQuota int) error {
 		}
 	}
 	// 3) 更新 relayInfo 上的订阅 PostDelta（用于日志）
-	if s.funding.Source() == BillingSourceSubscription {
-		s.relayInfo.SubscriptionPostDelta += int64(delta)
+	if sub, ok := s.funding.(*SubscriptionFunding); ok {
+		s.relayInfo.SubscriptionPostDelta += sub.subscriptionDelta
+		s.relayInfo.SubscriptionWalletConsumed += sub.walletDelta
 	}
 	s.settled = true
 	return tokenErr
@@ -168,6 +172,9 @@ func (s *BillingSession) reserve(targetQuota int, requireAvailableQuota bool) er
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if targetQuota < 0 || targetQuota > common.MaxWalletQuota {
+		return errors.New("invalid target quota for reservation")
+	}
 	if s.relayInfo != nil {
 		_, imageRequest := s.relayInfo.Request.(*dto.ImageRequest)
 		requireAvailableQuota = requireAvailableQuota || imageRequest || s.relayInfo.ImageRequestCount > 0
@@ -182,7 +189,36 @@ func (s *BillingSession) reserve(targetQuota int, requireAvailableQuota bool) er
 	}
 
 	if err := s.reserveFunding(delta, requireAvailableQuota); err != nil {
-		return err
+		sub, ok := s.funding.(*SubscriptionFunding)
+		if !ok || !sub.allowWalletOverflow || !errors.Is(err, model.ErrSubscriptionQuotaExceeded) {
+			return err
+		}
+		// The new reservation no longer fits. Move this request to wallet
+		// funding before sending it, keeping its token reservation unchanged.
+		if err := s.reserveToken(delta); err != nil {
+			return err
+		}
+		if err := model.TransferSubscriptionReservationToWallet(sub.requestId, sub.userId, sub.subscriptionId, targetQuota, s.extraReserved); err != nil {
+			if !s.relayInfo.IsPlayground {
+				if rollbackErr := model.RestoreTokenReservation(s.relayInfo.TokenId, s.relayInfo.TokenKey, delta); rollbackErr != nil {
+					// The extra token reservation still exists. Keep it in the
+					// final request refund even though the funding switch failed.
+					s.tokenConsumed += delta
+					common.SysError(fmt.Sprintf("failed to roll back token reservation after wallet transfer failure: %s", rollbackErr))
+				}
+			}
+			if errors.Is(err, model.ErrWalletQuotaInsufficient) {
+				return types.NewErrorWithStatusCode(err, types.ErrorCodeInsufficientUserQuota, http.StatusForbidden, types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
+			}
+			return types.NewError(err, types.ErrorCodeUpdateDataError, types.ErrOptionWithSkipRetry())
+		}
+		s.funding = &WalletFunding{userId: sub.userId, consumed: targetQuota}
+		s.preConsumedQuota = targetQuota
+		s.tokenConsumed += delta
+		s.extraReserved = 0
+		s.trusted = false
+		s.syncRelayInfo()
+		return nil
 	}
 	if err := s.reserveToken(delta); err != nil {
 		s.rollbackFundingReserve(delta)
@@ -287,7 +323,8 @@ func (s *BillingSession) reserveFunding(delta int, requireAvailableQuota bool) e
 	case *SubscriptionFunding:
 		if err := model.PostConsumeUserSubscriptionDelta(funding.subscriptionId, int64(delta)); err != nil {
 			return types.NewErrorWithStatusCode(
-				errors.New(i18n.Translate(s.lang, i18n.MsgQuotaSubscriptionInsufficient, map[string]any{"Error": err.Error()})),
+				// 保留原始错误链，订阅超额时才能识别并转到钱包扣费。
+				&wrappedError{msg: i18n.Translate(s.lang, i18n.MsgQuotaSubscriptionInsufficient, map[string]any{"Error": err.Error()}), err: err},
 				types.ErrorCodeInsufficientUserQuota,
 				http.StatusForbidden,
 				types.ErrOptionWithSkipRetry(),
@@ -378,6 +415,12 @@ func (s *BillingSession) syncRelayInfo() {
 	} else {
 		info.SubscriptionId = 0
 		info.SubscriptionPreConsumed = 0
+		info.SubscriptionPostDelta = 0
+		info.SubscriptionWalletConsumed = 0
+		info.SubscriptionAmountTotal = 0
+		info.SubscriptionAmountUsedAfterPreConsume = 0
+		info.SubscriptionPlanId = 0
+		info.SubscriptionPlanTitle = ""
 	}
 }
 
@@ -433,10 +476,11 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 			relayInfo: relayInfo,
 			lang:      i18n.StatedLang(c),
 			funding: &SubscriptionFunding{
-				requestId: relayInfo.RequestId,
-				userId:    relayInfo.UserId,
-				modelName: relayInfo.GetBillingModelName(),
-				amount:    subConsume,
+				requestId:           relayInfo.RequestId,
+				userId:              relayInfo.UserId,
+				modelName:           relayInfo.GetBillingModelName(),
+				amount:              subConsume,
+				allowWalletOverflow: pref != "subscription_only",
 			},
 		}
 		// 必须传 subConsume 而非 preConsumedQuota，保证 SubscriptionFunding.amount、
@@ -489,3 +533,13 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 		return session, nil
 	}
 }
+
+// wrappedError 使用翻译后的提示文本，同时保留原始错误供 errors.Is 判断。
+type wrappedError struct {
+	msg string
+	err error
+}
+
+func (e *wrappedError) Error() string { return e.msg }
+
+func (e *wrappedError) Unwrap() error { return e.err }

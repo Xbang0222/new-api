@@ -1591,7 +1591,7 @@ func postConsumeUserSubscriptionDeltaTx(tx *gorm.DB, userSubscriptionId int, del
 	}
 	newUsed := max(sub.AmountUsed+delta, 0)
 	if sub.AmountTotal > 0 && newUsed > sub.AmountTotal {
-		return fmt.Errorf("subscription used exceeds total, used=%d total=%d", newUsed, sub.AmountTotal)
+		return fmt.Errorf("%w, used=%d total=%d", ErrSubscriptionQuotaExceeded, newUsed, sub.AmountTotal)
 	}
 	sub.AmountUsed = newUsed
 	return tx.Save(&sub).Error
