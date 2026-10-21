@@ -1,0 +1,134 @@
+name: Ruoli Publish
+
+# 一键发版：在 Actions 页面手动运行。
+# 版本号 = <当前代码对应的官方版本>-ruoli-0.<发版次数>，例如 v1.0.0-rc.37-ruoli-0.4。
+# 打标签 → 生成更新日志并创建 Release → 触发 release.yml（程序文件）和 docker-build.yml（Docker 镜像）。
+
+on:
+  workflow_dispatch:
+    inputs:
+      notes:
+        description: '本次发版说明（可选，写在更新日志最前面）'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: ruoli-publish
+  cancel-in-progress: false
+
+env:
+  OFFICIAL_REPO: https://github.com/QuantumNous/new-api.git
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Fetch official tags
+        run: |
+          # 只在本次运行中使用官方标签判断版本，不会推回仓库。
+          git fetch --no-tags "$OFFICIAL_REPO" \
+            '+refs/tags/v*:refs/official-tags/v*' \
+            '+refs/heads/main:refs/remotes/official/main'
+          for ref in $(git for-each-ref --format='%(refname)' refs/official-tags); do
+            name=${ref#refs/official-tags/}
+            git rev-parse -q --verify "refs/tags/$name" >/dev/null || git update-ref "refs/tags/$name" "$ref"
+          done
+
+      - name: Compute version
+        id: version
+        run: |
+          set -euo pipefail
+          upstream=$(git describe --tags --abbrev=0 --match 'v[0-9]*' --exclude '*-ruoli-*' HEAD)
+          prev=$(git tag -l '*-ruoli-0.*' | awk -F'-ruoli-0.' '$2 ~ /^[0-9]+$/ {print $2, $0}' | sort -n | tail -1 | cut -d' ' -f2)
+          last=${prev##*-ruoli-0.}
+          next=$(( ${last:-0} + 1 ))
+          tag="${upstream}-ruoli-0.${next}"
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "::error::标签 $tag 已存在"; exit 1
+          fi
+          if [ -n "$prev" ] && [ "$(git rev-parse "$prev^{commit}")" = "$(git rev-parse HEAD)" ]; then
+            echo "::error::自 $prev 以来没有新提交，无需发版"; exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "prev=$prev" >> "$GITHUB_OUTPUT"
+          echo "upstream=$upstream" >> "$GITHUB_OUTPUT"
+          echo "新版本: $tag（上个版本: ${prev:-无}，官方基线: $upstream）"
+
+      - name: Generate changelog
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          PREV: ${{ steps.version.outputs.prev }}
+          UPSTREAM: ${{ steps.version.outputs.upstream }}
+          NOTES: ${{ inputs.notes }}
+        run: |
+          set -euo pipefail
+          range=${PREV:+$PREV..}HEAD
+          {
+            if [ -n "$NOTES" ]; then printf '%s\n\n' "$NOTES"; fi
+            echo "官方基线：\`$UPSTREAM\`"
+            echo
+            echo "Docker：\`docker pull xbang0222/new-api:$TAG\`"
+            echo
+            echo "## 本仓库改动"
+            echo
+            own=$(git log --reverse --no-merges --pretty=format:'- %s (%h, %an)' "$range" ^official/main | grep -Ev '^- (docs|test|chore)(\(|:)' || true)
+            echo "${own:-- 无}"
+            echo
+            # 已合入本仓库的官方提交 = HEAD 与官方 main 的共同祖先之前、上个版本之后的提交
+            base=$(git merge-base HEAD official/main)
+            official=$(git log --reverse --no-merges --pretty=format:'- %s (%h)' "$base" ${PREV:+^$PREV} | grep -Ev '^- (docs|test|chore)(\(|:)' || true)
+            count=$(printf '%s' "$official" | grep -c '^- ' || true)
+            echo "## 同步官方（$count 项）"
+            echo
+            if [ "$count" -gt 0 ]; then
+              echo "<details><summary>展开查看</summary>"
+              echo
+              echo "$official"
+              echo
+              echo "</details>"
+            else
+              echo "- 无"
+            fi
+            if [ -n "$PREV" ]; then
+              echo
+              echo "完整对比：https://github.com/${GITHUB_REPOSITORY}/compare/${PREV}...${TAG}"
+            fi
+          } > notes.md
+          cat notes.md
+
+      - name: Create tag and release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "$TAG"
+          git push origin "refs/tags/$TAG"
+          gh release create "$TAG" --title "$TAG" --notes-file notes.md --verify-tag
+
+      - name: Trigger builds
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          # GITHUB_TOKEN 推送的标签不会触发其他工作流，这里显式调用。
+          gh workflow run release.yml --ref "$TAG" -f name="$TAG"
+          gh workflow run docker-build.yml --ref "$TAG" -f tag="$TAG"
+          {
+            echo "### 已发布 $TAG"
+            echo "- Release: https://github.com/${GITHUB_REPOSITORY}/releases/tag/$TAG"
+            echo "- 程序编译和 Docker 镜像已在 Actions 中开始运行"
+          } >> "$GITHUB_STEP_SUMMARY"
