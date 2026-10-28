@@ -358,6 +358,8 @@ function BillingBreakdown(props: {
   const { log, other, isAdmin } = props
   const isPerCall = isPerCallBilling(other.model_price)
   const isClaude = other.claude === true
+  // OpenAI 12-hour cache writes have their own price, listed like Claude's.
+  const hasCacheWrite12h = (other.cache_creation_tokens_12h || 0) > 0
   const isTieredExpr = other.billing_mode === 'tiered_expr'
   const isPerSecond = other.billing_mode === 'per_second'
   const tieredSummary = getTieredBillingSummary(other)
@@ -445,7 +447,11 @@ function BillingBreakdown(props: {
     })
   }
 
-  if (!isTieredExpr && isClaude && hasAnyCacheTokens(other)) {
+  if (
+    !isTieredExpr &&
+    (isClaude || hasCacheWrite12h) &&
+    hasAnyCacheTokens(other)
+  ) {
     if (other.cache_ratio != null && other.cache_ratio !== 1) {
       rows.push({
         label: t('Cache Read'),
@@ -457,7 +463,9 @@ function BillingBreakdown(props: {
       other.cache_creation_ratio !== 1
     ) {
       rows.push({
-        label: t('Cache Creation'),
+        label: hasCacheWrite12h
+          ? t('Cache Creation (30m)')
+          : t('Cache Creation'),
         value: `${fmtPrice(baseInputUSD * other.cache_creation_ratio)}/M`,
       })
     }
@@ -477,6 +485,15 @@ function BillingBreakdown(props: {
       rows.push({
         label: t('Cache Creation (1h)'),
         value: `${fmtPrice(baseInputUSD * other.cache_creation_ratio_1h)}/M`,
+      })
+    }
+    if (
+      other.cache_creation_ratio_12h != null &&
+      other.cache_creation_ratio_12h !== 0
+    ) {
+      rows.push({
+        label: t('Cache Creation (12h)'),
+        value: `${fmtPrice(baseInputUSD * other.cache_creation_ratio_12h)}/M`,
       })
     }
   }
@@ -588,7 +605,12 @@ function TokenBreakdown(props: { log: UsageLog; other: LogOtherData }) {
   const cacheWrite = getCacheWriteTokens(other)
   const cacheWrite5m = other.cache_creation_tokens_5m || 0
   const cacheWrite1h = other.cache_creation_tokens_1h || 0
-  const splitCacheWrite = cacheWrite5m + cacheWrite1h
+  const cacheWrite12h = other.cache_creation_tokens_12h || 0
+  // cache_creation_tokens counts OpenAI 30-minute and 12-hour writes together.
+  const cacheWrite30m =
+    cacheWrite12h > 0 ? Math.max(cacheWrite - cacheWrite12h, 0) : 0
+  const splitCacheWrite =
+    cacheWrite5m + cacheWrite1h + cacheWrite12h + cacheWrite30m
   const cacheWriteRemainder = Math.max(0, cacheWrite - splitCacheWrite)
   const hasTokens = promptTokens > 0 || completionTokens > 0
 
@@ -613,7 +635,19 @@ function TokenBreakdown(props: { log: UsageLog; other: LogOtherData }) {
     })
   }
 
-  if (cacheWrite > 0 && splitCacheWrite === 0) {
+  if (other.image_cache_tokens !== undefined) {
+    rows.push({
+      label: t('Image Cache'),
+      value: other.image_cache_tokens.toLocaleString(),
+    })
+  }
+
+  if (
+    cacheWrite > 0 &&
+    cacheWrite5m === 0 &&
+    cacheWrite1h === 0 &&
+    cacheWrite12h === 0
+  ) {
     rows.push({
       label: t('Cache Write'),
       value: `${cacheWrite.toLocaleString()} (${formatTokenPercent(
@@ -650,6 +684,20 @@ function TokenBreakdown(props: { log: UsageLog; other: LogOtherData }) {
         cacheWrite1h,
         inputTokenTotal
       )})`,
+    })
+  }
+
+  if (cacheWrite30m > 0) {
+    rows.push({
+      label: t('Cache Write (30m)'),
+      value: cacheWrite30m.toLocaleString(),
+    })
+  }
+
+  if (cacheWrite12h > 0) {
+    rows.push({
+      label: t('Cache Write (12h)'),
+      value: cacheWrite12h.toLocaleString(),
     })
   }
 
@@ -948,7 +996,6 @@ export function DetailsDialog(props: DetailsDialogProps) {
               }
             />
           )}
-
         </div>
 
         {/* Request conversion (admin only, not for refund) */}
