@@ -1,7 +1,8 @@
 name: Ruoli Publish
 
 # 一键发版：在 Actions 页面手动运行。
-# 版本号 = <当前代码对应的官方版本>-ruoli-0.<发版次数>，例如 v1.0.0-rc.37-ruoli-0.4。
+# 版本号 = <当前代码对应的官方版本>-ruoli-0.<在这个官方版本上的第几次发版>，例如 v1.0.0-rc.45-ruoli-0.1；
+# 合并新的官方版本后从 0.1 重新计数。
 # 打标签 → 生成更新日志并创建 Release → 触发 release.yml（程序文件）和 docker-build.yml（Docker 镜像）。
 
 on:
@@ -49,8 +50,9 @@ jobs:
         run: |
           set -euo pipefail
           upstream=$(git describe --tags --abbrev=0 --match 'v[0-9]*' --exclude '*-ruoli-*' HEAD)
-          prev=$(git tag -l '*-ruoli-0.*' | awk -F'-ruoli-0.' '$2 ~ /^[0-9]+$/ {print $2, $0}' | sort -n | tail -1 | cut -d' ' -f2)
-          last=${prev##*-ruoli-0.}
+          # 上个版本（不论基于哪个官方版本）用于更新日志范围；序号只在同一官方版本内递增。
+          prev=$(git tag -l '*-ruoli-0.*' --sort=-creatordate | head -1)
+          last=$(git tag -l "${upstream}-ruoli-0.*" | awk -F'-ruoli-0.' '$2 ~ /^[0-9]+$/ {print $2}' | sort -n | tail -1)
           next=$(( ${last:-0} + 1 ))
           tag="${upstream}-ruoli-0.${next}"
           if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
