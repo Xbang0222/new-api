@@ -132,7 +132,7 @@ echo "    $(du -h "$DIR/db.sql.gz" | cut -f1) -> $DIR/db.sql.gz"
 echo "==> switching $CURRENT -> $IMAGE"
 mkdir -p "$BASE/logs-$TAG"
 docker stop -t "$STOP_SECONDS" "$NAME" >/dev/null
-if [ "$(docker inspect -f '{{.State.ExitCode}}' "$NAME")" != 0 ]; then
+if [ "$(docker inspect -f '{{.State.Running}} {{.State.ExitCode}} {{.State.OOMKilled}}' "$NAME")" != 'false 0 false' ]; then
   echo "current container did not exit cleanly; restoring it and aborting upgrade" >&2
   docker start "$NAME" >/dev/null
   healthy || echo "restored container failed health check; inspect production before retrying" >&2

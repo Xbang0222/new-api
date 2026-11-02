@@ -10,7 +10,7 @@ import unittest
 
 
 class ProductionShutdownTest(unittest.TestCase):
-    def deploy(self, timeout=None, exit_code=0):
+    def deploy(self, timeout=None, exit_code=0, running=False, oom=False):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
             commands = base / "commands"
@@ -30,6 +30,8 @@ if args[0] == 'inspect':
         print('SQL_DSN=test:fixture@tcp(localhost:3306)/fixture')
         if 'TEST_DRAIN' in os.environ:
             print('SHUTDOWN_TIMEOUT_SECONDS=' + os.environ['TEST_DRAIN'])
+    elif 'State.OOMKilled' in template:
+        print(os.environ['TEST_RUNNING'], os.environ['TEST_EXIT_CODE'], os.environ['TEST_OOM'])
     elif 'State.ExitCode' in template:
         print(os.environ['TEST_EXIT_CODE'])
     elif 'State.Running' in template:
@@ -55,7 +57,9 @@ elif args[0] == 'exec':
             ).group(1)
             payload = payload.replace("BASE=/opt/new-api", "BASE=" + str(base / "data"))
             env = {**os.environ, "PATH": str(commands) + os.pathsep + os.environ["PATH"],
-                   "TEST_CALLS": str(base / "calls"), "TEST_EXIT_CODE": str(exit_code)}
+                   "TEST_CALLS": str(base / "calls"), "TEST_EXIT_CODE": str(exit_code),
+                   "TEST_RUNNING": str(running).lower(), "TEST_OOM": str(oom).lower()}
+            env.pop("TEST_DRAIN", None)
             if timeout is not None:
                 env["TEST_DRAIN"] = timeout
             result = subprocess.run(["bash", "-s", "--", "v-next"], input=payload,
@@ -72,11 +76,13 @@ elif args[0] == 'exec':
                 self.assertTrue(any(call[0] == "run" for call in calls))
 
     def test_forced_exit_restores_current_container_and_aborts_upgrade(self):
-        result, calls = self.deploy(exit_code=137)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn(["start", "new-api"], calls)
-        self.assertFalse(any(call[0] in {"rename", "run"} for call in calls))
-        self.assertIn("aborting", result.stderr)
+        for state in [{"exit_code": 137}, {"oom": True}, {"running": True}]:
+            with self.subTest(state=state):
+                result, calls = self.deploy(**state)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(["start", "new-api"], calls)
+                self.assertFalse(any(call[0] in {"rename", "run"} for call in calls))
+                self.assertIn("aborting", result.stderr)
 
     def test_invalid_drain_aborts_before_stopping_production(self):
         for timeout in ["-1", "0", "invalid", "99999999999999999999"]:
