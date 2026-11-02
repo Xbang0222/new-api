@@ -66,6 +66,7 @@ export function useDashboardQuota(filters: DashboardFilters, enabled: boolean) {
   })
   return {
     data: query.data?.data ?? EMPTY_DATA,
+    dataUpdatedAt: query.dataUpdatedAt,
     timeRange,
     loading: query.isFetching || query.isPending,
     error: query.isError,

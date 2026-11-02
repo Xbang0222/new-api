@@ -33,6 +33,7 @@ import { cn } from '@/lib/utils'
 interface LogStatCardsProps {
   data: QuotaDataItem[]
   timeRange: DashboardTimeRange
+  dataUpdatedAt: number
   loading: boolean
   error: boolean
 }
@@ -56,8 +57,15 @@ export function LogStatCards(props: LogStatCardsProps) {
   const { i18n } = useTranslation()
   const statCardsConfig = useModelStatCardsConfig()
   const stats = calculateDashboardStats(props.data)
-  const timeRangeMinutes =
-    (props.timeRange.end_timestamp - props.timeRange.start_timestamp) / 60
+  // The inclusive query includes the whole last stored hour. Only the current
+  // hour is partial, capped at the data snapshot so cached rates stay stable.
+  const effectiveStart =
+    Math.floor(props.timeRange.start_timestamp / 3600) * 3600
+  const effectiveEnd = Math.min(
+    (Math.floor(props.timeRange.end_timestamp / 3600) + 1) * 3600,
+    props.dataUpdatedAt / 1000
+  )
+  const timeRangeMinutes = Math.max(0, effectiveEnd - effectiveStart) / 60
 
   const adaptedStats = {
     rpm: stats?.totalCount ?? 0,

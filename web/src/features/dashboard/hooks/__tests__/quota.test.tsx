@@ -37,6 +37,8 @@ import { useDashboardQuota } from '../use-dashboard-quota'
 
 let client: QueryClient
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-11-02T11:00:00Z'))
   client = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
   })
@@ -45,6 +47,7 @@ beforeEach(() => {
 afterEach(() => {
   client.clear()
   useAuthStore.getState().auth.reset()
+  vi.useRealTimers()
 })
 function Wrapper(props: { children: ReactNode }) {
   return (
@@ -68,6 +71,7 @@ function Cards(props: { filters: DashboardFilters }) {
       loading={query.loading}
       error={query.error}
       timeRange={query.timeRange}
+      dataUpdatedAt={query.dataUpdatedAt}
     />
   )
 }
@@ -138,6 +142,106 @@ describe('dashboard quota query', () => {
         }),
       })
     )
+  })
+
+  it.each([
+    {
+      name: 'historical partial hour with a non-UTC input offset',
+      start: '2026-11-02T15:31:00+05:30',
+      end: '2026-11-02T15:32:00+05:30',
+      now: '2026-11-03T00:00:00Z',
+      rpm: '2',
+      tpm: '10',
+    },
+    {
+      name: 'historical inclusive end exactly on the next hour',
+      start: '2026-11-02T10:01:00Z',
+      end: '2026-11-02T11:00:00Z',
+      now: '2026-11-03T00:00:00Z',
+      rpm: '1',
+      tpm: '5',
+    },
+    {
+      name: 'current partial hour',
+      start: '2026-11-02T10:01:00Z',
+      end: '2026-11-02T10:02:00Z',
+      now: '2026-11-02T10:02:00Z',
+      rpm: '60',
+      tpm: '300',
+    },
+    {
+      name: 'future end clipped to the data snapshot',
+      start: '2026-11-02T10:01:00Z',
+      end: '2026-11-02T12:30:00Z',
+      now: '2026-11-02T10:30:00Z',
+      rpm: '4',
+      tpm: '20',
+    },
+    {
+      name: 'wholly future range',
+      start: '2026-11-04T10:01:00Z',
+      end: '2026-11-04T10:02:00Z',
+      now: '2026-11-03T00:00:00Z',
+      rpm: '0',
+      tpm: '0',
+    },
+  ])('uses the effective bucket duration for $name', async (testCase) => {
+    vi.setSystemTime(new Date(testCase.now))
+    const get = vi.spyOn(api, 'get').mockResolvedValue({
+      data: {
+        success: true,
+        data: [{ created_at: 1793613600, count: 120, token_used: 600 }],
+      },
+    })
+    const filters: DashboardFilters = {
+      start_timestamp: new Date(testCase.start),
+      end_timestamp: new Date(testCase.end),
+      time_granularity: 'hour',
+    }
+    const view = render(
+      <Wrapper>
+        <Cards filters={filters} />
+      </Wrapper>
+    )
+    await waitFor(() =>
+      expect(
+        within(screen.getByRole('group', { name: 'Total Count' })).getByText(
+          '120'
+        )
+      ).toBeVisible()
+    )
+    expect(
+      within(screen.getByRole('group', { name: 'Average RPM' })).getByText(
+        testCase.rpm
+      )
+    ).toBeVisible()
+    expect(
+      within(screen.getByRole('group', { name: 'Average TPM' })).getByText(
+        testCase.tpm
+      )
+    ).toBeVisible()
+    expect(get).toHaveBeenCalledWith(
+      '/api/data',
+      expect.objectContaining({
+        params: expect.objectContaining({
+          end_timestamp: new Date(testCase.end).getTime() / 1000,
+        }),
+      })
+    )
+
+    // Repainting a cached result must not silently extend its rate denominator.
+    vi.setSystemTime(new Date('2026-11-05T00:00:00Z'))
+    view.rerender(
+      <Wrapper>
+        <Cards filters={filters} />
+      </Wrapper>
+    )
+    expect(
+      within(screen.getByRole('group', { name: 'Average RPM' })).getByText(
+        testCase.rpm
+      )
+    ).toBeVisible()
+    expect(get).toHaveBeenCalledTimes(1)
   })
 
   it.each([

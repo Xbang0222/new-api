@@ -458,6 +458,7 @@ export function Dashboard() {
                     loading={quotaQuery.loading}
                     error={quotaQuery.error}
                     timeRange={quotaQuery.timeRange}
+                    dataUpdatedAt={quotaQuery.dataUpdatedAt}
                   />
                 </Suspense>
               </FadeIn>
