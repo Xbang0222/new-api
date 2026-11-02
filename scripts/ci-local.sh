@@ -75,9 +75,17 @@ if [ "$PART" != web ]; then
 fi
 
 if [ "$PART" != backend ]; then
+  want_bun=$(sed -n "s/.*bun-version: *'\([^']*\)'.*/\1/p" .github/workflows/ci.yml | head -1)
+  if [ -n "$want_bun" ] && [ "$(bun --version 2>/dev/null)" != "$want_bun" ]; then
+    echo "note: GitHub CI uses bun $want_bun, this machine has $(bun --version 2>/dev/null || echo none)"
+  fi
   step "bun install" bash -c 'cd web && bun install --frozen-lockfile'
-  step "web typecheck" bash -c 'cd web && bun run typecheck'
-  step "web test" bash -c 'cd web && bun run test'
+  if [ "$FAILED" -eq 0 ] || [ -d web/node_modules ]; then
+    step "web typecheck" bash -c 'cd web && bun run typecheck'
+    step "web test" bash -c 'cd web && bun run test'
+  else
+    RESULTS+=("SKIP  web typecheck / web test (bun install failed)")
+  fi
 fi
 
 echo
