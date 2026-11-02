@@ -100,7 +100,9 @@ func TestRelayHTTPFailoverUsesAnotherChannelAndStopsAfterStreamContent(t *testin
 			common.BatchUpdateEnabled = false
 			common.LogConsumeEnabled = false
 			constant.ErrorLogEnabled = false
-			constant.CountToken = false
+			// Pre-consume reserves only the estimated input, so the token limit
+			// needs a counted prompt to see a non-zero reservation.
+			constant.CountToken = test.limitedToken
 			constant.StreamingTimeout = 30
 			common.AutomaticDisableChannelEnabled = false
 			common.RetryTimes = test.retries
