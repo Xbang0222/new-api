@@ -408,6 +408,8 @@ docker run --name new-api -d --restart always \
 2. Search for **New-API** in the application store
 3. One-click installation
 
+Read [AGENTS.md](./AGENTS.md) before contributing. Run checks appropriate to your change, including `make test` for the Go modules and `bun check -b`, `bun run lint`, `bun run test`, and `bun run build` in `web/` for frontend changes. Changes to RelayKit must also pass `GOWORK=off go build ./...` from `relaykit/`.
+
 📖 [Tutorial with images](./docs/BT.md)
 
 </details>

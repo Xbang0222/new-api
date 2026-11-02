@@ -637,6 +637,8 @@ bun run dev
 - 高级自定义上游：[docs/advanced-custom-upstreams.md](./docs/advanced-custom-upstreams.md)
 - RelayKit 说明：[relaykit/README.md](./relaykit/README.md)
 
+Read [AGENTS.md](./AGENTS.md) before contributing. Run checks appropriate to your change, including `make test` for the Go modules and `bun check -b`, `bun run lint`, `bun run test`, and `bun run build` in `web/` for frontend changes. Changes to RelayKit must also pass `GOWORK=off go build ./...` from `relaykit/`.
+
 ## 上游项目与归属声明
 
 本项目为 [new-api](https://github.com/QuantumNous/new-api) 的二次开发版本。

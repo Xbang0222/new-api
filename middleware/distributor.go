@@ -134,13 +134,20 @@ func Distribute() func(c *gin.Context) {
 					}
 				}
 
+				if value, exists := c.Get(contextKeyTaskPluginEndpointSelection); exists {
+					if selected, ok := value.(taskPluginEndpointSelection); ok && selected.Model == modelRequest.Model && selected.Channel != nil && selected.Channel.Status == common.ChannelStatusEnabled {
+						if matches, _ := model.ChannelSatisfiesFilters(selected.Channel, modelRequest.Model, constraints.Filters); matches {
+							channel = selected.Channel
+						}
+					}
+				}
 				affinityParam := &service.RetryParam{
 					Ctx:         c,
 					ModelName:   modelRequest.Model,
 					TokenGroup:  usingGroup,
 					RequestPath: c.Request.URL.Path,
 				}
-				if service.ShouldUseChannelAffinityForRequest(affinityParam) {
+				if channel == nil && service.ShouldUseChannelAffinityForRequest(affinityParam) {
 					if preferredChannelID, found := service.GetPreferredChannelByAffinity(c, modelRequest.Model, usingGroup); found {
 						affinityUsable := false
 						preferred, err := model.CacheGetChannel(preferredChannelID)
