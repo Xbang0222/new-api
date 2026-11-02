@@ -500,8 +500,8 @@ func Recharge(referenceId string, customerId string, callerIp string, receipts .
 	return nil
 }
 
-// topUpQueryWindowSeconds 限制充值记录查询的时间窗口（秒）。
-const topUpQueryWindowSeconds int64 = 30 * 24 * 60 * 60
+// topUpQueryWindowSeconds 限制用户查询自己充值记录的时间窗口（秒），保留上限以防滥用查询。
+const topUpQueryWindowSeconds int64 = 365 * 24 * 60 * 60
 
 // topUpQueryCutoff 返回允许查询的最早 create_time（秒级 Unix 时间戳）。
 func topUpQueryCutoff() int64 {
