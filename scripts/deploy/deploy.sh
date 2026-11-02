@@ -6,7 +6,9 @@
 #   scripts/deploy/deploy.sh staging <tag>    isolated test instance: own SQLite, no Redis, 127.0.0.1:3041
 #   scripts/deploy/deploy.sh tunnel           open staging at http://localhost:3041 (Ctrl-C to close)
 #   scripts/deploy/deploy.sh prod <tag>       back up MySQL, swap the container, health-check, roll back on failure
-#   scripts/deploy/deploy.sh release [notes]  publish GitHub main (tag + Docker image), wait for the image, deploy it to staging
+#   scripts/deploy/deploy.sh release [--staging] [notes]
+#                                             publish GitHub main (tag + Docker image), wait for the image, deploy it
+#                                             to production; with --staging deploy it to staging only
 #
 # Roll back production by deploying the previous tag: scripts/deploy/deploy.sh prod <previous-tag>
 set -euo pipefail
@@ -18,7 +20,7 @@ REPO=${DEPLOY_REPO:-Xbang0222/new-api}
 
 remote() { ssh "${SSH_OPTS[@]}" "$HOST" "$@"; }
 
-usage() { sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; exit 1; }
+usage() { sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 1; }
 
 # Print the id of the newest run of a workflow (optionally for one branch or tag), or nothing.
 latest_run() {
@@ -172,6 +174,10 @@ case ${1:-} in
     remote "bash -s -- $2" <<< "$PROD_SCRIPT"
     ;;
   release)
+    shift
+    target=prod
+    if [ "${1:-}" = --staging ]; then target=staging; shift; fi
+    notes=${1:-}
     # Checked first so a missing SSH connection fails now, not after a 20-minute image build.
     ssh -O check -o "ControlPath=$CONTROL_PATH" "$HOST" 2>/dev/null \
       || { echo "error: no SSH connection; run 'scripts/deploy/deploy.sh login' in a terminal first" >&2; exit 1; }
@@ -180,7 +186,7 @@ case ${1:-} in
       || { echo "error: this checkout is not at GitHub main ($head); merge and push first" >&2; exit 1; }
 
     before=$(latest_run ruoli-publish.yml)
-    gh workflow run ruoli-publish.yml --repo "$REPO" --ref main ${2:+-f notes="$2"}
+    gh workflow run ruoli-publish.yml --repo "$REPO" --ref main ${notes:+-f notes="$notes"}
     echo "==> waiting for Ruoli Publish to start"
     for _ in $(seq 30); do
       run=$(latest_run ruoli-publish.yml)
@@ -206,11 +212,16 @@ case ${1:-} in
     gh run watch "$build" --repo "$REPO" --exit-status --interval 30 >/dev/null \
       || { echo "error: Docker build failed: gh run view $build --repo $REPO --log-failed" >&2; exit 1; }
 
-    echo "==> deploying $tag to staging"
-    remote "bash -s -- $tag" <<< "$STAGING_SCRIPT"
-    echo
-    echo "next: scripts/deploy/deploy.sh tunnel   then check http://localhost:3041"
-    echo "      scripts/deploy/deploy.sh prod $tag   only after the owner approves"
+    if [ "$target" = staging ]; then
+      echo "==> deploying $tag to staging"
+      remote "bash -s -- $tag" <<< "$STAGING_SCRIPT"
+      echo
+      echo "next: scripts/deploy/deploy.sh tunnel   then check http://localhost:3041"
+      echo "      scripts/deploy/deploy.sh prod $tag   only after the owner approves"
+    else
+      echo "==> deploying $tag to production"
+      remote "bash -s -- $tag" <<< "$PROD_SCRIPT"
+    fi
     ;;
   *)
     usage
