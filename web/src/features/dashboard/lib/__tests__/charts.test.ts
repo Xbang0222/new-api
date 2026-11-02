@@ -64,14 +64,14 @@ const cases: Array<{
     start: '2025-11-29T12:00:00',
     interval: 604800,
     labels: [
-      '11-29 - 12-05',
-      '12-06 - 12-12',
-      '12-13 - 12-19',
-      '12-20 - 12-26',
-      '12-27 - 01-02',
-      '01-03 - 01-09',
-      '01-10 - 01-16',
-      '01-17 - 01-23',
+      '11-24 - 11-30',
+      '12-01 - 12-07',
+      '12-08 - 12-14',
+      '12-15 - 12-21',
+      '12-22 - 12-28',
+      '12-29 - 01-04',
+      '01-05 - 01-11',
+      '01-12 - 01-18',
     ],
   },
 ]
@@ -138,19 +138,127 @@ describe.each(cases)('dashboard $granularity chart chronology', (scenario) => {
     expect(data).toEqual(original)
   })
 
-  test('keeps the existing seven padded model buckets in chronological order', () => {
+  test('does not fabricate six earlier buckets for a single record without a selected range', () => {
     const data = [unorderedUsage(scenario.start, scenario.interval)[0]]
     const result = processChartData(data, scenario.granularity)
 
     for (const key of ['spec_line', 'spec_area', 'spec_model_line'] as const) {
       const values: Array<{ Time: string; rawQuota: number; Count: number }> =
         result[key].data[0].values
-      expect(values.map((row) => row.Time)).toEqual(scenario.labels.slice(1))
+      expect(values.map((row) => row.Time)).toEqual(scenario.labels.slice(-1))
       expect(
         values.map((row) =>
           key === 'spec_model_line' ? row.Count : row.rawQuota / 500000
         )
-      ).toEqual([0, 0, 0, 0, 0, 0, 8])
+      ).toEqual([8])
     }
+  })
+})
+
+describe('dashboard range aggregation', () => {
+  test('keeps both sparse endpoints and fills the selected daily window', () => {
+    const start = new Date('2026-10-03T00:00:00').getTime() / 1000
+    const end = new Date('2026-11-02T00:00:00').getTime() / 1000
+    const data = [
+      {
+        created_at: start,
+        model_name: 'a',
+        username: 'alice',
+        quota: 500000,
+        count: 1,
+      },
+      {
+        created_at: end,
+        model_name: 'a',
+        username: 'alice',
+        quota: 1000000,
+        count: 2,
+      },
+    ]
+    const range = { start_timestamp: start, end_timestamp: end }
+    const result = processChartData(
+      data,
+      'day',
+      undefined,
+      undefined,
+      undefined,
+      range
+    )
+    const trend = result.spec_model_line.data[0].values
+    expect(trend).toHaveLength(31)
+    expect(trend[0]).toMatchObject({ Time: '10-03', Count: 1 })
+    expect(trend[30]).toMatchObject({ Time: '11-02', Count: 2 })
+    expect(
+      trend.slice(1, 30).every((row: { Count: number }) => row.Count === 0)
+    ).toBe(true)
+    for (const key of ['spec_line', 'spec_area'] as const) {
+      expect(
+        result[key].data[0].values.reduce(
+          (sum: number, row: { rawQuota: number }) => sum + row.rawQuota,
+          0
+        )
+      ).toBe(1500000)
+    }
+    const users = processUserChartData(
+      data,
+      'day',
+      undefined,
+      10,
+      undefined,
+      range
+    ).spec_user_trend.data[0].values
+    expect(users).toHaveLength(31)
+    expect(
+      users.reduce(
+        (sum: number, row: { rawQuota: number }) => sum + row.rawQuota,
+        0
+      )
+    ).toBe(1500000)
+  })
+
+  test('aggregates Monday and Sunday into one week and starts a new bucket next Monday', () => {
+    const data = [
+      '2026-10-26T12:00:00',
+      '2026-11-01T12:00:00',
+      '2026-11-02T12:00:00',
+    ].map((date) => ({
+      created_at: new Date(date).getTime() / 1000,
+      model_name: 'a',
+      username: 'alice',
+      count: 1,
+      quota: 500000,
+    }))
+    const models = processChartData(data, 'week').spec_model_line.data[0].values
+    expect(models).toEqual([
+      { Time: '10-26 - 11-01', Model: 'a', Count: 2 },
+      { Time: '11-02 - 11-08', Model: 'a', Count: 1 },
+    ])
+    const users = processUserChartData(data, 'week').spec_user_trend.data[0]
+      .values
+    expect(users.map((row: { rawQuota: number }) => row.rawQuota)).toEqual([
+      1000000, 500000,
+    ])
+  })
+
+  test('keeps identical calendar labels from different years as different buckets', () => {
+    const data = ['2025-11-02T12:00:00', '2026-11-02T12:00:00'].map((date) => ({
+      created_at: new Date(date).getTime() / 1000,
+      model_name: 'a',
+      username: 'alice',
+      count: 1,
+      quota: 500000,
+    }))
+    const models = processChartData(data, 'day').spec_model_line.data[0].values
+    expect(
+      models.filter((row: { Count: number }) => row.Count > 0)
+    ).toHaveLength(2)
+    expect(new Set(models.map((row: { Time: string }) => row.Time)).size).toBe(
+      models.length
+    )
+    const users = processUserChartData(data, 'day').spec_user_trend.data[0]
+      .values
+    expect(
+      users.filter((row: { rawQuota: number }) => row.rawQuota > 0)
+    ).toHaveLength(2)
   })
 })
