@@ -21,7 +21,7 @@ func baseTokenRankingQuery(query TokenRankingQuery) *gorm.DB {
 	db := DB.Table("quota_data").
 		Select("user_id, username, sum(token_used) as token_used")
 	if query.StartTime > 0 {
-		db = db.Where("created_at >= ?", query.StartTime)
+		db = db.Where("created_at >= ?", quotaDataBucketStart(query.StartTime))
 	}
 	if query.EndTime > 0 {
 		db = db.Where("created_at <= ?", query.EndTime)
@@ -71,7 +71,7 @@ func GetUserTokenRanking(query TokenRankingQuery) (rank int, tokenUsed int64, er
 		Select("coalesce(sum(token_used), 0) as token_used").
 		Where("user_id = ?", userQuery.UserID)
 	if userQuery.StartTime > 0 {
-		db = db.Where("created_at >= ?", userQuery.StartTime)
+		db = db.Where("created_at >= ?", quotaDataBucketStart(userQuery.StartTime))
 	}
 	if userQuery.EndTime > 0 {
 		db = db.Where("created_at <= ?", userQuery.EndTime)

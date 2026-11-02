@@ -1,6 +1,7 @@
 package model
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -83,7 +84,7 @@ func logQuotaDataCache(quotaData *QuotaData) {
 
 func LogQuotaData(params QuotaDataLogParams) {
 	// 只精确到小时
-	createdAt := params.CreatedAt - (params.CreatedAt % 3600)
+	createdAt := quotaDataBucketStart(params.CreatedAt)
 	quotaData := &QuotaData{
 		UserID:              params.UserID,
 		Username:            params.Username,
@@ -108,44 +109,51 @@ func LogQuotaData(params QuotaDataLogParams) {
 func SaveQuotaDataCache() {
 	CacheQuotaDataLock.Lock()
 	defer CacheQuotaDataLock.Unlock()
-	size := len(CacheQuotaData)
-	// 如果缓存中有数据，就保存到数据库中
-	// 1. 先查询数据库中是否有数据
-	// 2. 如果有数据，就更新数据
-	// 3. 如果没有数据，就插入数据
-	for _, quotaData := range CacheQuotaData {
-		quotaDataDB := &QuotaData{}
-		DB.Table("quota_data").
-			Where("user_id = ? and username = ? and model_name = ? and created_at = ? and use_group = ? and token_id = ? and channel_id = ? and node_name = ?",
-				quotaData.UserID, quotaData.Username, quotaData.ModelName, quotaData.CreatedAt, quotaData.UseGroup, quotaData.TokenID, quotaData.ChannelID, quotaData.NodeName).
-			First(quotaDataDB)
-		if quotaDataDB.Id > 0 {
-			//quotaDataDB.Count += quotaData.Count
-			//quotaDataDB.Quota += quotaData.Quota
-			//DB.Table("quota_data").Save(quotaDataDB)
-			increaseQuotaData(quotaData)
-		} else {
-			DB.Table("quota_data").Create(quotaData)
+	saved := 0
+	for key, quotaData := range CacheQuotaData {
+		err := DB.Transaction(func(tx *gorm.DB) error {
+			var existing QuotaData
+			err := tx.Table("quota_data").Where("user_id = ? and username = ? and model_name = ? and created_at = ? and use_group = ? and token_id = ? and channel_id = ? and node_name = ?",
+				quotaData.UserID, quotaData.Username, quotaData.ModelName, quotaData.CreatedAt, quotaData.UseGroup, quotaData.TokenID, quotaData.ChannelID, quotaData.NodeName).First(&existing).Error
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				// Create may populate Id even if its transaction later fails. Keep the
+				// cached delta unchanged so the next flush can safely try again.
+				row := *quotaData
+				row.Id = 0
+				return tx.Table("quota_data").Create(&row).Error
+			}
+			if err != nil {
+				return err
+			}
+			result := tx.Table("quota_data").Where("id = ?", existing.Id).Updates(map[string]any{
+				"count":                 gorm.Expr("count + ?", quotaData.Count),
+				"quota":                 gorm.Expr("quota + ?", quotaData.Quota),
+				"token_used":            gorm.Expr("token_used + ?", quotaData.TokenUsed),
+				"cache_read_tokens":     gorm.Expr("cache_read_tokens + ?", quotaData.CacheReadTokens),
+				"cache_creation_tokens": gorm.Expr("cache_creation_tokens + ?", quotaData.CacheCreationTokens),
+			})
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected != 1 {
+				return gorm.ErrRecordNotFound
+			}
+			return nil
+		})
+		if err != nil {
+			common.SysLog(common.LogText("failed to save dashboard data: %s", err))
+			continue
 		}
+		delete(CacheQuotaData, key)
+		saved++
 	}
-	CacheQuotaData = make(map[string]*QuotaData)
-	common.SysLog(common.LogText("saved dashboard data, %d records", size))
+	common.SysLog(common.LogText("saved dashboard data, %d records", saved))
 }
 
-func increaseQuotaData(quotaData *QuotaData) {
-	err := DB.Table("quota_data").
-		Where("user_id = ? and username = ? and model_name = ? and created_at = ? and use_group = ? and token_id = ? and channel_id = ? and node_name = ?",
-			quotaData.UserID, quotaData.Username, quotaData.ModelName, quotaData.CreatedAt, quotaData.UseGroup, quotaData.TokenID, quotaData.ChannelID, quotaData.NodeName).
-		Updates(map[string]any{
-			"count":                 gorm.Expr("count + ?", quotaData.Count),
-			"quota":                 gorm.Expr("quota + ?", quotaData.Quota),
-			"token_used":            gorm.Expr("token_used + ?", quotaData.TokenUsed),
-			"cache_read_tokens":     gorm.Expr("cache_read_tokens + ?", quotaData.CacheReadTokens),
-			"cache_creation_tokens": gorm.Expr("cache_creation_tokens + ?", quotaData.CacheCreationTokens),
-		}).Error
-	if err != nil {
-		common.SysLog(common.LogText("increaseQuotaData error: %s", err))
-	}
+// Dashboard history is stored in hourly buckets. Include the bucket that
+// overlaps the start rather than discarding requests after a partial-hour start.
+func quotaDataBucketStart(timestamp int64) int64 {
+	return timestamp - timestamp%3600
 }
 
 func GetQuotaDataByUsername(username string, startTime int64, endTime int64) (quotaData []*QuotaData, err error) {
@@ -153,7 +161,7 @@ func GetQuotaDataByUsername(username string, startTime int64, endTime int64) (qu
 	// 从quota_data表中查询数据
 	err = DB.Table("quota_data").
 		Select("user_id, username, model_name, created_at, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used, sum(cache_read_tokens) as cache_read_tokens, sum(cache_creation_tokens) as cache_creation_tokens").
-		Where("username = ? and created_at >= ? and created_at <= ?", username, startTime, endTime).
+		Where("username = ? and created_at >= ? and created_at <= ?", username, quotaDataBucketStart(startTime), endTime).
 		Group("user_id, username, model_name, created_at").
 		Find(&quotaDatas).Error
 	return quotaDatas, err
@@ -164,7 +172,7 @@ func GetQuotaDataByUserId(userId int, startTime int64, endTime int64) (quotaData
 	// 从quota_data表中查询数据
 	err = DB.Table("quota_data").
 		Select("user_id, username, model_name, created_at, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used, sum(cache_read_tokens) as cache_read_tokens, sum(cache_creation_tokens) as cache_creation_tokens").
-		Where("user_id = ? and created_at >= ? and created_at <= ?", userId, startTime, endTime).
+		Where("user_id = ? and created_at >= ? and created_at <= ?", userId, quotaDataBucketStart(startTime), endTime).
 		Group("user_id, username, model_name, created_at").
 		Find(&quotaDatas).Error
 	return quotaDatas, err
@@ -174,7 +182,7 @@ func GetQuotaDataGroupByUser(startTime int64, endTime int64) (quotaData []*Quota
 	var quotaDatas []*QuotaData
 	err = DB.Table("quota_data").
 		Select("username, created_at, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used, sum(cache_read_tokens) as cache_read_tokens, sum(cache_creation_tokens) as cache_creation_tokens").
-		Where("created_at >= ? and created_at <= ?", startTime, endTime).
+		Where("created_at >= ? and created_at <= ?", quotaDataBucketStart(startTime), endTime).
 		Group("username, created_at").
 		Find(&quotaDatas).Error
 	return quotaDatas, err
@@ -187,7 +195,7 @@ func GetAllQuotaDates(startTime int64, endTime int64, username string) (quotaDat
 	var quotaDatas []*QuotaData
 	// 从quota_data表中查询数据
 	// only select model_name, sum(count) as count, sum(quota) as quota, model_name, created_at from quota_data group by model_name, created_at;
-	//err = DB.Table("quota_data").Where("created_at >= ? and created_at <= ?", startTime, endTime).Find(&quotaDatas).Error
-	err = DB.Table("quota_data").Select("model_name, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used, sum(cache_read_tokens) as cache_read_tokens, sum(cache_creation_tokens) as cache_creation_tokens, created_at").Where("created_at >= ? and created_at <= ?", startTime, endTime).Group("model_name, created_at").Find(&quotaDatas).Error
+	//err = DB.Table("quota_data").Where("created_at >= ? and created_at <= ?", quotaDataBucketStart(startTime), endTime).Find(&quotaDatas).Error
+	err = DB.Table("quota_data").Select("model_name, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used, sum(cache_read_tokens) as cache_read_tokens, sum(cache_creation_tokens) as cache_creation_tokens, created_at").Where("created_at >= ? and created_at <= ?", quotaDataBucketStart(startTime), endTime).Group("model_name, created_at").Find(&quotaDatas).Error
 	return quotaDatas, err
 }

@@ -560,6 +560,7 @@
   "failed to reload authz policy: %s": "重新加载授权策略失败: %s",
   "failed to reset codex usage": "重置 Codex 用量失败",
   "failed to save backup codes: %s": "保存备用码失败: %s",
+  "failed to save dashboard data: %s": "保存数据看板数据失败: %s",
   "failed to search tokens: %s": "搜索令牌失败: %s",
   "failed to search topups: %s": "搜索充值记录失败: %s",
   "failed to search user logs: %s": "搜索用户日志失败: %s",

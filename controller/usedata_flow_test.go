@@ -8,6 +8,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -132,4 +133,25 @@ func TestGetUserFlowQuotaDatesRejectsInvalidTimeRange(t *testing.T) {
 	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &payload))
 	require.False(t, payload.Success)
 	require.Equal(t, "invalid start_timestamp", payload.Message)
+}
+
+func TestDashboardQuotaEndpointsRejectInvalidRanges(t *testing.T) {
+	setupFlowControllerTestDB(t)
+	for name, handler := range map[string]gin.HandlerFunc{"all": GetAllQuotaDates, "users": GetQuotaDatesByUser, "self": GetUserQuotaDates, "ranking": GetTokenRanking, "flow": GetAllFlowQuotaDates, "self-flow": GetUserFlowQuotaDates} {
+		for _, query := range []string{"start_timestamp=bad&end_timestamp=2000", "start_timestamp=2000&end_timestamp=1000", "start_timestamp=1000&end_timestamp=-1"} {
+			t.Run(name+"/"+query, func(t *testing.T) {
+				recorder := httptest.NewRecorder()
+				ctx, _ := gin.CreateTestContext(recorder)
+				ctx.Set("id", 1)
+				ctx.Set("role", common.RoleAdminUser)
+				ctx.Request = httptest.NewRequest(http.MethodGet, "/api/data?"+query, nil)
+				handler(ctx)
+				var payload struct {
+					Success bool `json:"success"`
+				}
+				require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &payload))
+				assert.False(t, payload.Success)
+			})
+		}
+	}
 }
