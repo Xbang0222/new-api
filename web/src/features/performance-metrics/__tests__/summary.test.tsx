@@ -24,6 +24,7 @@ import { PerformanceOverview } from '@/features/dashboard/components/models/perf
 import { PerformanceHealthPanel } from '@/features/dashboard/components/overview/performance-health-panel'
 import { ModelDetailsPerformance } from '@/features/pricing/components/model-details-performance'
 import { UptimeSparkline } from '@/features/pricing/components/model-details-uptime-sparkline'
+import { api } from '@/lib/api'
 
 const chart = vi.hoisted(() =>
   vi.fn(
@@ -204,5 +205,71 @@ describe('server performance summaries', () => {
     )
     expect(screen.getAllByText('—')).toHaveLength(3)
     expect(screen.queryByText('0.00%')).not.toBeInTheDocument()
+  })
+})
+
+describe('dashboard performance range', () => {
+  it('queries the selected timestamps and updates metrics when the range changes', async () => {
+    const get = vi
+      .spyOn(api, 'get')
+      .mockResolvedValueOnce({
+        data: {
+          success: true,
+          data: {
+            summary,
+            models: [{ model_name: 'a', ...summary, success_rate: 70 }],
+          },
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          success: true,
+          data: {
+            summary: { ...summary, success_rate: 80 },
+            models: [{ model_name: 'a', ...summary, success_rate: 70 }],
+          },
+        },
+      })
+    const first = { start_timestamp: windowStart, end_timestamp: windowEnd }
+    const second = {
+      start_timestamp: windowStart - 6 * 86400,
+      end_timestamp: windowEnd,
+    }
+    const view = render(
+      <QueryClientProvider client={client}>
+        <PerformanceOverview timeRange={first} />
+      </QueryClientProvider>
+    )
+    expect(await screen.findByText('99.01%')).toBeVisible()
+    expect(get).toHaveBeenLastCalledWith(
+      '/api/perf-metrics/summary',
+      expect.objectContaining({ params: first })
+    )
+    view.rerender(
+      <QueryClientProvider client={client}>
+        <PerformanceOverview timeRange={second} />
+      </QueryClientProvider>
+    )
+    expect(await screen.findByText('80.00%')).toBeVisible()
+    expect(get).toHaveBeenLastCalledWith(
+      '/api/perf-metrics/summary',
+      expect.objectContaining({ params: second })
+    )
+    expect(screen.getByText('Site-wide performance')).toBeVisible()
+  })
+
+  it('shows a retryable error for a business failure instead of an empty dataset', async () => {
+    vi.spyOn(api, 'get').mockResolvedValue({
+      data: { success: false, message: 'unavailable' },
+    })
+    render(
+      <QueryClientProvider client={client}>
+        <PerformanceOverview />
+      </QueryClientProvider>
+    )
+    expect(await screen.findByRole('button', { name: 'Retry' })).toBeVisible()
+    expect(
+      screen.queryByText('No performance data available')
+    ).not.toBeInTheDocument()
   })
 })

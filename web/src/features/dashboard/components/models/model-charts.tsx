@@ -21,15 +21,11 @@ import { PieChart as PieChartIcon, RefreshCw } from 'lucide-react'
 import { useEffect, useMemo, useState, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { Button } from '@/components/ui/button'
 import { IconBadge } from '@/components/ui/icon-badge'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useThemeCustomization } from '@/context/theme-customization-provider'
 import { useTheme } from '@/context/theme-provider'
-import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
-import {
-  ToggleGroup,
-  ToggleGroupItem,
-} from '@/components/ui/toggle-group'
 import {
   DEFAULT_TIME_GRANULARITY,
   MODEL_ANALYTICS_CHART_OPTIONS,
@@ -38,9 +34,11 @@ import { processChartData } from '@/features/dashboard/lib'
 import type {
   ModelAnalyticsChartTab,
   QuotaDataItem,
+  DashboardTimeRange,
 } from '@/features/dashboard/types'
 import { useThemeRadiusPx } from '@/lib/theme-radius'
 import type { TimeGranularity } from '@/lib/time'
+import { cn } from '@/lib/utils'
 import { VCHART_OPTION } from '@/lib/vchart'
 
 let themeManagerPromise: Promise<
@@ -58,6 +56,7 @@ const CHART_SPEC_KEYS: Record<ModelAnalyticsChartTab, ChartSpecKey> = {
 interface ModelChartsProps {
   data: QuotaDataItem[]
   loading?: boolean
+  timeRange?: DashboardTimeRange
   timeGranularity?: TimeGranularity
   defaultChartTab?: ModelAnalyticsChartTab
   quickRangePresets?: readonly {
@@ -116,7 +115,8 @@ export function ModelCharts(props: ModelChartsProps) {
         timeGranularity,
         t,
         customization.preset,
-        chartRadius
+        chartRadius,
+        props.timeRange
       ),
     [
       props.data,
@@ -125,6 +125,7 @@ export function ModelCharts(props: ModelChartsProps) {
       t,
       customization.preset,
       chartRadius,
+      props.timeRange,
     ]
   )
 

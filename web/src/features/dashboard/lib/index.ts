@@ -26,6 +26,7 @@ export {
   saveChartPreferences,
   buildDefaultDashboardFilters,
   buildQuickRangeDashboardFilters,
+  refreshDashboardFilters,
 } from './filters'
 export {
   getLatencyColorClass,

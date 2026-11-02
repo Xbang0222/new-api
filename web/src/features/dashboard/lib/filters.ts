@@ -156,7 +156,8 @@ export function buildDefaultDashboardFilters(
 
 export function buildQuickRangeDashboardFilters(
   presetKey: string,
-  currentFilters?: DashboardFilters
+  currentFilters?: DashboardFilters,
+  now = new Date()
 ): { presetKey: string; filters: DashboardFilters } {
   const fallback =
     DASHBOARD_QUICK_RANGE_PRESETS.find(
@@ -165,7 +166,7 @@ export function buildQuickRangeDashboardFilters(
   const preset =
     DASHBOARD_QUICK_RANGE_PRESETS.find((item) => item.key === presetKey) ??
     fallback
-  const end = new Date()
+  const end = new Date(now)
   let start = new Date(end.getTime() - 24 * 3600 * 1000)
 
   if (preset.mode === 'today') {
@@ -200,7 +201,16 @@ export function buildQueryParams(
 } {
   return {
     ...timeRange,
+    start_timestamp: Math.floor(timeRange.start_timestamp / 3600) * 3600,
     default_time: getSavedGranularity(filters?.time_granularity),
     ...(filters?.username && { username: filters.username }),
   }
+}
+
+export function refreshDashboardFilters(
+  filters: DashboardFilters,
+  activeQuickRange: string | null
+): DashboardFilters {
+  if (!activeQuickRange) return filters
+  return buildQuickRangeDashboardFilters(activeQuickRange, filters).filters
 }

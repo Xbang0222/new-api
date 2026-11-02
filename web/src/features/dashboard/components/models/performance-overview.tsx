@@ -21,8 +21,10 @@ import { Gauge, HeartPulse, Timer } from 'lucide-react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { ErrorState } from '@/components/error-state'
 import { IconBadge, type IconBadgeTone } from '@/components/ui/icon-badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import type { DashboardTimeRange } from '@/features/dashboard/types'
 import { getPerfMetricsSummary } from '@/features/performance-metrics/api'
 import {
   formatLatency,
@@ -38,13 +40,16 @@ import { cn } from '@/lib/utils'
 const PERFORMANCE_WINDOW_HOURS = 24
 const TOP_MODEL_LIMIT = 6
 
-export function PerformanceOverview() {
+export function PerformanceOverview(props: { timeRange?: DashboardTimeRange }) {
   const { t } = useTranslation()
   const metricsQuery = useQuery({
-    queryKey: ['perf-metrics-summary', PERFORMANCE_WINDOW_HOURS],
+    queryKey: [
+      'perf-metrics-summary',
+      props.timeRange ?? PERFORMANCE_WINDOW_HOURS,
+    ],
     queryFn: async () =>
       requireServerSuccess(
-        await getPerfMetricsSummary(PERFORMANCE_WINDOW_HOURS)
+        await getPerfMetricsSummary(props.timeRange ?? PERFORMANCE_WINDOW_HOURS)
       ),
     staleTime: 60 * 1000,
     retry: false,
@@ -58,6 +63,15 @@ export function PerformanceOverview() {
   const topModels = useMemo(() => models.slice(0, TOP_MODEL_LIMIT), [models])
   const loading = metricsQuery.isLoading
   const hasData = models.length > 0
+
+  if (metricsQuery.isError) {
+    return (
+      <ErrorState
+        className='min-h-32'
+        onRetry={() => void metricsQuery.refetch()}
+      />
+    )
+  }
 
   if (!loading && !hasData) {
     return (
@@ -76,7 +90,7 @@ export function PerformanceOverview() {
             <HeartPulse />
           </IconBadge>
           <span className='text-xs font-semibold whitespace-nowrap'>
-            {t('Performance health')}
+            {t('Site-wide performance')}
           </span>
         </div>
 

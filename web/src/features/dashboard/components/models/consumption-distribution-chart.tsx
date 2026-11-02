@@ -32,6 +32,7 @@ import { processChartData } from '@/features/dashboard/lib'
 import type {
   ConsumptionDistributionChartType,
   QuotaDataItem,
+  DashboardTimeRange,
 } from '@/features/dashboard/types'
 import { useThemeRadiusPx } from '@/lib/theme-radius'
 import type { TimeGranularity } from '@/lib/time'
@@ -44,6 +45,7 @@ let themeManagerPromise: Promise<
 interface ConsumptionDistributionChartProps {
   data: QuotaDataItem[]
   loading?: boolean
+  timeRange?: DashboardTimeRange
   timeGranularity?: TimeGranularity
   defaultChartType?: ConsumptionDistributionChartType
 }
@@ -105,7 +107,8 @@ export function ConsumptionDistributionChart(
         timeGranularity,
         t,
         customization.preset,
-        chartRadius
+        chartRadius,
+        props.timeRange
       ),
     [
       props.data,
@@ -114,6 +117,7 @@ export function ConsumptionDistributionChart(
       t,
       customization.preset,
       chartRadius,
+      props.timeRange,
     ]
   )
   const spec = chartType === 'bar' ? chartData.spec_line : chartData.spec_area

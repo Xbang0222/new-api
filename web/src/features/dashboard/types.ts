@@ -22,6 +22,11 @@ import type { TimeGranularity } from '@/lib/time'
 // Quota & Usage Data Types
 // ============================================================================
 
+export interface DashboardTimeRange {
+  start_timestamp: number
+  end_timestamp: number
+}
+
 export interface QuotaDataItem {
   id?: number
   user_id?: number
