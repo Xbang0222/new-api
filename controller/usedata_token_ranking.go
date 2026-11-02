@@ -42,13 +42,8 @@ func maskRankingUsername(username string, fallback string) string {
 }
 
 func GetTokenRanking(c *gin.Context) {
-	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
-	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
-	if startTimestamp > 0 && endTimestamp > 0 && endTimestamp < startTimestamp {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": "end_timestamp must be greater than start_timestamp",
-		})
+	startTimestamp, endTimestamp, ok := parseDashboardQuotaTimeRange(c)
+	if !ok {
 		return
 	}
 

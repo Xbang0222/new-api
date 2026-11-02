@@ -22,6 +22,7 @@ import { Eye, EyeOff, RefreshCw } from 'lucide-react'
 import { lazy, Suspense, useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { ErrorState } from '@/components/error-state'
 import { SectionPageLayout } from '@/components/layout'
 import { FadeIn } from '@/components/page-transition'
 import { Button } from '@/components/ui/button'
@@ -47,22 +48,23 @@ import {
   DEFAULT_DASHBOARD_QUICK_RANGE,
   DEFAULT_TIME_GRANULARITY,
 } from './constants'
+import { useDashboardQuota } from './hooks/use-dashboard-quota'
 import {
   buildQuickRangeDashboardFilters,
   getDefaultDays,
   getSavedChartPreferences,
   getSavedGranularity,
   saveChartPreferences,
+  refreshDashboardFilters,
 } from './lib'
+import { isDashboardSectionAccessible } from './section-access'
 import {
   DASHBOARD_DEFAULT_SECTION,
   DASHBOARD_SECTION_IDS,
 } from './section-registry'
-import { isDashboardSectionAccessible } from './section-access'
 import type {
   DashboardChartPreferences,
   DashboardFilters,
-  QuotaDataItem,
   UserChartsFilters,
 } from './types'
 
@@ -245,9 +247,6 @@ export function Dashboard() {
   const activeSection = (params.section ??
     DASHBOARD_DEFAULT_SECTION) as DashboardSectionId
 
-  const [modelData, setModelData] = useState<QuotaDataItem[]>([])
-  const [dataLoading, setDataLoading] = useState(false)
-  const [modelRefreshKey, setModelRefreshKey] = useState(0)
   const [activeQuickRange, setActiveQuickRange] = useState<string | null>(
     DEFAULT_DASHBOARD_QUICK_RANGE
   )
@@ -268,6 +267,7 @@ export function Dashboard() {
     }
   )
   const [flowSensitiveVisible, setFlowSensitiveVisible] = useState(true)
+  const quotaQuery = useDashboardQuota(modelFilters, activeSection === 'models')
 
   const handleFilterChange = useCallback((filters: DashboardFilters) => {
     setActiveQuickRange(null)
@@ -291,18 +291,12 @@ export function Dashboard() {
   )
 
   const handleRefreshDashboard = useCallback(() => {
-    setModelRefreshKey((value) => value + 1)
+    setModelFilters((filters) =>
+      refreshDashboardFilters(filters, activeQuickRange)
+    )
     void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
     void queryClient.invalidateQueries({ queryKey: ['perf-metrics-summary'] })
-  }, [queryClient])
-
-  const handleDataUpdate = useCallback(
-    (data: QuotaDataItem[], loading: boolean) => {
-      setModelData(data)
-      setDataLoading(loading)
-    },
-    []
-  )
+  }, [queryClient, activeQuickRange])
 
   const handleChartPreferencesChange = useCallback(
     (preferences: DashboardChartPreferences) => {
@@ -460,16 +454,18 @@ export function Dashboard() {
               <FadeIn>
                 <Suspense fallback={<LogStatCardsFallback />}>
                   <LazyLogStatCards
-                    filters={modelFilters}
-                    refreshKey={modelRefreshKey}
-                    onDataUpdate={handleDataUpdate}
+                    data={quotaQuery.data}
+                    loading={quotaQuery.loading}
+                    error={quotaQuery.error}
+                    timeRange={quotaQuery.timeRange}
+                    dataUpdatedAt={quotaQuery.dataUpdatedAt}
                   />
                 </Suspense>
               </FadeIn>
               {isAdmin && (
                 <FadeIn delay={0.05}>
                   <Suspense fallback={<PerformanceOverviewFallback />}>
-                    <LazyPerformanceOverview />
+                    <LazyPerformanceOverview timeRange={quotaQuery.timeRange} />
                   </Suspense>
                 </FadeIn>
               )}
@@ -478,41 +474,56 @@ export function Dashboard() {
                   <Suspense fallback={<TokenRankingFallback />}>
                     <LazyTokenRankingPanel
                       filters={modelFilters}
-                      refreshKey={modelRefreshKey}
+                      timeRange={quotaQuery.timeRange}
                     />
                   </Suspense>
                 </FadeIn>
               )}
-              <FadeIn delay={0.15}>
-                <Suspense fallback={<ModelChartsFallback />}>
-                  <LazyConsumptionDistributionChart
-                    data={modelData}
-                    loading={dataLoading}
-                    defaultChartType={
-                      chartPreferences.consumptionDistributionChart
-                    }
-                    timeGranularity={
-                      modelFilters.time_granularity || DEFAULT_TIME_GRANULARITY
-                    }
-                  />
-                </Suspense>
-              </FadeIn>
-              <FadeIn delay={0.2}>
-                <Suspense fallback={<ModelChartsFallback />}>
-                  <LazyModelCharts
-                    data={modelData}
-                    loading={dataLoading}
-                    defaultChartTab={chartPreferences.modelAnalyticsChart}
-                    timeGranularity={
-                      modelFilters.time_granularity || DEFAULT_TIME_GRANULARITY
-                    }
-                    quickRangePresets={DASHBOARD_QUICK_RANGE_PRESETS}
-                    activeQuickRange={activeQuickRange}
-                    onQuickRangeChange={handleQuickRangeChange}
-                    onRefresh={handleRefreshDashboard}
-                  />
-                </Suspense>
-              </FadeIn>
+              <p className='text-muted-foreground text-xs'>
+                {t(
+                  'Usage is aggregated hourly, including partial boundary hours. Recent usage appears after the next statistics update.'
+                )}
+              </p>
+              {quotaQuery.error ? (
+                <ErrorState onRetry={() => void quotaQuery.refetch()} />
+              ) : (
+                <>
+                  <FadeIn delay={0.15}>
+                    <Suspense fallback={<ModelChartsFallback />}>
+                      <LazyConsumptionDistributionChart
+                        data={quotaQuery.data}
+                        loading={quotaQuery.loading}
+                        timeRange={quotaQuery.timeRange}
+                        defaultChartType={
+                          chartPreferences.consumptionDistributionChart
+                        }
+                        timeGranularity={
+                          modelFilters.time_granularity ||
+                          DEFAULT_TIME_GRANULARITY
+                        }
+                      />
+                    </Suspense>
+                  </FadeIn>
+                  <FadeIn delay={0.2}>
+                    <Suspense fallback={<ModelChartsFallback />}>
+                      <LazyModelCharts
+                        data={quotaQuery.data}
+                        loading={quotaQuery.loading}
+                        timeRange={quotaQuery.timeRange}
+                        defaultChartTab={chartPreferences.modelAnalyticsChart}
+                        timeGranularity={
+                          modelFilters.time_granularity ||
+                          DEFAULT_TIME_GRANULARITY
+                        }
+                        quickRangePresets={DASHBOARD_QUICK_RANGE_PRESETS}
+                        activeQuickRange={activeQuickRange}
+                        onQuickRangeChange={handleQuickRangeChange}
+                        onRefresh={handleRefreshDashboard}
+                      />
+                    </Suspense>
+                  </FadeIn>
+                </>
+              )}
             </>
           )}
           {activeSection === 'users' && (

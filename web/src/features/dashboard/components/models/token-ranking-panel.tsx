@@ -1,3 +1,5 @@
+import { useQuery } from '@tanstack/react-query'
+import { KeyRound, Loader2 } from 'lucide-react'
 /*
 Copyright (C) 2023-2026 QuantumNous
 
@@ -17,16 +19,20 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useMemo, type ReactNode } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { KeyRound, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { computeTimeRange } from '@/lib/time'
+
+import { ErrorState } from '@/components/error-state'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getTokenRanking } from '@/features/dashboard/api'
 import { buildQueryParams, getDefaultDays } from '@/features/dashboard/lib'
-import type { DashboardFilters } from '@/features/dashboard/types'
+import type {
+  DashboardFilters,
+  DashboardTimeRange,
+} from '@/features/dashboard/types'
+import { requireServerSuccess } from '@/lib/server-error-message'
+import { computeTimeRange } from '@/lib/time'
 
 const RANK_COLORS = [
   'var(--chart-1)',
@@ -38,7 +44,7 @@ const RANK_COLORS = [
 
 interface TokenRankingPanelProps {
   filters?: DashboardFilters
-  refreshKey?: number
+  timeRange?: DashboardTimeRange
 }
 
 function formatTokenMillions(value: number | null | undefined): string {
@@ -67,23 +73,26 @@ export function TokenRankingPanel(props: TokenRankingPanelProps) {
   const { t } = useTranslation()
 
   const queryParams = useMemo(() => {
-    const timeRange = computeTimeRange(
-      getDefaultDays(props.filters?.time_granularity),
-      props.filters?.start_timestamp,
-      props.filters?.end_timestamp
-    )
+    const timeRange =
+      props.timeRange ??
+      computeTimeRange(
+        getDefaultDays(props.filters?.time_granularity),
+        props.filters?.start_timestamp,
+        props.filters?.end_timestamp
+      )
     const params = buildQueryParams(timeRange, props.filters)
     return {
       start_timestamp: params.start_timestamp,
       end_timestamp: params.end_timestamp,
       username: params.username,
     }
-  }, [props.filters])
+  }, [props.filters, props.timeRange])
 
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ['dashboard', 'token-ranking', queryParams, props.refreshKey],
-    queryFn: () => getTokenRanking(queryParams),
-    select: (res) => (res.success ? res.data : null),
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['dashboard', 'token-ranking', queryParams],
+    queryFn: async () =>
+      requireServerSuccess(await getTokenRanking(queryParams)),
+    select: (res) => res.data,
     staleTime: 60_000,
   })
 
@@ -129,9 +138,11 @@ export function TokenRankingPanel(props: TokenRankingPanelProps) {
     )
   } else if (isError || !data) {
     body = (
-      <div className='text-muted-foreground p-6 text-sm'>
-        {t('Failed to load token ranking')}
-      </div>
+      <ErrorState
+        title={t('Failed to load token ranking')}
+        className='min-h-40'
+        onRetry={() => void refetch()}
+      />
     )
   } else if ((ranking?.length ?? 0) === 0) {
     body = (
@@ -153,7 +164,7 @@ export function TokenRankingPanel(props: TokenRankingPanelProps) {
               return (
                 <div
                   key={`${item.rank}-${item.name}`}
-                  className='grid min-h-8 items-center gap-2 rounded-md border border-transparent px-2 py-1 transition-[background-color,border-color] hover:border-border hover:bg-muted/35'
+                  className='hover:border-border hover:bg-muted/35 grid min-h-8 items-center gap-2 rounded-md border border-transparent px-2 py-1 transition-[background-color,border-color]'
                   style={{
                     gridTemplateColumns:
                       'minmax(6.5rem, 9rem) minmax(5rem, 1fr) max-content',

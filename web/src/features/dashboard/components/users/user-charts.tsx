@@ -16,21 +16,19 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { VChart } from '@visactor/react-vchart'
 import { Users, Loader2, RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { ErrorState } from '@/components/error-state'
 import { Button } from '@/components/ui/button'
 import { IconBadge } from '@/components/ui/icon-badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import {
-  ToggleGroup,
-  ToggleGroupItem,
-} from '@/components/ui/toggle-group'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useThemeCustomization } from '@/context/theme-customization-provider'
 import { useTheme } from '@/context/theme-provider'
 import { getUserQuotaDataByUsers } from '@/features/dashboard/api'
@@ -105,14 +103,16 @@ function getRankValueLabel(
   value: number,
   datum: Record<string, unknown>
 ) {
-  const formatter = (spec as {
-    label?: {
-      formatMethod?: (
-        value: number,
-        datum?: Record<string, unknown>
-      ) => string
+  const formatter = (
+    spec as {
+      label?: {
+        formatMethod?: (
+          value: number,
+          datum?: Record<string, unknown>
+        ) => string
+      }
     }
-  })?.label?.formatMethod
+  )?.label?.formatMethod
   return formatter ? formatter(value, datum) : String(value)
 }
 
@@ -140,12 +140,13 @@ function UserRankList({ spec }: { spec: unknown }) {
           const name = String(item.User || '-')
           const rawValue = Number(item.rawQuota) || 0
           const width = `${Math.max((rawValue / maxValue) * 100, 2)}%`
-          const color = colorMap[name] || RANK_COLORS[index % RANK_COLORS.length]
+          const color =
+            colorMap[name] || RANK_COLORS[index % RANK_COLORS.length]
 
           return (
             <div
               key={name}
-              className='grid min-h-8 items-center gap-2 rounded-md border border-transparent px-2 py-1 transition-[background-color,border-color] hover:border-border hover:bg-muted/35'
+              className='hover:border-border hover:bg-muted/35 grid min-h-8 items-center gap-2 rounded-md border border-transparent px-2 py-1 transition-[background-color,border-color]'
               style={{
                 gridTemplateColumns:
                   'minmax(6.5rem, 9rem) minmax(5rem, 1fr) max-content',
@@ -185,7 +186,7 @@ interface UserChartsProps {
 
 export function UserCharts(props: UserChartsProps) {
   const { t } = useTranslation()
-  const queryClient = useQueryClient()
+  const [rangeAnchor, setRangeAnchor] = useState(() => new Date())
   const { resolvedTheme } = useTheme()
   const { customization } = useThemeCustomization()
   const [themeReady, setThemeReady] = useState(false)
@@ -203,23 +204,25 @@ export function UserCharts(props: UserChartsProps) {
 
   const timeRange = useMemo(() => {
     if (activeQuickRange) {
-      const result = buildQuickRangeDashboardFilters(activeQuickRange, {
-        time_granularity: timeGranularity,
-      })
+      const result = buildQuickRangeDashboardFilters(
+        activeQuickRange,
+        undefined,
+        rangeAnchor
+      )
       const start = result.filters.start_timestamp as Date
       const end = result.filters.end_timestamp as Date
       return {
-        start_timestamp: Math.floor(start.getTime() / 1000),
+        start_timestamp: Math.floor(start.getTime() / 3600000) * 3600,
         end_timestamp: Math.floor(end.getTime() / 1000),
       }
     }
 
-    const { start, end } = getRollingDateRange(selectedRange)
+    const { start, end } = getRollingDateRange(selectedRange, rangeAnchor)
     return {
-      start_timestamp: Math.floor(start.getTime() / 1000),
+      start_timestamp: Math.floor(start.getTime() / 3600000) * 3600,
       end_timestamp: Math.floor(end.getTime() / 1000),
     }
-  }, [activeQuickRange, selectedRange, timeGranularity])
+  }, [activeQuickRange, selectedRange, rangeAnchor])
 
   const handleQuickRangeChange = useCallback(
     (value: string[]) => {
@@ -230,8 +233,8 @@ export function UserCharts(props: UserChartsProps) {
         time_granularity: timeGranularity,
       })
 
-      const nextGranularity =
-        result.filters.time_granularity || timeGranularity
+      setRangeAnchor(result.filters.end_timestamp ?? new Date())
+      const nextGranularity = result.filters.time_granularity || timeGranularity
       onFiltersChange({
         ...props.filters,
         activeQuickRange: result.presetKey,
@@ -247,9 +250,7 @@ export function UserCharts(props: UserChartsProps) {
       saveGranularity(g)
       onFiltersChange({
         ...props.filters,
-        activeQuickRange: null,
         timeGranularity: g,
-        selectedRange: getDefaultDays(g),
       })
     },
     [onFiltersChange, props.filters]
@@ -278,17 +279,23 @@ export function UserCharts(props: UserChartsProps) {
     updateTheme()
   }, [resolvedTheme])
 
-  const { data: userData, isLoading } = useQuery({
+  const {
+    data: userData,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
     queryKey: ['dashboard', 'user-quota', timeRange],
     queryFn: async () =>
       requireServerSuccess(await getUserQuotaDataByUsers(timeRange)),
-    select: (res) => (res.success ? res.data : []),
+    select: (res) => res.data,
     staleTime: 60_000,
   })
 
   const handleRefresh = useCallback(() => {
-    void queryClient.invalidateQueries({ queryKey: ['dashboard', 'user-quota'] })
-  }, [queryClient])
+    setRangeAnchor(new Date())
+    void refetch()
+  }, [refetch])
 
   const chartData = useMemo(
     () =>
@@ -297,7 +304,8 @@ export function UserCharts(props: UserChartsProps) {
         timeGranularity,
         t,
         topUserLimit,
-        customization.preset
+        customization.preset,
+        timeRange
       ),
     [
       userData,
@@ -306,6 +314,7 @@ export function UserCharts(props: UserChartsProps) {
       t,
       topUserLimit,
       customization.preset,
+      timeRange,
     ]
   )
 
@@ -386,13 +395,14 @@ export function UserCharts(props: UserChartsProps) {
         )}
       </div>
 
-      <div className='grid gap-3'>
-        {USER_CHARTS.map((chart) => {
-          const spec = chartData[chart.specKey]
-          const isRankChart = chart.value === 'rank'
-          const chartElement =
-            themeReady &&
-            spec && (
+      {isError ? (
+        <ErrorState onRetry={handleRefresh} />
+      ) : (
+        <div className='grid gap-3'>
+          {USER_CHARTS.map((chart) => {
+            const spec = chartData[chart.specKey]
+            const isRankChart = chart.value === 'rank'
+            const chartElement = themeReady && spec && (
               <VChart
                 key={`user-${chart.value}-${topUserLimit}-${resolvedTheme}-${customization.preset}`}
                 spec={{
@@ -403,38 +413,41 @@ export function UserCharts(props: UserChartsProps) {
                 option={VCHART_OPTION}
               />
             )
-          let chartContent = chartElement || null
-          if (isLoading) {
-            chartContent = <Skeleton className='h-full w-full' />
-          } else if (isRankChart) {
-            chartContent = <UserRankList spec={spec} />
-          }
+            let chartContent = chartElement || null
+            if (isLoading) {
+              chartContent = <Skeleton className='h-full w-full' />
+            } else if (isRankChart) {
+              chartContent = <UserRankList spec={spec} />
+            }
 
-          return (
-            <div
-              key={chart.value}
-              className='overflow-hidden rounded-lg border'
-            >
-              <div className='flex w-full items-center gap-2 border-b px-3 py-2 sm:px-5 sm:py-3'>
-                <IconBadge tone='info' size='sm'>
-                  <Users />
-                </IconBadge>
-                <div className='text-sm font-semibold'>{t(chart.labelKey)}</div>
-              </div>
-
+            return (
               <div
-                className={
-                  isRankChart
-                    ? 'h-[240px] p-1.5 sm:h-[280px] sm:p-2'
-                    : 'h-[300px] p-1.5 sm:h-96 sm:p-2'
-                }
+                key={chart.value}
+                className='overflow-hidden rounded-lg border'
               >
-                {chartContent}
+                <div className='flex w-full items-center gap-2 border-b px-3 py-2 sm:px-5 sm:py-3'>
+                  <IconBadge tone='info' size='sm'>
+                    <Users />
+                  </IconBadge>
+                  <div className='text-sm font-semibold'>
+                    {t(chart.labelKey)}
+                  </div>
+                </div>
+
+                <div
+                  className={
+                    isRankChart
+                      ? 'h-[240px] p-1.5 sm:h-[280px] sm:p-2'
+                      : 'h-[300px] p-1.5 sm:h-96 sm:p-2'
+                  }
+                >
+                  {chartContent}
+                </div>
               </div>
-            </div>
-          )
-        })}
-      </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

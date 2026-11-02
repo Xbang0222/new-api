@@ -22,7 +22,6 @@ import {
   DASHBOARD_RANK_BAR_HEIGHT,
   DASHBOARD_RANK_BASE_COUNT,
   DASHBOARD_RANK_DESKTOP_ROW_HEIGHT,
-  MAX_CHART_TREND_POINTS,
 } from '@/features/dashboard/constants'
 import type {
   QuotaDataItem,
@@ -30,7 +29,13 @@ import type {
   ProcessedUserChartData,
 } from '@/features/dashboard/types'
 import { getCurrencyDisplay } from '@/lib/currency'
-import { formatChartTime, type TimeGranularity } from '@/lib/time'
+import type { TimeGranularity } from '@/lib/time'
+
+import {
+  buildDashboardTimeAxis,
+  dashboardBucketStart,
+  type ChartTimeRange,
+} from './chart-time'
 
 type TFunction = (key: string) => string
 type TooltipLineItem = {
@@ -139,7 +144,8 @@ export function processChartData(
   timeGranularity: TimeGranularity = 'day',
   t?: TFunction,
   themeKey?: string,
-  chartCornerRadius?: number
+  chartCornerRadius?: number,
+  timeRange?: ChartTimeRange
 ): ProcessedChartData {
   const tt: TFunction = t ?? ((x) => x)
   const otherLabel = tt('Other')
@@ -285,22 +291,19 @@ export function processChartData(
 
   // Aggregate all metrics by time and model
   const timeModelMap = new Map<
-    string,
+    number,
     Map<string, { quota: number; count: number; tokens: number }>
   >()
   const modelTotalsMap = new Map<
     string,
     { quota: number; count: number; tokens: number }
   >()
-  const timeTimestamps = new Map<string, number>()
+  const timeTimestamps = new Set<number>()
 
   data.forEach((item) => {
     const timestamp = Number(item.created_at)
-    const timeKey = formatChartTime(timestamp, timeGranularity)
-    timeTimestamps.set(
-      timeKey,
-      Math.min(timeTimestamps.get(timeKey) ?? timestamp, timestamp)
-    )
+    const timeKey = dashboardBucketStart(timestamp, timeGranularity)
+    timeTimestamps.add(timeKey)
     const model = item.model_name || 'Unknown'
     const quota = Number(item.quota) || 0
     const count = Number(item.count) || 0
@@ -333,9 +336,11 @@ export function processChartData(
   })
 
   const allModels = [...modelTotalsMap.keys()]
-  const sortedTimes = [...timeTimestamps]
-    .sort((a, b) => a[1] - b[1])
-    .map(([time]) => time)
+  const timeAxis = buildDashboardTimeAxis(
+    timeTimestamps,
+    timeGranularity,
+    timeRange
+  )
   const sortedModels = [...allModels].sort()
   const modelColorDomain = [...new Set([...sortedModels, otherLabel])]
   const modelColorRange = getVChartDefaultColors(
@@ -351,28 +356,7 @@ export function processChartData(
     range: modelColorRange,
   }
 
-  // Pad time points if too few (default 7 points)
-  const MAX_TREND_POINTS = MAX_CHART_TREND_POINTS
-  const fillTimePoints = (times: string[]) => {
-    if (times.length >= MAX_TREND_POINTS) return times
-    const lastTime = Math.max(
-      ...data.map((item) => Number(item.created_at) || 0)
-    )
-    let intervalSec = 3600
-    if (timeGranularity === 'week') {
-      intervalSec = 604800
-    } else if (timeGranularity === 'day') {
-      intervalSec = 86400
-    }
-    const padded = Array.from({ length: MAX_TREND_POINTS }, (_, i) =>
-      formatChartTime(
-        lastTime - (MAX_TREND_POINTS - 1 - i) * intervalSec,
-        timeGranularity
-      )
-    )
-    return padded
-  }
-  const chartTimes = fillTimePoints(sortedTimes)
+  const chartTimes = [...timeAxis]
 
   const totalTimes = [...modelTotalsMap.values()].reduce(
     (sum, x) => sum + (Number(x.count) || 0),
@@ -400,7 +384,7 @@ export function processChartData(
     TimeSum: number
   }> = []
 
-  chartTimes.forEach((time) => {
+  chartTimes.forEach(([time, label]) => {
     let timeData = sortedModels.map((model) => {
       const stats = timeModelMap.get(time)?.get(model)
       const rawQuota = Number(stats?.quota) || 0
@@ -408,7 +392,7 @@ export function processChartData(
       // Match legacy frontend getQuotaWithUnit(..., 4)
       const usage = usd ? Number(usd.toFixed(4)) : 0
       return {
-        Time: time,
+        Time: label,
         Model: model,
         rawQuota,
         Usage: usage,
@@ -435,7 +419,7 @@ export function processChartData(
   )
 
   const areaValues: typeof lineValues = []
-  chartTimes.forEach((time) => {
+  chartTimes.forEach(([time, label]) => {
     const buckets = new Map<string, { rawQuota: number; usage: number }>()
     const modelMap = timeModelMap.get(time)
     let timeSum = 0
@@ -454,7 +438,7 @@ export function processChartData(
     })
     for (const [model, vals] of buckets) {
       areaValues.push({
-        Time: time,
+        Time: label,
         Model: model,
         rawQuota: vals.rawQuota,
         Usage: vals.usage,
@@ -483,11 +467,11 @@ export function processChartData(
     Model: string
     Count: number
   }> = []
-  chartTimes.forEach((time) => {
+  chartTimes.forEach(([time, label]) => {
     const timeData = topTrendModels.map((model) => {
       const stats = timeModelMap.get(time)?.get(model)
       return {
-        Time: time,
+        Time: label,
         Model: model,
         Count: Number(stats?.count) || 0,
       }
@@ -498,7 +482,7 @@ export function processChartData(
         return sum + (Number(stats?.count) || 0)
       }, 0)
       timeData.push({
-        Time: time,
+        Time: label,
         Model: otherLabel,
         Count: otherCount,
       })
@@ -782,7 +766,8 @@ export function processUserChartData(
   timeGranularity: TimeGranularity = 'day',
   t?: TFunction,
   limit = 10,
-  themeKey?: string
+  themeKey?: string,
+  timeRange?: ChartTimeRange
 ): ProcessedUserChartData {
   const tt: TFunction = t ?? ((x) => x)
   const { config } = getCurrencyDisplay()
@@ -882,13 +867,13 @@ export function processUserChartData(
     }
   })
 
-  const timeUserMap = new Map<string, Map<string, number>>()
-  const timeTimestamps = new Map<string, number>()
+  const timeUserMap = new Map<number, Map<string, number>>()
+  const timeTimestamps = new Set<number>()
 
   data.forEach((item) => {
     const ts = Number(item.created_at)
-    const timeKey = formatChartTime(ts, timeGranularity)
-    timeTimestamps.set(timeKey, Math.min(timeTimestamps.get(timeKey) ?? ts, ts))
+    const timeKey = dashboardBucketStart(ts, timeGranularity)
+    timeTimestamps.add(timeKey)
     const user = item.username || 'unknown'
     if (!topUserSet.has(user)) return
     let map = timeUserMap.get(timeKey)
@@ -899,9 +884,12 @@ export function processUserChartData(
     map.set(user, (map.get(user) || 0) + (Number(item.quota) || 0))
   })
 
-  const sortedTimePoints = [...timeTimestamps]
-    .sort((a, b) => a[1] - b[1])
-    .map(([time]) => time)
+  const timeAxis = buildDashboardTimeAxis(
+    timeTimestamps,
+    timeGranularity,
+    timeRange
+  )
+  const sortedTimePoints = [...timeAxis]
   const trendValues: Array<{
     Time: string
     User: string
@@ -909,11 +897,11 @@ export function processUserChartData(
     Usage: number
   }> = []
 
-  sortedTimePoints.forEach((time) => {
+  sortedTimePoints.forEach(([time, label]) => {
     topUsers.forEach((user) => {
       const q = timeUserMap.get(time)?.get(user) || 0
       trendValues.push({
-        Time: time,
+        Time: label,
         User: user,
         rawQuota: q,
         Usage: Number((q / quotaPerUnit).toFixed(4)),

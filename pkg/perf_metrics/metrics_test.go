@@ -3,6 +3,7 @@ package perfmetrics
 import (
 	"context"
 	"errors"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -238,12 +239,33 @@ func TestPerformanceAggregationAndFlush(t *testing.T) {
 			assert.NotContains(t, string(encoded), "request_count")
 			assert.NotContains(t, string(encoded), "success_count")
 
+			// The dashboard may request a historical partial-hour range. Database
+			// and hot data must use the same effective boundaries, not time.Now().
+			excludedHot := &atomicBucket{}
+			excludedHot.add(Sample{Success: true})
+			excludedKey := bucketKey{model: "outside-dashboard-range", group: "a", bucketTs: hour + 3600}
+			hotBuckets.Store(excludedKey, excludedHot)
+			require.NoError(t, model.UpsertPerfMetric(&model.PerfMetric{ModelName: "outside-dashboard-range", Group: "a", BucketTs: hour + 3600, RequestCount: 10, SuccessCount: 10}))
+			explicit, err := QuerySummaryRange(hour+60, hour+120, groups)
+			require.NoError(t, err)
+			assert.Equal(t, before.Summary, explicit.Summary)
+			assert.Equal(t, hour, explicit.WindowStart)
+			assert.Equal(t, hour+3600, explicit.WindowEnd)
+			require.Len(t, explicit.Models, 1)
+			assert.Equal(t, "test-model", explicit.Models[0].ModelName)
+			hotBuckets.Delete(excludedKey)
+			require.NoError(t, db.Where("model_name = ?", "outside-dashboard-range").Delete(&model.PerfMetric{}).Error)
+
 			flushCompletedBuckets()
 			flushCompletedBuckets()
 			after, err := Query(QueryParams{Model: "test-model", Hours: 24, AllowedGroups: groups})
 			require.NoError(t, err)
 			assert.Equal(t, before.Summary, after.Summary)
 			assert.Equal(t, before.Series, after.Series)
+			persistedRange, err := QuerySummaryRange(hour+60, hour+120, groups)
+			require.NoError(t, err)
+			assert.Equal(t, explicit.Summary, persistedRange.Summary)
+			assert.Equal(t, explicit.Models, persistedRange.Models)
 
 			RecordRelayResult(context.Background(), &relaycommon.RelayInfo{OriginModelName: "test-model", UsingGroup: "a", StartTime: now}, types.InitOpenAIError("context_length_exceeded", 400))
 			after, err = Query(QueryParams{Model: "test-model", Hours: 24, AllowedGroups: groups})
@@ -262,6 +284,69 @@ func TestPerformanceAggregationAndFlush(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, 98.04, combined.Summary.SuccessRate)
 			assert.Equal(t, 99.01, combined.Models[0].SuccessRate)
+
+			t.Run("explicit range covers the complete historical hour and caps future coverage", func(t *testing.T) {
+				for _, stamp := range []int64{hour - 3600, hour + 300, hour + 3600} {
+					require.NoError(t, model.UpsertPerfMetric(&model.PerfMetric{ModelName: "range-precision", Group: "precision", BucketTs: stamp, RequestCount: 1, SuccessCount: 1}))
+				}
+				hotFailure := &atomicBucket{}
+				hotFailure.add(Sample{})
+				inKey := bucketKey{model: "range-precision", group: "precision", bucketTs: hour + 600}
+				nextKey := bucketKey{model: "range-precision", group: "precision", bucketTs: hour + 3600}
+				hotBuckets.Store(inKey, hotFailure)
+				nextFailure := &atomicBucket{}
+				nextFailure.add(Sample{})
+				hotBuckets.Store(nextKey, nextFailure)
+				t.Cleanup(func() {
+					hotBuckets.Delete(inKey)
+					hotBuckets.Delete(nextKey)
+					assert.NoError(t, db.Where("model_name = ?", "range-precision").Delete(&model.PerfMetric{}).Error)
+				})
+				covered, err := QuerySummaryRange(hour+60, hour+120, []string{"precision"})
+				require.NoError(t, err)
+				require.NotNil(t, covered.Summary)
+				assert.Equal(t, 50.0, covered.Summary.SuccessRate)
+				require.Len(t, covered.Models, 1)
+				assert.Equal(t, int64(2), covered.Models[0].RequestCount)
+				assert.Equal(t, hour, covered.WindowStart)
+				assert.Equal(t, hour+3600, covered.WindowEnd)
+				exact, err := QuerySummaryRange(hour, hour, []string{"precision"})
+				require.NoError(t, err)
+				assert.Equal(t, covered, exact)
+				flushCompletedBuckets()
+				persisted, err := QuerySummaryRange(hour+60, hour+120, []string{"precision"})
+				require.NoError(t, err)
+				assert.Equal(t, covered, persisted)
+				currentHour := time.Now().Unix() / 3600 * 3600
+				require.NoError(t, model.UpsertPerfMetric(&model.PerfMetric{ModelName: "range-precision", Group: "current-precision", BucketTs: currentHour, RequestCount: 2, SuccessCount: 2}))
+				currentFailure := &atomicBucket{}
+				currentFailure.add(Sample{})
+				currentKey := bucketKey{model: "range-precision", group: "current-precision", bucketTs: currentHour}
+				hotBuckets.Store(currentKey, currentFailure)
+				t.Cleanup(func() { hotBuckets.Delete(currentKey) })
+				current, err := QuerySummaryRange(currentHour+3599, currentHour+3599, []string{"current-precision"})
+				require.NoError(t, err)
+				assert.Equal(t, min(currentHour, current.WindowEnd), current.WindowStart)
+				assert.LessOrEqual(t, current.WindowEnd, currentHour+3600)
+				if current.WindowEnd > currentHour {
+					require.Len(t, current.Models, 1)
+					assert.Equal(t, int64(3), current.Models[0].RequestCount)
+					assert.Equal(t, 66.67, current.Models[0].SuccessRate)
+				} else {
+					// At the exact second of a new hour the effective window is empty.
+					assert.Empty(t, current.Models)
+				}
+				beforeNow := time.Now().Unix()
+				capped, err := QuerySummaryRange(hour, math.MaxInt64, []string{})
+				require.NoError(t, err)
+				assert.GreaterOrEqual(t, capped.WindowEnd, beforeNow)
+				assert.LessOrEqual(t, capped.WindowEnd, time.Now().Unix())
+				future, err := QuerySummaryRange(math.MaxInt64-3600, math.MaxInt64, []string{"precision"})
+				require.NoError(t, err)
+				assert.Equal(t, future.WindowStart, future.WindowEnd)
+				assert.Empty(t, future.Models)
+				assert.Nil(t, future.Summary)
+			})
 
 			t.Run("recent models are summarized over their status sample hours", func(t *testing.T) {
 				for i := range 26 {

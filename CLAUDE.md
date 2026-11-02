@@ -18,7 +18,7 @@ Rules:
 - If the task touches billing as defined under **Billing rules (mandatory read gate)** in `AGENTS.md`, also Read `.agents/rules/billing.md` in full before planning or editing. Tasks outside that definition may skip it.
 - For any feature, fix, or change request, also Read `.agents/rules/workflow.md` and follow it from requirement to deploy.
 
-This file only adds commands and a map of the request path; the rules live in the files above.
+This file only adds commands and a map of the request path; the rules live in the shared files above. Codex and Claude Code follow the same project workflow. Read skills from the shared user directory specified there; Claude slash commands are optional entry points, not separate procedures.
 
 ## Commands
 

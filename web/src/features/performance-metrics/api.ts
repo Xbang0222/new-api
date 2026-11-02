@@ -1,3 +1,4 @@
+import type { DashboardTimeRange } from '@/features/dashboard/types'
 /*
 Copyright (C) 2023-2026 QuantumNous
 
@@ -21,11 +22,14 @@ import { api } from '@/lib/api'
 import type { PerformanceMetricsData, PerfSummaryAllData } from './types'
 
 export async function getPerfMetricsSummary(
-  hours = 24,
+  hoursOrRange: number | DashboardTimeRange = 24,
   recentModels?: string[]
 ): Promise<PerfSummaryAllData> {
   const res = await api.get<PerfSummaryAllData>('/api/perf-metrics/summary', {
-    params: { hours, recent_model: recentModels },
+    params:
+      typeof hoursOrRange === 'number'
+        ? { hours: hoursOrRange, recent_model: recentModels }
+        : hoursOrRange,
     paramsSerializer: { indexes: null },
   })
   return res.data

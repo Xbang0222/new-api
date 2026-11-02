@@ -10,7 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func parseFlowQuotaTimeRange(c *gin.Context) (int64, int64, bool) {
+func parseDashboardQuotaTimeRange(c *gin.Context) (int64, int64, bool) {
 	startTimestamp, err := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
 	if err != nil || startTimestamp <= 0 {
 		common.ApiErrorMsg(c, "invalid start_timestamp")
@@ -29,8 +29,10 @@ func parseFlowQuotaTimeRange(c *gin.Context) (int64, int64, bool) {
 }
 
 func GetAllQuotaDates(c *gin.Context) {
-	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
-	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
+	startTimestamp, endTimestamp, ok := parseDashboardQuotaTimeRange(c)
+	if !ok {
+		return
+	}
 	username := c.Query("username")
 	dates, err := model.GetAllQuotaDates(startTimestamp, endTimestamp, username)
 	if err != nil {
@@ -46,8 +48,10 @@ func GetAllQuotaDates(c *gin.Context) {
 }
 
 func GetQuotaDatesByUser(c *gin.Context) {
-	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
-	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
+	startTimestamp, endTimestamp, ok := parseDashboardQuotaTimeRange(c)
+	if !ok {
+		return
+	}
 	dates, err := model.GetQuotaDataGroupByUser(startTimestamp, endTimestamp)
 	if err != nil {
 		common.ApiError(c, err)
@@ -62,8 +66,10 @@ func GetQuotaDatesByUser(c *gin.Context) {
 
 func GetUserQuotaDates(c *gin.Context) {
 	userId := c.GetInt("id")
-	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
-	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
+	startTimestamp, endTimestamp, ok := parseDashboardQuotaTimeRange(c)
+	if !ok {
+		return
+	}
 	startTimestamp, err := limitLogTimeRange(startTimestamp, endTimestamp)
 	if err != nil {
 		common.ApiError(c, err)
@@ -83,7 +89,7 @@ func GetUserQuotaDates(c *gin.Context) {
 }
 
 func GetAllFlowQuotaDates(c *gin.Context) {
-	startTimestamp, endTimestamp, ok := parseFlowQuotaTimeRange(c)
+	startTimestamp, endTimestamp, ok := parseDashboardQuotaTimeRange(c)
 	if !ok {
 		return
 	}
@@ -103,7 +109,7 @@ func GetAllFlowQuotaDates(c *gin.Context) {
 
 func GetUserFlowQuotaDates(c *gin.Context) {
 	userId := c.GetInt("id")
-	startTimestamp, endTimestamp, ok := parseFlowQuotaTimeRange(c)
+	startTimestamp, endTimestamp, ok := parseDashboardQuotaTimeRange(c)
 	if !ok {
 		return
 	}
