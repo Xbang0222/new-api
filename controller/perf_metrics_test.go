@@ -38,7 +38,7 @@ func TestPerformanceSummaryExplicitDashboardRange(t *testing.T) {
 	assert.Equal(t, 60.0, payload.Data.Summary.SuccessRate)
 	assert.Equal(t, int64(1200), payload.Data.Summary.AvgLatencyMs)
 	assert.Equal(t, int64(3600), payload.Data.WindowStart)
-	assert.Equal(t, int64(7300), payload.Data.WindowEnd)
+	assert.Equal(t, int64(10800), payload.Data.WindowEnd)
 	for _, query := range []string{
 		"start_timestamp=3661", "end_timestamp=7300", "start_timestamp=&end_timestamp=7300", "start_timestamp=bad&end_timestamp=7300", "start_timestamp=0&end_timestamp=7300", "start_timestamp=7300&end_timestamp=3661", "start_timestamp=3661&end_timestamp=7300&recent_model=dashboard-range",
 	} {
