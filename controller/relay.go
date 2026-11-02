@@ -108,7 +108,6 @@ func writeRelayStreamError(c *gin.Context, relayFormat types.RelayFormat, relayE
 	}
 	status.MarkFailed(string(relayErr.GetErrorCode()), string(relayErr.GetErrorType()), relayErr.StatusCode)
 	upstreamURLs := common.UpstreamAddresses(c)
-	helper.ExtendWriteDeadline(c)
 	if relayFormat == types.RelayFormatClaude {
 		body, err := common.Marshal(gin.H{
 			"type":  "error",
