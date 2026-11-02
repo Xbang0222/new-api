@@ -33,6 +33,7 @@ import {
 } from '@/components/ui/empty'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { useSidebarModules } from '@/hooks/use-sidebar-config'
 
 import { getChannelSchedulingOverview } from './api'
 import { OverviewCards } from './components/overview-cards'
@@ -51,13 +52,21 @@ const POLL_INTERVAL_MS = 2000
 const EMPTY_FILTERS: SchedulingFilters = { group: '', model: '', priority: '' }
 
 export function ChannelScheduling() {
+  const isModuleEnabled = useSidebarModules()
   const { t } = useTranslation()
-  const [activeTab, setActiveTab] = useState('overview')
+  const [selectedTab, setActiveTab] = useState('overview')
+  const visibleTabs = ['overview', 'pools', 'settings'].filter((key) =>
+    isModuleEnabled('scheduling', key)
+  )
+  const activeTab = visibleTabs.includes(selectedTab)
+    ? selectedTab
+    : (visibleTabs[0] ?? '')
   const [selectedGroup, setSelectedGroup] = useState('')
   const [selectedPoolKey, setSelectedPoolKey] = useState('')
   const overviewQuery = useQuery({
     queryKey: ['channel-scheduling-overview'],
     queryFn: () => getChannelSchedulingOverview(EMPTY_FILTERS),
+    enabled: activeTab !== '' && activeTab !== 'settings',
     refetchInterval: activeTab === 'settings' ? false : POLL_INTERVAL_MS,
     refetchIntervalInBackground: false,
   })
@@ -181,14 +190,22 @@ export function ChannelScheduling() {
           className='flex flex-col gap-4'
         >
           <TabsList>
-            <TabsTrigger value='overview'>
-              {t('Real-time overview')}
-            </TabsTrigger>
-            <TabsTrigger value='pools'>{t('Pool details')}</TabsTrigger>
-            <TabsTrigger value='settings'>{t('Strategy settings')}</TabsTrigger>
+            {isModuleEnabled('scheduling', 'overview') && (
+              <TabsTrigger value='overview'>
+                {t('Real-time overview')}
+              </TabsTrigger>
+            )}
+            {isModuleEnabled('scheduling', 'pools') && (
+              <TabsTrigger value='pools'>{t('Pool details')}</TabsTrigger>
+            )}
+            {isModuleEnabled('scheduling', 'settings') && (
+              <TabsTrigger value='settings'>
+                {t('Strategy settings')}
+              </TabsTrigger>
+            )}
           </TabsList>
 
-          {activeTab !== 'settings' && (
+          {activeTab !== '' && activeTab !== 'settings' && (
             <SchedulingScopeSelector
               groups={groups}
               selectedGroup={activeGroup}
@@ -201,22 +218,28 @@ export function ChannelScheduling() {
             />
           )}
 
-          <TabsContent value='overview' className='flex flex-col gap-4'>
-            {overviewContent}
-          </TabsContent>
+          {isModuleEnabled('scheduling', 'overview') && (
+            <TabsContent value='overview' className='flex flex-col gap-4'>
+              {overviewContent}
+            </TabsContent>
+          )}
 
-          <TabsContent value='pools'>
-            <PoolTable
-              group={activeGroup}
-              pools={pools}
-              faults={overviewQuery.data?.faults ?? []}
-              channelFaults={overviewQuery.data?.channel_faults ?? []}
-            />
-          </TabsContent>
+          {isModuleEnabled('scheduling', 'pools') && (
+            <TabsContent value='pools'>
+              <PoolTable
+                group={activeGroup}
+                pools={pools}
+                faults={overviewQuery.data?.faults ?? []}
+                channelFaults={overviewQuery.data?.channel_faults ?? []}
+              />
+            </TabsContent>
+          )}
 
-          <TabsContent value='settings'>
-            <SettingsPanel />
-          </TabsContent>
+          {isModuleEnabled('scheduling', 'settings') && (
+            <TabsContent value='settings'>
+              <SettingsPanel />
+            </TabsContent>
+          )}
         </Tabs>
       </SectionPageLayout.Content>
     </SectionPageLayout>

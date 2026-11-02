@@ -268,6 +268,44 @@ describe('dashboard quota query', () => {
     ).toBeVisible()
   })
 
+  it('explains incomplete historical cache totals without adding cache counts to total tokens', async () => {
+    vi.spyOn(api, 'get').mockResolvedValue({
+      data: {
+        success: true,
+        data: [
+          {
+            created_at: 1793613600,
+            count: 2,
+            token_used: 600,
+            cache_read_tokens: 100,
+            cache_creation_tokens: 50,
+          },
+        ],
+      },
+    })
+    render(
+      <Wrapper>
+        <Cards filters={first} />
+      </Wrapper>
+    )
+    expect(
+      await within(
+        screen.getByRole('group', { name: 'Total Tokens' })
+      ).findByText('600')
+    ).toBeVisible()
+    expect(
+      within(screen.getByRole('group', { name: 'Cache Read' })).getByText('100')
+    ).toBeVisible()
+    expect(
+      within(screen.getByRole('group', { name: 'Cache Write' })).getByText('50')
+    ).toBeVisible()
+    expect(
+      screen.getByText(
+        'Historical cache totals may be incomplete when older versions did not collect cache usage. Updates do not reset existing totals.'
+      )
+    ).toBeVisible()
+  })
+
   it('exposes a transport failure as an error without usable data', async () => {
     vi.spyOn(api, 'get').mockRejectedValue(new Error('offline'))
     const hook = renderHook(() => useDashboardQuota(first, true), {

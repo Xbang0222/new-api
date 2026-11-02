@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useEffect, useMemo } from 'react'
+import { Fragment, useEffect, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 
@@ -43,7 +43,13 @@ import {
   SIDEBAR_MODULES_DEFAULT,
   type SidebarModulesAdminConfig,
   serializeSidebarModulesAdmin,
+  isSidebarModuleSelected,
 } from './config'
+import { SidebarChildControls } from './sidebar-child-controls'
+import {
+  getSidebarChildSection,
+  SIDEBAR_CHILD_SECTIONS,
+} from './sidebar-child-sections'
 
 type SidebarModulesSectionProps = {
   config: SidebarModulesAdminConfig
@@ -174,6 +180,7 @@ export function SidebarModulesSection({
         title: t('Invoice Management'),
         description: t('Review, issue, and deliver user invoice applications.'),
       },
+      taskPlugins: { title: t('Task Plugins'), description: t('Task Plugins') },
       systemInfo: {
         title: t('System Info'),
         description: t('Inspect system instances and runtime status.'),
@@ -202,11 +209,22 @@ export function SidebarModulesSection({
     })
   }
 
+  const currentConfig = form.watch()
+  const setModule = (section: string, module: string, checked: boolean) => {
+    form.setValue(`${section}.${module}`, checked, { shouldDirty: true })
+    const child = getSidebarChildSection(section, module)
+    if (checked && child) {
+      form.setValue(`${child[0]}.enabled`, true, { shouldDirty: true })
+    }
+  }
+
   const resetToDefault = () => {
     form.reset(SIDEBAR_MODULES_DEFAULT)
   }
 
-  const sections = Object.entries(config)
+  const sections = Object.entries(config).filter(
+    ([key]) => !SIDEBAR_CHILD_SECTIONS[key]
+  )
 
   return (
     <SettingsSection title={t('Sidebar modules')}>
@@ -252,7 +270,7 @@ export function SidebarModulesSection({
                   )}
                 />
 
-                <SettingsControlChildren className='grid gap-3 md:grid-cols-2'>
+                <SettingsControlChildren className='grid gap-3'>
                   {modules.map(([moduleKey]) => {
                     const moduleInfo = moduleMeta[sectionKey]?.[moduleKey] ?? {
                       title: toTitleCase(moduleKey),
@@ -261,34 +279,57 @@ export function SidebarModulesSection({
                     const moduleDisabled =
                       // eslint-disable-next-line @typescript-eslint/no-explicit-any
                       !form.watch(`${sectionKey}.enabled` as any)
+                    const childEntry = getSidebarChildSection(
+                      sectionKey,
+                      moduleKey
+                    )
+                    const moduleChecked = isSidebarModuleSelected(
+                      currentConfig,
+                      sectionKey,
+                      moduleKey
+                    )
+                    const childrenDisabled = moduleDisabled || !moduleChecked
                     return (
-                      <FormField
-                        key={`${sectionKey}.${moduleKey}`}
-                        control={form.control}
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        name={`${sectionKey}.${moduleKey}` as any}
-                        render={({ field }) => (
-                          <SettingsSwitchItem
-                            className={
-                              moduleDisabled ? 'py-2 opacity-50' : 'py-2'
-                            }
-                          >
-                            <SettingsSwitchContent>
-                              <FormLabel>{moduleInfo.title}</FormLabel>
-                              <FormDescription>
-                                {moduleInfo.description}
-                              </FormDescription>
-                            </SettingsSwitchContent>
-                            <FormControl>
-                              <Switch
-                                checked={Boolean(field.value)}
-                                onCheckedChange={field.onChange}
-                                disabled={moduleDisabled}
-                              />
-                            </FormControl>
-                          </SettingsSwitchItem>
+                      <Fragment key={`${sectionKey}.${moduleKey}`}>
+                        <FormField
+                          key={`${sectionKey}.${moduleKey}`}
+                          control={form.control}
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                          name={`${sectionKey}.${moduleKey}` as any}
+                          render={() => (
+                            <SettingsSwitchItem
+                              className={
+                                moduleDisabled ? 'py-2 opacity-50' : 'py-2'
+                              }
+                            >
+                              <SettingsSwitchContent>
+                                <FormLabel>{moduleInfo.title}</FormLabel>
+                                <FormDescription>
+                                  {moduleInfo.description}
+                                </FormDescription>
+                              </SettingsSwitchContent>
+                              <FormControl>
+                                <Switch
+                                  checked={moduleChecked}
+                                  onCheckedChange={(checked) =>
+                                    setModule(sectionKey, moduleKey, checked)
+                                  }
+                                  disabled={moduleDisabled}
+                                />
+                              </FormControl>
+                            </SettingsSwitchItem>
+                          )}
+                        />
+                        {childEntry && (
+                          <SidebarChildControls
+                            section={childEntry[0]}
+                            config={currentConfig}
+                            disabled={childrenDisabled}
+                            controlPrefix='sidebar-admin'
+                            onChange={setModule}
+                          />
                         )}
-                      />
+                      </Fragment>
                     )
                   })}
                 </SettingsControlChildren>

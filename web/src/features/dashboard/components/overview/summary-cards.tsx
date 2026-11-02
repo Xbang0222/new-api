@@ -27,6 +27,7 @@ import { Button } from '@/components/ui/button'
 import { getUserQuotaDates } from '@/features/dashboard/api'
 import { useSummaryCardsConfig } from '@/features/dashboard/hooks/use-dashboard-config'
 import type { QuotaDataItem } from '@/features/dashboard/types'
+import { useSidebarModules } from '@/hooks/use-sidebar-config'
 import { useStatus } from '@/hooks/use-status'
 import { getCurrencyLabel, isCurrencyDisplayEnabled } from '@/lib/currency'
 import { formatNumber, formatQuota } from '@/lib/format'
@@ -133,6 +134,7 @@ const HEALTH_CONFIG: Record<
 }
 
 export function SummaryCards() {
+  const isModuleEnabled = useSidebarModules()
   const { t } = useTranslation()
   const user = useAuthStore((state) => state.auth.user)
   const { status, loading } = useStatus()
@@ -225,11 +227,15 @@ export function SummaryCards() {
     todayUsageDisplay,
     currencyEnabled,
     currencyLabel,
-  }).map((item) => ({
-    ...item,
-    sparkline: getSummarySparkline(item.key, sparklineData),
-  }))
+  })
+    .filter((item) => isModuleEnabled('overviewSummary', item.key))
+    .map((item) => ({
+      ...item,
+      sparkline: getSummarySparkline(item.key, sparklineData),
+    }))
   const metricsLoading = loading || usageTrendQuery.isLoading
+  const visibleMetricCount =
+    items.length + Number(isModuleEnabled('overviewSummary', 'balance'))
 
   return (
     <section className='border-border/60 bg-card/95 h-full overflow-hidden rounded-2xl border shadow-sm'>
@@ -255,20 +261,29 @@ export function SummaryCards() {
         </div>
       </div>
 
-      <div className='bg-border/50 grid gap-px sm:grid-cols-2 xl:grid-cols-4'>
-        <div className='bg-info/[0.035] min-w-0 p-4 sm:p-5'>
-          <StatCard
-            title={t('Credit remaining')}
-            value={formatQuota(remainQuota)}
-            description={`${t('Runway')}: ${runwayDisplay}`}
-            icon={creditIcon}
-            iconTone='info'
-            tone='accent-1'
-            sparkline={sparklineData.balance}
-            sparklineVariant='line'
-            loading={metricsLoading}
-          />
-        </div>
+      <div
+        className={cn(
+          'bg-border/50 grid gap-px',
+          visibleMetricCount > 1 && 'sm:grid-cols-2',
+          visibleMetricCount === 3 && 'xl:grid-cols-3',
+          visibleMetricCount === 4 && 'xl:grid-cols-4'
+        )}
+      >
+        {isModuleEnabled('overviewSummary', 'balance') && (
+          <div className='bg-info/[0.035] min-w-0 p-4 sm:p-5'>
+            <StatCard
+              title={t('Credit remaining')}
+              value={formatQuota(remainQuota)}
+              description={`${t('Runway')}: ${runwayDisplay}`}
+              icon={creditIcon}
+              iconTone='info'
+              tone='accent-1'
+              sparkline={sparklineData.balance}
+              sparklineVariant='line'
+              loading={metricsLoading}
+            />
+          </div>
+        )}
         {items.map((item) => (
           <div key={item.key} className='bg-card min-w-0 p-4 sm:p-5'>
             <StatCard

@@ -16,7 +16,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import {
+  isSidebarModuleContentVisibleForConfig,
+  parseSidebarModuleLayers,
+} from '@/hooks/use-sidebar-config'
 import { useStatus } from '@/hooks/use-status'
+import { useAuthStore } from '@/stores/auth-store'
 
 import type { AnnouncementItem, ApiInfoItem, FAQItem } from '../types'
 
@@ -62,13 +67,32 @@ export function useFAQ() {
  * Get dashboard content panel visibility
  */
 export function useDashboardContentVisibility() {
-  const { status } = useStatus()
-  const hasStatus = Boolean(status)
+  const { status, ready } = useStatus()
+  const user = useAuthStore((state) => state.auth.user)
+  const { adminConfig, userConfig } = parseSidebarModuleLayers(status, user)
+  const panels = Object.fromEntries(
+    Object.keys(adminConfig.overview).map((key) => [
+      key,
+      ready &&
+        isSidebarModuleContentVisibleForConfig(
+          'overview',
+          key,
+          adminConfig,
+          userConfig
+        ),
+    ])
+  )
 
   return {
-    apiInfo: hasStatus && status?.api_info_enabled !== false,
-    announcements: hasStatus && status?.announcements_enabled !== false,
-    faq: hasStatus && status?.faq_enabled !== false,
-    uptimeKuma: hasStatus && status?.uptime_kuma_enabled !== false,
+    summary: panels.summary,
+    community: panels.community,
+    performanceHealth: panels.performanceHealth,
+    guide: panels.guide,
+    invitationRanking: panels.invitationRanking,
+    apiInfo: panels.apiInfo && status?.api_info_enabled !== false,
+    announcements:
+      panels.announcements && status?.announcements_enabled !== false,
+    faq: panels.faq && status?.faq_enabled !== false,
+    uptimeKuma: panels.uptimeKuma && status?.uptime_kuma_enabled !== false,
   }
 }

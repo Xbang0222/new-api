@@ -159,6 +159,9 @@ func TestGetAffCodeCanReturnInvitationDetails(t *testing.T) {
 }
 
 func TestInvitationRankingDatabaseMatrix(t *testing.T) {
+	previousMap := common.OptionMap
+	common.OptionMap = map[string]string{"SidebarModulesAdmin": `{"overview":{"invitationRanking":true}}`}
+	t.Cleanup(func() { common.OptionMap = previousMap })
 	for _, database := range []struct{ kind, env string }{
 		{"sqlite", ""}, {"mysql", "TEST_MYSQL_DSN"}, {"postgres", "TEST_POSTGRES_DSN"},
 	} {
@@ -215,5 +218,43 @@ func TestInvitationRankingDatabaseMatrix(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestInvitationRankingDisabled(t *testing.T) {
+	previousMap := common.OptionMap
+	previousDB := model.DB
+	common.OptionMap = map[string]string{}
+	model.DB = nil
+	t.Cleanup(func() {
+		common.OptionMap = previousMap
+		model.DB = previousDB
+	})
+	for _, config := range []string{
+		"", "invalid", `{}`, `{"overview":{"invitationRanking":false}}`,
+		`{"console":{"enabled":false},"overview":{"invitationRanking":true}}`,
+		`{"console":{"overview":false},"overview":{"invitationRanking":true}}`,
+		`{"console":{"detail":false},"overview":{"invitationRanking":true}}`,
+		`{"overview":{"enabled":false,"invitationRanking":true}}`,
+	} {
+		common.OptionMap["SidebarModulesAdmin"] = config
+		for _, role := range []int{common.RoleCommonUser, common.RoleAdminUser, common.RoleRootUser} {
+			recorder := httptest.NewRecorder()
+			ctx, _ := gin.CreateTestContext(recorder)
+			ctx.Request = httptest.NewRequest(http.MethodGet, "/api/data/invitation-ranking", nil)
+			ctx.Set("id", 1)
+			ctx.Set("role", role)
+			GetInvitationRanking(ctx)
+			require.Equal(t, http.StatusOK, recorder.Code)
+			assert.Equal(t, "no-store", recorder.Header().Get("Cache-Control"))
+			var payload struct {
+				Success bool                           `json:"success"`
+				Data    []model.InvitationRankingEntry `json:"data"`
+			}
+			require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &payload))
+			assert.True(t, payload.Success)
+			assert.NotNil(t, payload.Data)
+			assert.Empty(t, payload.Data)
+		}
 	}
 }
