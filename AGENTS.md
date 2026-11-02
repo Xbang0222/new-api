@@ -2,6 +2,10 @@
 
 DO NOT send optional commentary
 
+## Project Workflow (all coding agents)
+
+Before planning, implementing, or reviewing any feature, fix, or change in this repository, read `.agents/rules/workflow.md` in full and follow it. It is the shared project workflow for Codex, Claude Code, and other agents. Read referenced skills using the available file-reading tool; no particular slash-command or vendor-specific tool is required. Existing explicit user approval remains valid across workflow stages.
+
 ## Overview
 
 This is an AI API gateway/proxy built with Go. It aggregates 40+ upstream AI providers (OpenAI, Claude, Gemini, Azure, AWS Bedrock, etc.) behind a unified API, with user management, billing, rate limiting, and an admin dashboard.
