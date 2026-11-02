@@ -14,3 +14,14 @@ Rules:
 - After reading, follow every rule in `AGENTS.md` for the rest of the work.
 - If the task touches `web/`, also Read `web/AGENTS.md` before editing frontend files.
 - If the task touches billing as defined under **Billing rules (mandatory read gate)** in `AGENTS.md`, also Read `.agents/rules/billing.md` in full before planning or editing. Tasks outside that definition may skip it.
+- For any feature, fix, or change request, also Read `.agents/rules/workflow.md` and follow it from requirement to deploy.
+
+## Agent skills
+
+### Issue tracker
+
+Local markdown under `.scratch/` (never GitHub issues; this repository is public). See `.agents/rules/workflow.md`.
+
+### Domain docs
+
+Single-context. No glossary or ADR files yet; use the vocabulary in `AGENTS.md`.
