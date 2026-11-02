@@ -38,6 +38,8 @@ Run and record the actual results of every check that applies:
 ## 6. Release and deploy
 
 - Release: the owner runs the `Ruoli Publish` workflow (or asks the agent to run `gh workflow run ruoli-publish.yml`), which builds the `xbang0222/new-api:<tag>` image.
-- Staging first: `scripts/deploy/deploy.sh staging <tag>`, then let the owner check the staging site.
+- SSH uses the owner's 1Password agent, which cannot prompt for background processes. If `ssh netcup` hangs, ask the owner to run `scripts/deploy/deploy.sh login` in a visible terminal (one fingerprint, valid 8 hours); later commands reuse that connection.
+- Staging first: `scripts/deploy/deploy.sh staging <tag>`, then `scripts/deploy/deploy.sh tunnel` so the owner can check it at http://localhost:3041. Staging is isolated: its own SQLite database, no access to production MySQL or Redis.
+- Never read production database contents or credentials outside `deploy.sh`.
 - Production only after the owner explicitly approves that tag: `scripts/deploy/deploy.sh prod <tag>`. The script backs up the database, switches the image, health-checks, and rolls back automatically on failure.
 - Manual rollback: `scripts/deploy/deploy.sh prod <previous-tag>`.
