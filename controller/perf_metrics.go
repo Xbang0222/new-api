@@ -26,7 +26,20 @@ func GetPerfMetricsSummary(c *gin.Context) {
 		return
 	}
 	activeGroups := append(lo.Keys(ratio_setting.GetGroupRatioCopy()), "auto")
-	result, err := perfmetrics.QuerySummaryAll(hours, activeGroups, recentModels...)
+	var result perfmetrics.SummaryAllResult
+	var err error
+	query := c.Request.URL.Query()
+	if query.Has("start_timestamp") || query.Has("end_timestamp") {
+		start, startErr := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
+		end, endErr := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
+		if startErr != nil || endErr != nil || start <= 0 || end < start || query.Has("recent_model") {
+			common.ApiErrorStatus(c, http.StatusBadRequest, common.NewMessage("Invalid parameters"))
+			return
+		}
+		result, err = perfmetrics.QuerySummaryRange(start, end, activeGroups)
+	} else {
+		result, err = perfmetrics.QuerySummaryAll(hours, activeGroups, recentModels...)
+	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,

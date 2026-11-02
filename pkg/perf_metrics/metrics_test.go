@@ -238,12 +238,33 @@ func TestPerformanceAggregationAndFlush(t *testing.T) {
 			assert.NotContains(t, string(encoded), "request_count")
 			assert.NotContains(t, string(encoded), "success_count")
 
+			// The dashboard may request a historical partial-hour range. Database
+			// and hot data must use the same effective boundaries, not time.Now().
+			excludedHot := &atomicBucket{}
+			excludedHot.add(Sample{Success: true})
+			excludedKey := bucketKey{model: "outside-dashboard-range", group: "a", bucketTs: hour + 3600}
+			hotBuckets.Store(excludedKey, excludedHot)
+			require.NoError(t, model.UpsertPerfMetric(&model.PerfMetric{ModelName: "outside-dashboard-range", Group: "a", BucketTs: hour + 3600, RequestCount: 10, SuccessCount: 10}))
+			explicit, err := QuerySummaryRange(hour+60, hour+120, groups)
+			require.NoError(t, err)
+			assert.Equal(t, before.Summary, explicit.Summary)
+			assert.Equal(t, hour, explicit.WindowStart)
+			assert.Equal(t, hour+120, explicit.WindowEnd)
+			require.Len(t, explicit.Models, 1)
+			assert.Equal(t, "test-model", explicit.Models[0].ModelName)
+			hotBuckets.Delete(excludedKey)
+			require.NoError(t, db.Where("model_name = ?", "outside-dashboard-range").Delete(&model.PerfMetric{}).Error)
+
 			flushCompletedBuckets()
 			flushCompletedBuckets()
 			after, err := Query(QueryParams{Model: "test-model", Hours: 24, AllowedGroups: groups})
 			require.NoError(t, err)
 			assert.Equal(t, before.Summary, after.Summary)
 			assert.Equal(t, before.Series, after.Series)
+			persistedRange, err := QuerySummaryRange(hour+60, hour+120, groups)
+			require.NoError(t, err)
+			assert.Equal(t, explicit.Summary, persistedRange.Summary)
+			assert.Equal(t, explicit.Models, persistedRange.Models)
 
 			RecordRelayResult(context.Background(), &relaycommon.RelayInfo{OriginModelName: "test-model", UsingGroup: "a", StartTime: now}, types.InitOpenAIError("context_length_exceeded", 400))
 			after, err = Query(QueryParams{Model: "test-model", Hours: 24, AllowedGroups: groups})

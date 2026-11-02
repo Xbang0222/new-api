@@ -201,12 +201,26 @@ func Query(params QueryParams) (QueryResult, error) {
 }
 
 func QuerySummaryAll(hours int, groups []string, recentModels ...string) (SummaryAllResult, error) {
-	if len(recentModels) > MaxRecentModels {
-		return SummaryAllResult{}, common.NewMessage("Invalid parameters")
-	}
 	now := time.Now()
 	startTs, endTs := queryWindow(now, hours)
 	recentStartTs, _ := queryWindow(now, recentSuccessHistoryHours)
+	return querySummaryWindow(startTs, endTs, recentStartTs, groups, recentModels)
+}
+
+// QuerySummaryRange summarizes the dashboard's explicit window. Historical
+// metrics may contain hourly buckets, so include the overlapping first hour.
+func QuerySummaryRange(startTs, endTs int64, groups []string) (SummaryAllResult, error) {
+	if startTs <= 0 || endTs < startTs {
+		return SummaryAllResult{}, common.NewMessage("Invalid parameters")
+	}
+	startTs -= startTs % 3600
+	return querySummaryWindow(startTs, endTs, startTs, groups, nil)
+}
+
+func querySummaryWindow(startTs, endTs, recentStartTs int64, groups, recentModels []string) (SummaryAllResult, error) {
+	if len(recentModels) > MaxRecentModels {
+		return SummaryAllResult{}, common.NewMessage("Invalid parameters")
+	}
 	allowedGroups := allowedGroupSet(groups)
 	queryStartTs := startTs
 
