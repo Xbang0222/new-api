@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test, vi } from 'vitest'
 
 import type { QuotaDataItem } from '@/features/dashboard/types'
 import type { TimeGranularity } from '@/lib/time'
@@ -261,4 +261,40 @@ describe('dashboard range aggregation', () => {
       users.filter((row: { rawQuota: number }) => row.rawQuota > 0)
     ).toHaveLength(2)
   })
+})
+
+test('preserves Sunday usage and midnight day buckets through a midnight DST transition', () => {
+  vi.stubEnv('TZ', 'America/Santiago')
+  try {
+    const data = [
+      '2026-08-31T12:00:00',
+      '2026-09-06T12:00:00',
+      '2026-09-07T12:00:00',
+      '2026-09-08T12:00:00',
+    ].map((date) => ({
+      created_at: new Date(date).getTime() / 1000,
+      model_name: 'a',
+      username: 'alice',
+      count: 1,
+      quota: 500000,
+    }))
+    const models = processChartData(data, 'week').spec_model_line.data[0].values
+    expect(models.map((row: { Count: number }) => row.Count)).toEqual([2, 2])
+    const users = processUserChartData(data, 'week').spec_user_trend.data[0]
+      .values
+    expect(users.map((row: { rawQuota: number }) => row.rawQuota)).toEqual([
+      1000000, 1000000,
+    ])
+    const daily = processChartData(data.slice(1), 'day').spec_model_line.data[0]
+      .values
+    expect(
+      daily.map((row: { Time: string; Count: number }) => [row.Time, row.Count])
+    ).toEqual([
+      ['09-06', 1],
+      ['09-07', 1],
+      ['09-08', 1],
+    ])
+  } finally {
+    vi.unstubAllEnvs()
+  }
 })

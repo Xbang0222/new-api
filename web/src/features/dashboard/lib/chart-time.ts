@@ -32,10 +32,10 @@ export function dashboardBucketStart(
 ): number {
   if (granularity === 'hour') return Math.floor(timestamp / 3600) * 3600
   const date = new Date(timestamp * 1000)
-  date.setHours(0, 0, 0, 0)
   if (granularity === 'week') {
     date.setDate(date.getDate() - ((date.getDay() + 6) % 7))
   }
+  date.setHours(0, 0, 0, 0)
   return date.getTime() / 1000
 }
 
@@ -66,6 +66,7 @@ export function buildDashboardTimeAxis(
       } else {
         const next = new Date(timestamp * 1000)
         next.setDate(next.getDate() + (granularity === 'week' ? 7 : 1))
+        next.setHours(0, 0, 0, 0)
         timestamp = next.getTime() / 1000
       }
     }
