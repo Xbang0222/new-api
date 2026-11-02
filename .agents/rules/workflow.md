@@ -34,9 +34,11 @@ Before doing anything that leaves a trace on the owner's computer, the server, o
 
 ## 6. Release and deploy
 
-- Release: the owner runs the `Ruoli Publish` workflow on GitHub (or approves `gh workflow run ruoli-publish.yml`), which builds the `xbang0222/new-api:<tag>` image. This is the only GitHub automation this workflow uses.
-- SSH uses the owner's 1Password agent, which cannot prompt for background processes. If `ssh netcup` hangs, ask the owner to run `scripts/deploy/deploy.sh login` in a visible terminal (one fingerprint, valid 8 hours); later commands reuse that connection.
-- Staging first: `scripts/deploy/deploy.sh staging <tag>`, then `scripts/deploy/deploy.sh tunnel` so the owner can check it at http://localhost:3041. Staging is isolated: its own SQLite database, no access to production MySQL or Redis.
+Release is semi-automatic: one command takes merged `main` to staging; production waits for the owner.
+
+- SSH uses the owner's 1Password agent, which cannot prompt for background processes. If `ssh netcup` hangs or `release` reports no SSH connection, ask the owner to run `scripts/deploy/deploy.sh login` in a visible terminal (one fingerprint, valid 8 hours); later commands reuse that connection.
+- After the merge is pushed and the owner approves releasing it, run `scripts/deploy/deploy.sh release ["<notes>"]` in the background (it takes 10-20 minutes). It runs the `Ruoli Publish` workflow (tag, GitHub release, `xbang0222/new-api:<tag>` image build), waits for the image, and deploys it to staging. This is the only GitHub automation this workflow uses; the Docker build needs the `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` repository secrets.
+- Then `scripts/deploy/deploy.sh tunnel` so the owner can check staging at http://localhost:3041. To redeploy an existing tag to staging only: `scripts/deploy/deploy.sh staging <tag>`. Staging is isolated: its own SQLite database, no access to production MySQL or Redis.
 - Production only after the owner explicitly approves that tag: `scripts/deploy/deploy.sh prod <tag>`. The script backs up the database, switches the image, health-checks, and rolls back automatically on failure.
 - Manual rollback: `scripts/deploy/deploy.sh prod <previous-tag>`.
 - Never read production database contents or credentials outside `deploy.sh`.

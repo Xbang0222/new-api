@@ -6,6 +6,7 @@
 #   scripts/deploy/deploy.sh staging <tag>    isolated test instance: own SQLite, no Redis, 127.0.0.1:3041
 #   scripts/deploy/deploy.sh tunnel           open staging at http://localhost:3041 (Ctrl-C to close)
 #   scripts/deploy/deploy.sh prod <tag>       back up MySQL, swap the container, health-check, roll back on failure
+#   scripts/deploy/deploy.sh release [notes]  publish GitHub main (tag + Docker image), wait for the image, deploy it to staging
 #
 # Roll back production by deploying the previous tag: scripts/deploy/deploy.sh prod <previous-tag>
 set -euo pipefail
@@ -13,10 +14,16 @@ set -euo pipefail
 HOST=${DEPLOY_HOST:-netcup}
 CONTROL_PATH=${DEPLOY_CONTROL_PATH:-$HOME/.ssh/cm-netcup}
 SSH_OPTS=(-o ControlMaster=auto -o "ControlPath=$CONTROL_PATH" -o ControlPersist=8h)
+REPO=${DEPLOY_REPO:-Xbang0222/new-api}
 
 remote() { ssh "${SSH_OPTS[@]}" "$HOST" "$@"; }
 
-usage() { sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 1; }
+usage() { sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; exit 1; }
+
+# Print the id of the newest run of a workflow (optionally for one branch or tag), or nothing.
+latest_run() {
+  gh run list --repo "$REPO" --workflow "$1" ${2:+--branch "$2"} --limit 1 --json databaseId --jq '.[0].databaseId // empty'
+}
 
 require_tag() {
   [[ ${1:-} =~ ^v[0-9A-Za-z.+-]+$ ]] || { echo "error: tag must look like v1.0.0-rc.25-ruoli-0.4" >&2; exit 1; }
@@ -163,6 +170,47 @@ case ${1:-} in
   prod)
     require_tag "${2:-}"
     remote "bash -s -- $2" <<< "$PROD_SCRIPT"
+    ;;
+  release)
+    # Checked first so a missing SSH connection fails now, not after a 20-minute image build.
+    ssh -O check -o "ControlPath=$CONTROL_PATH" "$HOST" 2>/dev/null \
+      || { echo "error: no SSH connection; run 'scripts/deploy/deploy.sh login' in a terminal first" >&2; exit 1; }
+    head=$(gh api "repos/$REPO/commits/main" --jq .sha)
+    [ "$(git rev-parse HEAD)" = "$head" ] \
+      || { echo "error: this checkout is not at GitHub main ($head); merge and push first" >&2; exit 1; }
+
+    before=$(latest_run ruoli-publish.yml)
+    gh workflow run ruoli-publish.yml --repo "$REPO" --ref main ${2:+-f notes="$2"}
+    echo "==> waiting for Ruoli Publish to start"
+    for _ in $(seq 30); do
+      run=$(latest_run ruoli-publish.yml)
+      [ -n "$run" ] && [ "$run" != "$before" ] && break
+      sleep 2
+    done
+    [ -n "$run" ] && [ "$run" != "$before" ] || { echo "error: Ruoli Publish did not start" >&2; exit 1; }
+    gh run watch "$run" --repo "$REPO" --exit-status --interval 10 >/dev/null \
+      || { echo "error: Ruoli Publish failed: gh run view $run --repo $REPO --log-failed" >&2; exit 1; }
+
+    # Ruoli Publish creates an annotated tag; its peeled "^{}" line carries the commit it points at.
+    tag=$(git ls-remote --tags "https://github.com/$REPO.git" \
+      | awk -v h="$head" '$1 == h && $2 ~ /-ruoli-0\.[0-9]+\^\{\}$/ { sub("refs/tags/", "", $2); sub(/\^\{\}$/, "", $2); print $2 }' \
+      | sort -V | tail -1)
+    require_tag "$tag"
+    echo "==> published $tag; waiting for the Docker image (usually 10-20 minutes)"
+    for _ in $(seq 30); do
+      build=$(latest_run docker-build.yml "$tag")
+      [ -n "$build" ] && break
+      sleep 2
+    done
+    [ -n "$build" ] || { echo "error: Docker build for $tag did not start" >&2; exit 1; }
+    gh run watch "$build" --repo "$REPO" --exit-status --interval 30 >/dev/null \
+      || { echo "error: Docker build failed: gh run view $build --repo $REPO --log-failed" >&2; exit 1; }
+
+    echo "==> deploying $tag to staging"
+    remote "bash -s -- $tag" <<< "$STAGING_SCRIPT"
+    echo
+    echo "next: scripts/deploy/deploy.sh tunnel   then check http://localhost:3041"
+    echo "      scripts/deploy/deploy.sh prod $tag   only after the owner approves"
     ;;
   *)
     usage
