@@ -21,6 +21,7 @@ import {
   CardStaggerContainer,
   CardStaggerItem,
 } from '@/components/page-transition'
+import { useSidebarModules } from '@/hooks/use-sidebar-config'
 import { useStatus } from '@/hooks/use-status'
 import { useAuthStore } from '@/stores/auth-store'
 
@@ -32,6 +33,7 @@ import { SidebarModulesCard } from './components/sidebar-modules-card'
 import { useProfile } from './hooks'
 
 export function Profile() {
+  const isModuleEnabled = useSidebarModules()
   const { profile, loading, refreshProfile } = useProfile()
   const { status } = useStatus()
   const permissions = useAuthStore((s) => s.auth.user?.permissions)
@@ -57,28 +59,35 @@ export function Profile() {
           <CardStaggerItem>
             <div className='grid gap-4 sm:gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.46fr)] xl:items-start'>
               <div className='space-y-4 sm:space-y-6'>
-                <ProfileSettingsCard
-                  profile={profile}
-                  loading={loading}
-                  onProfileUpdate={refreshProfile}
-                  quotaRemindEnabled={quotaRemindEnabled}
-                  quotaRemindThreshold={quotaRemindThreshold}
-                />
-                <LanguagePreferencesCard
-                  profile={profile}
-                  onProfileUpdate={refreshProfile}
-                />
+                {isModuleEnabled('profile', 'details') && (
+                  <ProfileSettingsCard
+                    profile={profile}
+                    loading={loading}
+                    onProfileUpdate={refreshProfile}
+                    quotaRemindEnabled={quotaRemindEnabled}
+                    quotaRemindThreshold={quotaRemindThreshold}
+                  />
+                )}
+                {isModuleEnabled('profile', 'preferences') && (
+                  <LanguagePreferencesCard
+                    profile={profile}
+                    onProfileUpdate={refreshProfile}
+                  />
+                )}
               </div>
 
               <div className='space-y-4 sm:space-y-6 xl:sticky xl:top-6'>
-                {checkinEnabled && (
+                {checkinEnabled && isModuleEnabled('profile', 'checkin') && (
                   <CheckinCalendarCard
                     checkinEnabled={checkinEnabled}
                     turnstileEnabled={turnstileEnabled}
                     turnstileSiteKey={turnstileSiteKey}
                   />
                 )}
-                {canConfigureSidebar && <SidebarModulesCard />}
+                {canConfigureSidebar &&
+                  isModuleEnabled('profile', 'sidebar') && (
+                    <SidebarModulesCard />
+                  )}
               </div>
             </div>
           </CardStaggerItem>

@@ -45,6 +45,7 @@ import { useTranslation } from 'react-i18next'
 
 import type { SidebarData } from '@/components/layout/types'
 import { ROLE } from '@/lib/roles'
+import { useAuthStore } from '@/stores/auth-store'
 
 function InvoiceSidebarIcon(
   props: Omit<ComponentProps<typeof HugeiconsIcon>, 'icon'>
@@ -84,6 +85,8 @@ export const SIDEBAR_ROUTE_URLS = {
  */
 export function useSidebarData(): SidebarData {
   const { t } = useTranslation()
+  const isAdmin =
+    (useAuthStore((state) => state.auth.user?.role) ?? 0) >= ROLE.ADMIN
 
   return {
     navGroups: [
@@ -116,6 +119,9 @@ export function useSidebarData(): SidebarData {
           {
             title: t('Dashboard'),
             url: SIDEBAR_ROUTE_URLS.dashboard,
+            configUrls: isAdmin
+              ? ['/dashboard/models', '/dashboard/flow', '/dashboard/users']
+              : ['/dashboard/models'],
             icon: LayoutDashboard,
             tourId: 'dashboard',
           },
@@ -191,6 +197,11 @@ export function useSidebarData(): SidebarData {
           {
             title: t('Models'),
             url: SIDEBAR_ROUTE_URLS.models,
+            configUrls: [
+              '/models/metadata',
+              '/models/vendors',
+              '/models/deployments',
+            ],
             icon: Box,
           },
           {
@@ -228,6 +239,16 @@ export function useSidebarData(): SidebarData {
           {
             title: t('System Settings'),
             url: SIDEBAR_ROUTE_URLS.systemSettings,
+            configUrls: [
+              '/system-settings/site',
+              '/system-settings/auth',
+              '/system-settings/billing',
+              '/system-settings/models',
+              '/system-settings/request-policies',
+              '/system-settings/security',
+              '/system-settings/content',
+              '/system-settings/operations',
+            ],
             activeUrls: ['/system-settings'],
             icon: Settings,
             requiredRole: ROLE.SUPER_ADMIN,

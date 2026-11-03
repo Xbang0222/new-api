@@ -106,6 +106,16 @@ docker inspect "$NAME" > "$DIR/container.inspect.json"
 docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$NAME" | grep -v -e '^PATH=' -e '^$' > "$DIR/app.env"
 echo "$CURRENT" > "$DIR/previous-image"
 
+# The application drains HTTP requests before flushing dashboard statistics.
+# Give that drain its configured budget, plus time for the final database writes.
+DRAIN_SECONDS=$(sed -n 's/^SHUTDOWN_TIMEOUT_SECONDS=//p' "$DIR/app.env")
+DRAIN_SECONDS=${DRAIN_SECONDS:-120}
+if ! [[ $DRAIN_SECONDS =~ ^[0-9]{1,9}$ ]] || [ "$((10#$DRAIN_SECONDS))" -le 0 ]; then
+  echo "invalid SHUTDOWN_TIMEOUT_SECONDS; aborting before stopping production" >&2
+  exit 1
+fi
+STOP_SECONDS=$((10#$DRAIN_SECONDS + 60))
+
 echo "==> backing up MySQL"
 DSN=$(sed -n 's/^SQL_DSN=//p' "$DIR/app.env")
 DB_USER=${DSN%%:*}
@@ -121,8 +131,14 @@ echo "    $(du -h "$DIR/db.sql.gz" | cut -f1) -> $DIR/db.sql.gz"
 
 echo "==> switching $CURRENT -> $IMAGE"
 mkdir -p "$BASE/logs-$TAG"
+docker stop -t "$STOP_SECONDS" "$NAME" >/dev/null
+if [ "$(docker inspect -f '{{.State.Running}} {{.State.ExitCode}} {{.State.OOMKilled}}' "$NAME")" != 'false 0 false' ]; then
+  echo "current container did not exit cleanly; restoring it and aborting upgrade" >&2
+  docker start "$NAME" >/dev/null
+  healthy || echo "restored container failed health check; inspect production before retrying" >&2
+  exit 1
+fi
 docker rm -f "$PREV" >/dev/null 2>&1 || true
-docker stop -t 30 "$NAME" >/dev/null
 docker rename "$NAME" "$PREV"
 docker run -d --name "$NAME" --restart unless-stopped --network 1panel-network \
   -p "127.0.0.1:$PORT:3000" --env-file "$DIR/app.env" \

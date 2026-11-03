@@ -363,6 +363,9 @@ it.each([1, 10])(
               announcements_enabled: false,
               faq_enabled: false,
               uptime_kuma_enabled: false,
+              SidebarModulesAdmin: JSON.stringify({
+                overview: { invitationRanking: true },
+              }),
             },
           },
         }
@@ -403,5 +406,42 @@ it.each([1, 10])(
         within(informationRow).queryByText('Performance health')
       ).not.toBeInTheDocument()
     }
+  }
+)
+
+it.each([false, undefined])(
+  'hides the leaderboard without requesting rankings when the switch is %s',
+  async (enabled) => {
+    client.setQueryData(['status'], {
+      SidebarModulesAdmin: JSON.stringify({
+        overview: { invitationRanking: enabled },
+      }),
+      api_info_enabled: false,
+      announcements_enabled: false,
+      faq_enabled: false,
+      uptime_kuma_enabled: false,
+    })
+    const get = vi.spyOn(api, 'get').mockResolvedValue({
+      data: { success: true, data: [] },
+    })
+    const router = createRouter({
+      routeTree: createRootRoute({ component: OverviewDashboard }),
+      history: createMemoryHistory({ initialEntries: ['/'] }),
+    })
+    await router.load()
+    render(
+      <QueryClientProvider client={client}>
+        <I18nextProvider i18n={i18n}>
+          <RouterProvider router={router} />
+        </I18nextProvider>
+      </QueryClientProvider>
+    )
+    expect(await screen.findByText('Usage at a glance')).toBeVisible()
+    expect(
+      screen.queryByText('Invitation earnings leaderboard')
+    ).not.toBeInTheDocument()
+    expect(
+      get.mock.calls.some(([url]) => url === '/api/data/invitation-ranking')
+    ).toBe(false)
   }
 )

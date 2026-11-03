@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import i18next from 'i18next'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { toast } from 'sonner'
 
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
@@ -35,7 +35,8 @@ import { generateAffiliateLink } from '../lib'
 // Affiliate Hook
 // ============================================================================
 
-export function useAffiliate() {
+export function useAffiliate(enabled = true) {
+  const requestIdRef = useRef(0)
   const [affiliateCode, setAffiliateCode] = useState<string>('')
   const [affiliateLink, setAffiliateLink] = useState<string>('')
   const [loading, setLoading] = useState(true)
@@ -44,9 +45,12 @@ export function useAffiliate() {
 
   // Fetch affiliate code
   const fetchAffiliateCode = useCallback(async () => {
+    if (!enabled) return
+    const requestId = ++requestIdRef.current
     try {
       setLoading(true)
       const response = requireServerSuccess(await getAffiliateCode())
+      if (requestId !== requestIdRef.current) return
 
       if (response.success && response.data) {
         setAffiliateCode(response.data)
@@ -54,11 +58,11 @@ export function useAffiliate() {
         setAffiliateLink(link)
       }
     } catch (error) {
-      handleServerError(error)
+      if (requestId === requestIdRef.current) handleServerError(error)
     } finally {
-      setLoading(false)
+      if (requestId === requestIdRef.current) setLoading(false)
     }
-  }, [])
+  }, [enabled])
 
   // Copy affiliate link
   const copyAffiliateLink = useCallback(() => {
@@ -90,13 +94,17 @@ export function useAffiliate() {
   }, [])
 
   useEffect(() => {
-    fetchAffiliateCode()
-  }, [fetchAffiliateCode])
+    if (!enabled) return
+    void fetchAffiliateCode()
+    return () => {
+      requestIdRef.current += 1
+    }
+  }, [enabled, fetchAffiliateCode])
 
   return {
     affiliateCode,
     affiliateLink,
-    loading,
+    loading: enabled && loading,
     transferring,
     copyAffiliateLink,
     transferQuota,

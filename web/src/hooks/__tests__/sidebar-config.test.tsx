@@ -17,18 +17,27 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, renderHook } from '@testing-library/react'
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { checkIsActive } from '@/components/layout/lib/url-utils'
+import { useDashboardContentVisibility } from '@/features/dashboard/hooks/use-status-data'
 import {
   parseSidebarModulesAdmin,
   serializeSidebarModulesAdmin,
 } from '@/features/system-settings/maintenance/config'
+import { SIDEBAR_CHILD_SECTIONS } from '@/features/system-settings/maintenance/sidebar-child-sections'
+import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth-store'
 
-import { useSidebarConfig } from '../use-sidebar-config'
+import {
+  useSidebarConfig,
+  useSidebarModules,
+  useIsSidebarModuleVisible,
+  isSidebarModuleVisibleForConfig,
+  isSidebarModuleEnabledForConfig,
+} from '../use-sidebar-config'
 import { useSidebarData } from '../use-sidebar-data'
 
 beforeEach(() => {
@@ -182,4 +191,189 @@ describe('audit log sidebar entry', () => {
     expect(titles).not.toContain('Usage Logs')
     expect(titles).toContain('Audit Logs')
   })
+})
+
+const overviewCards = [
+  'summary',
+  'community',
+  'invitationRanking',
+  'performanceHealth',
+  'announcements',
+  'apiInfo',
+  'faq',
+  'uptimeKuma',
+  'guide',
+] as const
+
+it.each(overviewCards)(
+  'hides only the %s overview card when its switch is off',
+  (card) => {
+    const client = new QueryClient()
+    const overview = Object.fromEntries(
+      overviewCards.map((key) => [key, key !== card])
+    )
+    client.setQueryData(['status'], {
+      SidebarModulesAdmin: JSON.stringify({ overview }),
+    })
+    const { result, unmount } = renderHook(
+      () => useDashboardContentVisibility(),
+      {
+        wrapper: ({ children }) => (
+          <QueryClientProvider client={client}>{children}</QueryClientProvider>
+        ),
+      }
+    )
+    for (const key of overviewCards) {
+      expect(result.current[key]).toBe(key !== card)
+    }
+    unmount()
+    client.clear()
+  }
+)
+
+it.each([
+  { console: { enabled: false } },
+  { console: { overview: false } },
+  { overview: { enabled: false, invitationRanking: true } },
+])('hides every overview card when its parent is disabled: %j', (config) => {
+  const client = new QueryClient()
+  client.setQueryData(['status'], {
+    SidebarModulesAdmin: JSON.stringify(config),
+  })
+  const { result, unmount } = renderHook(
+    () => useDashboardContentVisibility(),
+    {
+      wrapper: ({ children }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    }
+  )
+  for (const key of overviewCards) expect(result.current[key]).toBe(false)
+  unmount()
+  client.clear()
+})
+
+it.each(Object.entries(SIDEBAR_CHILD_SECTIONS))(
+  'enforces administrator and parent switches for every %s child',
+  (section, definition) => {
+    const admin = parseSidebarModulesAdmin('')
+    for (const child of definition.modules) {
+      admin[section][child.key] = true
+      expect(
+        isSidebarModuleEnabledForConfig(section, child.key, admin, null)
+      ).toBe(true)
+      admin[section][child.key] = false
+      const user = { [section]: { enabled: true, [child.key]: true } }
+      expect(
+        isSidebarModuleEnabledForConfig(section, child.key, admin, user)
+      ).toBe(false)
+      admin[section][child.key] = true
+      admin[definition.parentSection][definition.parentModule] = false
+      expect(
+        isSidebarModuleEnabledForConfig(section, child.key, admin, user)
+      ).toBe(false)
+      admin[definition.parentSection][definition.parentModule] = true
+    }
+  }
+)
+
+it.each([
+  ['/dashboard/flow', 'dashboard', 'flow'],
+  ['/models/vendors', 'models', 'vendors'],
+  ['/usage-logs/drawing', 'taskLogs', 'drawing'],
+  ['/system-settings/billing/payment', 'systemSettings', 'billing'],
+  ['/task-plugins', 'admin', 'taskPlugins'],
+  ['/chat/123', 'chat', 'chat'],
+])(
+  'hides the disabled destination %s even when opened directly',
+  (url, section, key) => {
+    const admin = parseSidebarModulesAdmin('')
+    expect(isSidebarModuleVisibleForConfig(url, admin, null)).toBe(true)
+    admin[section][key] = false
+    expect(isSidebarModuleVisibleForConfig(url, admin, null)).toBe(false)
+  }
+)
+
+it('keeps the model management entry pointing to an enabled child when the default tab is hidden', () => {
+  const { result } = sidebarFor({ models: { metadata: false, vendors: true } })
+  const models = result.current
+    .flatMap((group) => group.items)
+    .find((item) => item.title === 'Models')
+  expect(models).toHaveProperty('url', '/models/vendors')
+})
+
+it('hides wallet navigation when all of its cards are disabled', () => {
+  const { result } = sidebarFor({
+    wallet: {
+      summary: false,
+      recharge: false,
+      subscriptions: false,
+      affiliate: false,
+    },
+  })
+  expect(
+    result.current
+      .flatMap((group) => group.items)
+      .some((item) => item.title === 'Wallet')
+  ).toBe(false)
+})
+
+it('does not enable modules before status resolves, and applies later settings immediately', async () => {
+  let resolveStatus!: (value: unknown) => void
+  const statusRequest = new Promise((resolve) => {
+    resolveStatus = resolve
+  })
+  vi.spyOn(api, 'get').mockReturnValue(statusRequest)
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  const { result, unmount } = renderHook(
+    () => {
+      const enabled = useSidebarModules()
+      return {
+        security: useIsSidebarModuleVisible('/security'),
+        sessions: enabled('security', 'sessions'),
+        profile: enabled('profile', 'details'),
+      }
+    },
+    {
+      wrapper: ({ children }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    }
+  )
+  expect(result.current).toEqual({
+    security: false,
+    sessions: false,
+    profile: false,
+  })
+  await act(async () => {
+    resolveStatus({
+      data: {
+        success: true,
+        data: {
+          SidebarModulesAdmin: JSON.stringify({
+            security: { sessions: false },
+          }),
+        },
+      },
+    })
+    await statusRequest
+  })
+  await waitFor(() =>
+    expect(result.current).toEqual({
+      security: true,
+      sessions: false,
+      profile: true,
+    })
+  )
+  act(() =>
+    client.setQueryData(['status'], {
+      SidebarModulesAdmin: JSON.stringify({ personal: { security: false } }),
+    })
+  )
+  await waitFor(() => expect(result.current.security).toBe(false))
+  expect(result.current.sessions).toBe(false)
+  unmount()
+  client.clear()
 })

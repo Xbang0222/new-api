@@ -20,11 +20,13 @@ import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
 import { Badge } from '@/components/ui/badge'
+import { useSidebarModules } from '@/hooks/use-sidebar-config'
 
 import { SystemInstancesPanel } from './components/system-instances-panel'
 import { SystemTasksPanel } from './components/system-tasks-panel'
 
 export function SystemInfo() {
+  const isModuleEnabled = useSidebarModules()
   const { t } = useTranslation()
 
   return (
@@ -39,8 +41,10 @@ export function SystemInfo() {
       </SectionPageLayout.Title>
       <SectionPageLayout.Content>
         <div className='space-y-4'>
-          <SystemInstancesPanel />
-          <SystemTasksPanel />
+          {isModuleEnabled('systemInfo', 'instances') && (
+            <SystemInstancesPanel />
+          )}
+          {isModuleEnabled('systemInfo', 'tasks') && <SystemTasksPanel />}
         </div>
       </SectionPageLayout.Content>
     </SectionPageLayout>

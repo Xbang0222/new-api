@@ -54,7 +54,7 @@ function formatStatNumber(value: number, locale: Intl.LocalesArgument) {
 }
 
 export function LogStatCards(props: LogStatCardsProps) {
-  const { i18n } = useTranslation()
+  const { t, i18n } = useTranslation()
   const statCardsConfig = useModelStatCardsConfig()
   const stats = calculateDashboardStats(props.data)
   // The inclusive query includes the whole last stored hour. Only the current
@@ -171,11 +171,11 @@ export function LogStatCards(props: LogStatCardsProps) {
           )
         })}
       </div>
-      {/*<p className='text-muted-foreground border-t px-3 py-2 text-xs'>*/}
-      {/*  {t(*/}
-      {/*    'Cache usage is recorded only after the upgrade; historical data is not backfilled.'*/}
-      {/*  )}*/}
-      {/*</p>*/}
+      <p className='text-muted-foreground border-t px-3 py-2 text-xs'>
+        {t(
+          'Historical cache totals may be incomplete when older versions did not collect cache usage. Updates do not reset existing totals.'
+        )}
+      </p>
     </div>
   )
 }

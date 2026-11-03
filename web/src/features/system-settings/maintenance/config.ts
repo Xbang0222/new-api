@@ -16,6 +16,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import {
+  getSidebarChildSection,
+  SIDEBAR_CHILD_SECTIONS,
+} from './sidebar-child-sections'
+
 export type HeaderNavAccessConfig = {
   enabled: boolean
   requireAuth: boolean
@@ -110,7 +115,20 @@ export const SIDEBAR_MODULES_DEFAULT: SidebarModulesAdminConfig = {
     subscription: true,
     invoiceManagement: true,
     systemInfo: true,
+    taskPlugins: true,
   },
+}
+
+for (const [key, section] of Object.entries(SIDEBAR_CHILD_SECTIONS)) {
+  SIDEBAR_MODULES_DEFAULT[key] = {
+    enabled: true,
+    ...Object.fromEntries(
+      section.modules.map((module) => [
+        module.key,
+        module.defaultEnabled ?? true,
+      ])
+    ),
+  }
 }
 
 const toBoolean = (value: unknown, fallback: boolean): boolean => {
@@ -379,4 +397,14 @@ export function serializeSidebarModulesAdmin(
   config: SidebarModulesAdminConfig
 ): string {
   return JSON.stringify(config)
+}
+
+export function isSidebarModuleSelected(
+  config: SidebarModulesAdminConfig,
+  section: string,
+  module: string
+): boolean {
+  if (config[section]?.[module] === false) return false
+  const child = getSidebarChildSection(section, module)
+  return !child || config[child[0]]?.enabled !== false
 }

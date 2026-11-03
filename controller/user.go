@@ -492,6 +492,34 @@ func GetAffCode(c *gin.Context) {
 }
 
 func GetInvitationRanking(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
+	common.OptionMapRWMutex.RLock()
+	sidebarConfig := common.OptionMap["SidebarModulesAdmin"]
+	common.OptionMapRWMutex.RUnlock()
+	var modules struct {
+		Console struct {
+			Enabled  *bool `json:"enabled"`
+			Overview *bool `json:"overview"`
+			Detail   *bool `json:"detail"`
+		} `json:"console"`
+		Overview struct {
+			Enabled           *bool `json:"enabled"`
+			InvitationRanking bool  `json:"invitationRanking"`
+		} `json:"overview"`
+	}
+	parseErr := common.UnmarshalJsonStr(sidebarConfig, &modules)
+	consoleEnabled := modules.Console.Enabled == nil || *modules.Console.Enabled
+	overviewEnabled := modules.Console.Overview
+	if overviewEnabled == nil {
+		overviewEnabled = modules.Console.Detail
+	}
+	if parseErr != nil || !consoleEnabled ||
+		(overviewEnabled != nil && !*overviewEnabled) ||
+		(modules.Overview.Enabled != nil && !*modules.Overview.Enabled) ||
+		!modules.Overview.InvitationRanking {
+		common.ApiSuccess(c, []model.InvitationRankingEntry{})
+		return
+	}
 	ranking, err := model.GetInvitationRanking()
 	if err != nil {
 		common.ApiError(c, err)
@@ -506,7 +534,6 @@ func GetInvitationRanking(c *gin.Context) {
 			ranking[i].Username = maskRankingUsername(ranking[i].Username, "User")
 		}
 	}
-	c.Header("Cache-Control", "no-store")
 	common.ApiSuccess(c, ranking)
 }
 

@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 
 import { handleServerError } from '@/lib/handle-server-error'
 
@@ -165,16 +165,20 @@ function parseDiscountMap(data: unknown): Record<number, number> {
   )
 }
 
-export function useTopupInfo() {
+export function useTopupInfo(enabled = true) {
+  const requestIdRef = useRef(0)
   const [topupInfo, setTopupInfo] = useState<TopupInfo | null>(null)
   const [presetAmounts, setPresetAmounts] = useState<PresetAmount[]>([])
   const [loading, setLoading] = useState(true)
 
   const fetchTopupInfo = useCallback(async () => {
+    if (!enabled) return
+    const requestId = ++requestIdRef.current
     try {
       setLoading(true)
 
       const response = await getTopupInfo()
+      if (requestId !== requestIdRef.current) return
 
       if (!response.success || !response.data) {
         handleServerError(response)
@@ -209,13 +213,14 @@ export function useTopupInfo() {
         setPresetAmounts(defaultPresets)
       }
     } catch (err) {
-      handleServerError(err)
+      if (requestId === requestIdRef.current) handleServerError(err)
     } finally {
-      setLoading(false)
+      if (requestId === requestIdRef.current) setLoading(false)
     }
-  }, [])
+  }, [enabled])
 
   useEffect(() => {
+    if (!enabled) return
     let cancelled = false
 
     queueMicrotask(() => {
@@ -224,13 +229,14 @@ export function useTopupInfo() {
 
     return () => {
       cancelled = true
+      requestIdRef.current += 1
     }
-  }, [fetchTopupInfo])
+  }, [enabled, fetchTopupInfo])
 
   return {
     topupInfo,
     presetAmounts,
-    loading,
+    loading: enabled && loading,
     refetch: fetchTopupInfo,
   }
 }

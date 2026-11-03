@@ -25,6 +25,7 @@ import { useTranslation } from 'react-i18next'
 import { SectionPageLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { useSidebarModules } from '@/hooks/use-sidebar-config'
 import { requireServerSuccess } from '@/lib/server-error-message'
 
 import { listDeployments } from './api'
@@ -62,6 +63,7 @@ const SECTION_META: Record<
 }
 
 function ModelsContent() {
+  const isModuleEnabled = useSidebarModules()
   const { t } = useTranslation()
   const navigate = useNavigate({ from: '/models/$section' })
   const { tabCategory, setTabCategory, setOpen, setCurrentVendor } = useModels()
@@ -130,7 +132,9 @@ function ModelsContent() {
           <div className='flex h-full min-h-0 flex-col gap-4'>
             <Tabs value={activeSection} onValueChange={handleSectionChange}>
               <TabsList className='max-w-full flex-wrap justify-start group-data-horizontal/tabs:h-auto'>
-                {MODELS_SECTION_IDS.map((section) => (
+                {MODELS_SECTION_IDS.filter((section) =>
+                  isModuleEnabled('models', section)
+                ).map((section) => (
                   <TabsTrigger key={section} value={section}>
                     {t(SECTION_META[section].tabKey)}
                   </TabsTrigger>

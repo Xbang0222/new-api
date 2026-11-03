@@ -111,11 +111,12 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-async function renderPage(path = '/security') {
+async function renderPage(path = '/security', sidebarModules?: object) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
   client.setQueryData(['status'], {
+    SidebarModulesAdmin: JSON.stringify(sidebarModules ?? {}),
     checkin_enabled: false,
     wechat_login: true,
     github_oauth: true,
@@ -275,4 +276,27 @@ describe('security page migration', () => {
       await screen.findByRole('button', { name: 'Delete Account' })
     ).toBeVisible()
   })
+})
+
+it('does not mount hidden security areas or request their credentials and sessions', async () => {
+  await renderPage('/security', {
+    security: { sessions: false, verification: false },
+  })
+  expect(await screen.findByText('Login & Authentication')).toBeVisible()
+  expect(screen.queryByText('Sessions & Access')).not.toBeInTheDocument()
+  expect(screen.queryByText('Security verification')).not.toBeInTheDocument()
+  expect(screen.getByRole('complementary', { name: 'Privacy' })).toBeVisible()
+  const urls = vi.mocked(api.get).mock.calls.map(([url]) => url)
+  expect(urls).not.toContain('/api/user/access_tokens')
+  expect(urls).not.toContain('/api/user/sessions')
+  expect(urls).not.toContain('/api/user/passkey')
+  expect(urls).not.toContain('/api/user/2fa/status')
+})
+
+it('keeps profile preferences visible when personal settings are hidden', async () => {
+  await renderPage('/profile', {
+    profile: { details: false, preferences: true },
+  })
+  expect(await screen.findByText('Language Preferences')).toBeVisible()
+  expect(screen.queryByText('Notification Settings')).not.toBeInTheDocument()
 })

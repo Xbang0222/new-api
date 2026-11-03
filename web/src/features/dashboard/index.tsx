@@ -34,6 +34,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { useSidebarModules } from '@/hooks/use-sidebar-config'
 import { useStatus } from '@/hooks/use-status'
 import { isTokenRankingEnabled } from '@/hooks/use-system-config'
 import { ROLE } from '@/lib/roles'
@@ -241,6 +242,7 @@ export function Dashboard() {
   const params = route.useParams()
   const userRole = useAuthStore((state) => state.auth.user?.role)
   const { status } = useStatus()
+  const isModuleEnabled = useSidebarModules()
   const displayTokenRankingEnabled = isTokenRankingEnabled(
     status?.display_token_ranking_enabled
   )
@@ -315,9 +317,10 @@ export function Dashboard() {
       DASHBOARD_SECTION_IDS.filter(
         (section) =>
           section !== 'overview' &&
+          isModuleEnabled('dashboard', section) &&
           isDashboardSectionAccessible(section, userRole)
       ),
-    [userRole]
+    [userRole, isModuleEnabled]
   )
   const handleSectionChange = useCallback(
     (section: string) => {

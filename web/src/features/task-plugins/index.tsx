@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CircleHelp, Upload } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -33,6 +33,7 @@ import {
 } from '@/components/ui/popover'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { useSidebarModules } from '@/hooks/use-sidebar-config'
 import { handleServerError } from '@/lib/handle-server-error'
 
 import {
@@ -47,21 +48,38 @@ import { UploadDialog } from './components/upload-dialog'
 import type { TaskPluginListItem } from './types'
 
 export function TaskPlugins() {
+  const isModuleEnabled = useSidebarModules()
+  const installedVisible = isModuleEnabled('taskPlugins', 'installed')
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [detail, setDetail] = useState<TaskPluginListItem | null>(null)
-  const [tab, setTab] = useState('installed')
+  const [selectedTab, setTab] = useState('installed')
+  const visibleTabs = ['installed', 'marketplace'].filter((key) =>
+    isModuleEnabled('taskPlugins', key)
+  )
+  const tab = visibleTabs.includes(selectedTab)
+    ? selectedTab
+    : (visibleTabs[0] ?? '')
   const [uploadKey, setUploadKey] = useState<string | null>(null)
   const [uploadOpen, setUploadOpen] = useState(false)
   const [confirmDisable, setConfirmDisable] = useState(false)
   const enabledQuery = useQuery({
     queryKey: ['task-plugin-enabled'],
     queryFn: getTaskPluginEnabledOption,
+    enabled: tab !== '',
   })
   const pluginsQuery = useQuery({
     queryKey: ['task-plugins'],
     queryFn: listTaskPlugins,
+    enabled: confirmDisable && tab !== '',
   })
+  useEffect(() => {
+    if (!installedVisible) {
+      setDetail(null)
+      setUploadOpen(false)
+    }
+    if (tab === '') setConfirmDisable(false)
+  }, [installedVisible, tab])
   const enabledMutation = useMutation({
     mutationFn: setTaskPluginEnabledOption,
     onSuccess: (_, enabled) => {
@@ -141,35 +159,49 @@ export function TaskPlugins() {
             className='flex h-full min-h-0 flex-col gap-3'
           >
             <TabsList className='max-w-full flex-wrap justify-start group-data-horizontal/tabs:h-auto'>
-              <TabsTrigger value='installed'>{t('Installed')}</TabsTrigger>
-              <TabsTrigger value='marketplace'>{t('Marketplace')}</TabsTrigger>
+              {isModuleEnabled('taskPlugins', 'installed') && (
+                <TabsTrigger value='installed'>{t('Installed')}</TabsTrigger>
+              )}
+              {isModuleEnabled('taskPlugins', 'marketplace') && (
+                <TabsTrigger value='marketplace'>
+                  {t('Marketplace')}
+                </TabsTrigger>
+              )}
             </TabsList>
-            <TabsContent value='installed' className='min-h-0 flex-1'>
-              <PluginsTable
-                onDetails={setDetail}
-                onUpload={(key) => openUpload(key)}
-              />
-            </TabsContent>
-            <TabsContent value='marketplace' className='min-h-0 flex-1'>
-              <MarketplacePanel />
-            </TabsContent>
+            {isModuleEnabled('taskPlugins', 'installed') && (
+              <TabsContent value='installed' className='min-h-0 flex-1'>
+                <PluginsTable
+                  onDetails={setDetail}
+                  onUpload={(key) => openUpload(key)}
+                />
+              </TabsContent>
+            )}
+            {isModuleEnabled('taskPlugins', 'marketplace') && (
+              <TabsContent value='marketplace' className='min-h-0 flex-1'>
+                <MarketplacePanel />
+              </TabsContent>
+            )}
           </Tabs>
         </SectionPageLayout.Content>
       </SectionPageLayout>
-      <PluginDetailSheet
-        key={detail?.meta.key ?? ''}
-        plugin={detail}
-        onOpenChange={(open) => {
-          if (!open) setDetail(null)
-        }}
-      />
-      <UploadDialog
-        open={uploadOpen}
-        onOpenChange={setUploadOpen}
-        initialKey={uploadKey ?? undefined}
-      />
+      {installedVisible && (
+        <PluginDetailSheet
+          key={detail?.meta.key ?? ''}
+          plugin={detail}
+          onOpenChange={(open) => {
+            if (!open) setDetail(null)
+          }}
+        />
+      )}
+      {installedVisible && (
+        <UploadDialog
+          open={uploadOpen}
+          onOpenChange={setUploadOpen}
+          initialKey={uploadKey ?? undefined}
+        />
+      )}
       <ConfirmDialog
-        open={confirmDisable}
+        open={confirmDisable && tab !== ''}
         onOpenChange={setConfirmDisable}
         title={t('Disable task plugins?')}
         desc={

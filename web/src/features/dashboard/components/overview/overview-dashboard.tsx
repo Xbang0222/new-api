@@ -40,6 +40,11 @@ export function OverviewDashboard() {
   const user = useAuthStore((state) => state.auth.user)
   const [tourOpen, setTourOpen] = useState(false)
   const {
+    summary: showSummary,
+    community: showCommunity,
+    performanceHealth: showPerformanceHealth,
+    guide: showGuide,
+    invitationRanking: showInvitationRanking,
     apiInfo: showApiInfoPanel,
     announcements: showAnnouncementsPanel,
     faq: showFAQPanel,
@@ -49,8 +54,10 @@ export function OverviewDashboard() {
 
   return (
     <>
-      <OnboardingTour open={tourOpen} onOpenChange={setTourOpen} />
-      {!isAdmin && (
+      {showGuide && (
+        <OnboardingTour open={tourOpen} onOpenChange={setTourOpen} />
+      )}
+      {!isAdmin && showGuide && (
         <div className='mb-3 flex justify-end'>
           <Button variant='ghost' size='sm' onClick={() => setTourOpen(true)}>
             {t('View guide')}
@@ -58,12 +65,12 @@ export function OverviewDashboard() {
         </div>
       )}
       <OverviewSectionLayout
-        summary={<SummaryCards />}
-        community={<CommunityGroupCard />}
+        summary={showSummary && <SummaryCards />}
+        community={showCommunity && <CommunityGroupCard />}
         informationPanels={
           <>
-            <InvitationRankingPanel />
-            {isAdmin && <PerformanceHealthPanel />}
+            {showInvitationRanking && <InvitationRankingPanel />}
+            {isAdmin && showPerformanceHealth && <PerformanceHealthPanel />}
             {showAnnouncementsPanel && <AnnouncementsPanel />}
             {showApiInfoPanel && <ApiInfoPanel />}
             {showFAQPanel && <FAQPanel />}

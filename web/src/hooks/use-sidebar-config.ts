@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 
 import type { NavGroup, NavItem } from '@/components/layout/types'
 import {
@@ -24,6 +24,10 @@ import {
   parseSidebarModulesUser,
   type SidebarModulesAdminConfig,
 } from '@/features/system-settings/maintenance/config'
+import {
+  SIDEBAR_CHILD_SECTIONS,
+  getSidebarChildSection,
+} from '@/features/system-settings/maintenance/sidebar-child-sections'
 import { useStatus } from '@/hooks/use-status'
 import { useAuthStore } from '@/stores/auth-store'
 
@@ -98,23 +102,13 @@ export function resolveConsoleHomePath(
   )
   if (
     preferred &&
-    isSidebarModuleEnabledForConfig(
-      preferred.section,
-      preferred.module,
-      adminConfig,
-      userConfig
-    )
+    isSidebarModuleVisibleForConfig(preferred.path, adminConfig, userConfig)
   ) {
     return preferred.path
   }
 
   const destination = CONSOLE_HOME_CANDIDATES.find((candidate) =>
-    isSidebarModuleEnabledForConfig(
-      candidate.section,
-      candidate.module,
-      adminConfig,
-      userConfig
-    )
+    isSidebarModuleVisibleForConfig(candidate.path, adminConfig, userConfig)
   )
 
   return destination?.path ?? '/profile'
@@ -128,6 +122,8 @@ export const URL_TO_CONFIG_MAP: Record<
   { section: string; module: string }
 > = {
   '/playground': { section: 'chat', module: 'playground' },
+  '/chat': { section: 'chat', module: 'chat' },
+  '/chat2link': { section: 'chat', module: 'chat' },
   '/dashboard': { section: 'console', module: 'overview' },
   '/dashboard/overview': { section: 'console', module: 'overview' },
   '/dashboard/models': { section: 'console', module: 'dashboard' },
@@ -154,6 +150,15 @@ export const URL_TO_CONFIG_MAP: Record<
   '/system-info': { section: 'admin', module: 'systemInfo' },
   '/system-settings': { section: 'admin', module: 'setting' },
   '/system-settings/site': { section: 'admin', module: 'setting' },
+  '/task-plugins': { section: 'admin', module: 'taskPlugins' },
+}
+
+for (const [section, config] of Object.entries(SIDEBAR_CHILD_SECTIONS)) {
+  for (const module of config.modules) {
+    if (module.url) {
+      URL_TO_CONFIG_MAP[module.url] = { section, module: module.key }
+    }
+  }
 }
 
 /**
@@ -167,17 +172,48 @@ export function isSidebarModuleVisibleForConfig(
   adminConfig: SidebarModulesAdminConfig,
   userConfig: SidebarModulesUserConfig
 ): boolean {
-  const mapping = URL_TO_CONFIG_MAP[url]
+  const normalizedUrl = url.split('?')[0].replace(/\/$/, '')
+  const mapping =
+    URL_TO_CONFIG_MAP[normalizedUrl] ??
+    Object.entries(URL_TO_CONFIG_MAP)
+      .filter(([path]) => normalizedUrl.startsWith(`${path}/`))
+      .sort(([a], [b]) => b.length - a.length)[0]?.[1]
   if (!mapping) {
     // Non-sidebar/internal routes remain visible unless explicitly registered.
     return true
   }
 
-  return isSidebarModuleEnabledForConfig(
+  return isSidebarModuleContentVisibleForConfig(
     mapping.section,
     mapping.module,
     adminConfig,
     userConfig
+  )
+}
+
+/** A parent with no visible leaf content must not leave an empty page or card. */
+export function isSidebarModuleContentVisibleForConfig(
+  section: string,
+  module: string,
+  adminConfig: SidebarModulesAdminConfig,
+  userConfig: SidebarModulesUserConfig
+): boolean {
+  if (
+    !isSidebarModuleEnabledForConfig(section, module, adminConfig, userConfig)
+  ) {
+    return false
+  }
+  const childEntry = getSidebarChildSection(section, module)
+  return (
+    !childEntry ||
+    childEntry[1].modules.some((child) =>
+      isSidebarModuleContentVisibleForConfig(
+        childEntry[0],
+        child.key,
+        adminConfig,
+        userConfig
+      )
+    )
   )
 }
 
@@ -194,6 +230,19 @@ export function isSidebarModuleEnabledForConfig(
     section === 'console' &&
     module === 'setupGuide' &&
     adminSection.overview !== true
+  ) {
+    return false
+  }
+
+  const parent = SIDEBAR_CHILD_SECTIONS[section]
+  if (
+    parent &&
+    !isSidebarModuleEnabledForConfig(
+      parent.parentSection,
+      parent.parentModule,
+      adminConfig,
+      userConfig
+    )
   ) {
     return false
   }
@@ -264,6 +313,25 @@ function filterNavItems(
 ): NavItem[] {
   return items
     .map((item) => {
+      if (
+        item.type !== 'chat-presets' &&
+        typeof item.url === 'string' &&
+        item.configUrls &&
+        !isSidebarModuleVisibleForConfig(
+          item.url as string,
+          adminConfig,
+          userConfig
+        )
+      ) {
+        const url = item.configUrls.find((candidate) =>
+          isSidebarModuleVisibleForConfig(
+            candidate as string,
+            adminConfig,
+            userConfig
+          )
+        )
+        if (url) return { ...item, url }
+      }
       // If collapsible item, also filter its sub-items
       if ('items' in item && item.items) {
         const filteredSubItems = item.items.filter((subItem) =>
@@ -301,7 +369,7 @@ function filterNavItems(
  *      UI to restore.
  */
 export function useSidebarConfig(navGroups: NavGroup[]): NavGroup[] {
-  const { status } = useStatus()
+  const { status, ready } = useStatus()
   const { auth } = useAuthStore()
 
   const { adminConfig, userConfig } = useMemo(
@@ -320,7 +388,7 @@ export function useSidebarConfig(navGroups: NavGroup[]): NavGroup[] {
     [navGroups, adminConfig, userConfig]
   )
 
-  return filteredNavGroups
+  return ready ? filteredNavGroups : []
 }
 
 /**
@@ -329,7 +397,7 @@ export function useSidebarConfig(navGroups: NavGroup[]): NavGroup[] {
  * dropdown's wallet link) so they honour the same "wallet display" toggle.
  */
 export function useIsSidebarModuleVisible(url: string): boolean {
-  const { status } = useStatus()
+  const { status, ready } = useStatus()
   const { auth } = useAuthStore()
 
   const { adminConfig, userConfig } = parseSidebarModuleLayers(
@@ -337,23 +405,47 @@ export function useIsSidebarModuleVisible(url: string): boolean {
     auth?.user
   )
 
-  return isSidebarModuleVisibleForConfig(url, adminConfig, userConfig)
+  return ready && isSidebarModuleVisibleForConfig(url, adminConfig, userConfig)
 }
 
 export function useIsSidebarModuleEnabled(
   section: string,
   module: string
 ): boolean {
-  const { status } = useStatus()
+  const { status, ready } = useStatus()
   const { auth } = useAuthStore()
   const { adminConfig, userConfig } = parseSidebarModuleLayers(
     status,
     auth?.user
   )
-  return isSidebarModuleEnabledForConfig(
-    section,
-    module,
-    adminConfig,
-    userConfig
+  return (
+    ready &&
+    isSidebarModuleContentVisibleForConfig(
+      section,
+      module,
+      adminConfig,
+      userConfig
+    )
+  )
+}
+
+/** Visibility preferences only; server authorization remains authoritative. */
+export function useSidebarModules() {
+  const { status, ready } = useStatus()
+  const user = useAuthStore((state) => state.auth.user)
+  const { adminConfig, userConfig } = useMemo(
+    () => parseSidebarModuleLayers(status, user),
+    [status, user]
+  )
+  return useCallback(
+    (section: string, module: string) =>
+      ready &&
+      isSidebarModuleContentVisibleForConfig(
+        section,
+        module,
+        adminConfig,
+        userConfig
+      ),
+    [ready, adminConfig, userConfig]
   )
 }
