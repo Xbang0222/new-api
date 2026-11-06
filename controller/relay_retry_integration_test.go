@@ -260,13 +260,7 @@ func TestRelayHTTPFailoverUsesAnotherChannelAndStopsAfterStreamContent(t *testin
 				assert.Contains(t, recorder.Body.String(), "fallback success")
 			} else if test.stream {
 				assert.Contains(t, recorder.Body.String(), "partial answer")
-				if test.ollama {
-					assert.Contains(t, recorder.Body.String(), "model_unavailable")
-				} else {
-					assert.Contains(t, recorder.Body.String(), `"code":"upstream_failure"`)
-					assert.Contains(t, recorder.Body.String(), "data: [DONE]")
-					assert.NotContains(t, recorder.Body.String(), "model_unavailable")
-				}
+				assert.Contains(t, recorder.Body.String(), "model_unavailable")
 			} else if !test.paidFallback {
 				assert.Contains(t, recorder.Body.String(), "model_unavailable")
 			}
