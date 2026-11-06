@@ -1,7 +1,6 @@
 package service
 
 import (
-	"errors"
 	"fmt"
 	"math"
 	"net/http/httptest"
@@ -971,56 +970,6 @@ func TestPostTextConsumeQuotaBillsOpenAI12hCacheWrites(t *testing.T) {
 			assert.Equal(t, float64(7000), other["cache_write_tokens"])
 			assert.Equal(t, float64(4000), other["cache_creation_tokens_12h"])
 			assert.Equal(t, tc.ratio12h, other["cache_creation_ratio_12h"])
-		})
-	}
-}
-
-// An upstream error event before any model output is a failed attempt: the
-// relay retries or refunds it, so settling the prompt estimate here would
-// charge the user for a request upstream rejected.
-func TestPostTextConsumeQuotaSkipsUpstreamErrorBeforeContent(t *testing.T) {
-	const userID, channelID = 64, 64
-	gin.SetMode(gin.TestMode)
-	usage := &dto.Usage{PromptTokens: 958592, TotalTokens: 958592}
-	for _, tc := range []struct {
-		name         string
-		firstContent bool
-		wantLog      bool
-	}{
-		{"error before content", false, false},
-		{"error after content", true, true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			truncate(t)
-			seedUser(t, userID, 100_000_000)
-			seedChannel(t, channelID)
-			ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
-			ctx.Request = httptest.NewRequest("POST", "/v1/messages", nil)
-			info := &relaycommon.RelayInfo{
-				UserId:              userID,
-				OriginModelName:     "claude-opus-5-5",
-				UsingGroup:          "default",
-				StartTime:           time.Now(),
-				IsStream:            true,
-				RelayFormat:         types.RelayFormatClaude,
-				ChannelMeta:         &relaycommon.ChannelMeta{ChannelId: channelID},
-				PriceData:           hosttypes.PriceData{ModelRatio: 2.5, CompletionRatio: 5, GroupRatioInfo: hosttypes.GroupRatioInfo{GroupRatio: 1}},
-				UpstreamStreamError: types.NewError(errors.New("Upstream request failed"), types.ErrorCodeBadResponse),
-				UpstreamStartTime:   time.Now(),
-			}
-			if tc.firstContent {
-				info.MarkUpstreamFirstContent()
-			}
-
-			PostTextConsumeQuota(ctx, info, usage, nil)
-
-			if tc.wantLog {
-				assert.Equal(t, int64(1), countLogs(t))
-				assert.Less(t, getUserQuota(t, userID), 100_000_000)
-			} else {
-				assert.Zero(t, countLogs(t))
-				assert.Equal(t, 100_000_000, getUserQuota(t, userID))
-			}
 		})
 	}
 }

@@ -289,23 +289,7 @@ func CalcOpenRouterCacheCreateTokens(usage dto.Usage, priceData types.PriceData)
 	return quota
 }
 
-// skipUpstreamFailedAttempt leaves an attempt unsettled when upstream sent an
-// error event before any output. The relay controller then retries it on
-// another channel or refunds the pre-consumed quota, so the user pays only for
-// the attempt that answered instead of a prompt estimate for a rejected one.
-func skipUpstreamFailedAttempt(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) bool {
-	if !relayInfo.UpstreamFailedBeforeContent() {
-		return false
-	}
-	logger.LogWarn(ctx, common.LogText("upstream stream error before any output, attempt not charged: channelId %d, model %s",
-		relayInfo.ChannelId, relayInfo.OriginModelName))
-	return true
-}
-
 func PostAudioConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usage *dto.Usage, extraContent []*common.Message) {
-	if skipUpstreamFailedAttempt(ctx, relayInfo) {
-		return
-	}
 	if usage == nil {
 		usage = &dto.Usage{PromptTokens: relayInfo.GetEstimatePromptTokens(), TotalTokens: relayInfo.GetEstimatePromptTokens()}
 	}
