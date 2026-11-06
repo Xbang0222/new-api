@@ -1106,13 +1106,6 @@ func (info *RelayInfo) MarkUpstreamFirstContent() {
 	info.UpstreamFirstContentTime = time.Now()
 }
 
-// UpstreamFailedBeforeContent reports that the stream scanner stopped on an
-// upstream error event before any model output arrived. The relay treats such
-// an attempt as failed (retry or refund), so it must not be settled.
-func (info *RelayInfo) UpstreamFailedBeforeContent() bool {
-	return info != nil && info.UpstreamStreamError != nil && info.UpstreamFirstContentTime.IsZero()
-}
-
 func (info *RelayInfo) UpstreamFirstResponseDuration() (int64, bool) {
 	if info == nil || info.UpstreamStartTime.IsZero() {
 		return 0, false
