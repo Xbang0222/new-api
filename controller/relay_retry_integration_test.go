@@ -56,7 +56,7 @@ func TestRelayHTTPFailoverUsesAnotherChannelAndStopsAfterStreamContent(t *testin
 		{name: "legacy auto next group with zero retries", auto: true, crossGroup: true, wantFallback: 1, wantStatus: 200},
 		{name: "legacy auto respects cross group off", auto: true, retries: 3, wantStatus: 500},
 		{name: "intelligent auto respects cross group off", auto: true, intelligent: true, wantStatus: 500},
-		{name: "stream interrupted after content", stream: true, retries: 1, wantStatus: 200},
+		{name: "stream interrupted after content", stream: true, intelligent: true, retries: 1, wantStatus: 200},
 		{name: "ollama stream invalid JSON after content", stream: true, ollama: true, intelligent: true, retries: 1, wantStatus: 200},
 		{name: "free to paid ratio blocks empty wallet", auto: true, crossGroup: true, paidFallback: true, walletQuota: common.GetPointer(0), wantStatus: 403, wantWalletQuota: common.GetPointer(0)},
 		{name: "free to paid per call blocks empty wallet", auto: true, crossGroup: true, paidFallback: true, perCall: true, walletQuota: common.GetPointer(0), wantStatus: 403, wantWalletQuota: common.GetPointer(0)},
@@ -93,6 +93,9 @@ func TestRelayHTTPFailoverUsesAnotherChannelAndStopsAfterStreamContent(t *testin
 			db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 			require.NoError(t, err)
 			require.NoError(t, db.AutoMigrate(&model.Channel{}, &model.Ability{}, &model.User{}, &model.Token{}, &model.SubscriptionPlan{}, &model.UserSubscription{}, &model.SubscriptionPreConsumeRecord{}, &model.PerfMetric{}))
+			if test.stream && !test.ollama {
+				require.NoError(t, db.AutoMigrate(&model.ChannelModelState{}))
+			}
 			model.DB = db
 			common.SetDatabaseTypes(common.DatabaseTypeSQLite, common.DatabaseTypeSQLite)
 			common.MemoryCacheEnabled = true
@@ -210,6 +213,10 @@ func TestRelayHTTPFailoverUsesAnotherChannelAndStopsAfterStreamContent(t *testin
 				if index == 0 && test.ollama {
 					channel.Type = constant.ChannelTypeOllama
 				}
+				if test.stream && !test.ollama {
+					service.ResetChannelSchedulingState(channel.Id, "")
+					t.Cleanup(func() { service.ResetChannelSchedulingState(channel.Id, "") })
+				}
 				require.NoError(t, db.Create(&channel).Error)
 				require.NoError(t, db.Create(&model.Ability{Group: group, Model: modelName, ChannelId: channel.Id, Enabled: true, Priority: &priority, Weight: 100}).Error)
 			}
@@ -256,11 +263,27 @@ func TestRelayHTTPFailoverUsesAnotherChannelAndStopsAfterStreamContent(t *testin
 				require.Len(t, metrics.Models, 1)
 				assert.Equal(t, int64(1), metrics.Models[0].RequestCount)
 			}
+			if test.stream && !test.ollama {
+				overview, err := service.GetChannelSchedulingOverview("default", modelName, nil, 0)
+				require.NoError(t, err)
+				assert.Equal(t, int64(1), overview.Requests)
+				assert.Equal(t, int64(1), overview.Errors, "a forwarded upstream error must count as a failed attempt")
+				for _, channel := range overview.Channels {
+					assert.Zero(t, channel.SuccessCount)
+					assert.NotContains(t, channel.LastError, "stream interrupted")
+				}
+			}
 			if test.wantFallback > 0 {
 				assert.Contains(t, recorder.Body.String(), "fallback success")
 			} else if test.stream {
 				assert.Contains(t, recorder.Body.String(), "partial answer")
-				assert.Contains(t, recorder.Body.String(), "model_unavailable")
+				if test.ollama {
+					assert.Contains(t, recorder.Body.String(), "model_unavailable")
+				} else {
+					assert.Contains(t, recorder.Body.String(), `"code":"upstream_failure"`)
+					assert.Contains(t, recorder.Body.String(), "data: [DONE]")
+					assert.NotContains(t, recorder.Body.String(), "model_unavailable")
+				}
 			} else if !test.paidFallback {
 				assert.Contains(t, recorder.Body.String(), "model_unavailable")
 			}
