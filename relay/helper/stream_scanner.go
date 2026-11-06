@@ -312,6 +312,9 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 				continue
 			}
 			if !strings.HasPrefix(data, "[DONE]") {
+				if upstreamErr := detectUpstreamStreamError(data); upstreamErr != nil {
+					info.StreamStatus.MarkFailed(string(upstreamErr.GetErrorCode()), string(upstreamErr.GetErrorType()), upstreamErr.StatusCode)
+				}
 				info.SetFirstResponseTime()
 				if IsMeaningfulStreamData(data) {
 					info.MarkUpstreamFirstContent()
