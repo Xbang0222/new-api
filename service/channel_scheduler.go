@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"net/http"
 	"sort"
 	"strings"
 	"sync"
@@ -711,21 +710,6 @@ func FinishScheduledChannelAttempt(info *relaycommon.RelayInfo, channel *model.C
 		return
 	}
 	info.SchedulerAttemptActive = false
-	// Forwarded protocol errors may have no relay error; classify them only for scheduling.
-	if outcome := info.StreamStatus.OutcomeSnapshot(); outcome.Response == relaycommon.ResponseOutcomeFailed {
-		success = false
-		if relayErr == nil {
-			status := outcome.ErrorStatus
-			if status < 400 || status > 599 {
-				status = http.StatusBadGateway
-			}
-			relayErr = types.WithOpenAIError(types.OpenAIError{
-				Message: "upstream stream response failed",
-				Type:    outcome.ErrorType,
-				Code:    outcome.ErrorCode,
-			}, status)
-		}
-	}
 	key := schedulingPoolKey{Group: info.SchedulerGroup, Model: info.SchedulerModel, Priority: info.SchedulerPriority}
 	pool := getSchedulingPool(key)
 	now := time.Now()
