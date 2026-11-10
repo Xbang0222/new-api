@@ -163,7 +163,8 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 			channel, err := selectIntelligentChannel(param, param.TokenGroup)
 			return channel, param.TokenGroup, err
 		}
-		channel, err := selectLegacyChannel(param, param.TokenGroup, param.GetRetry())
+		priorityRetry := max(param.GetRetry()-param.Ctx.GetInt(ginKeyChannelAffinityRetryOffset), 0)
+		channel, err := selectLegacyChannel(param, param.TokenGroup, priorityRetry)
 		return channel, param.TokenGroup, err
 	}
 
@@ -186,6 +187,7 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 		}
 	}
 	startRetryIndex, _ := common.GetContextKeyType[int](param.Ctx, constant.ContextKeyAutoGroupRetryIndex)
+	affinityRetryOffset := param.Ctx.GetInt(ginKeyChannelAffinityRetryOffset)
 	selectGroup := param.TokenGroup
 	for index := startGroupIndex; index < len(autoGroups); index++ {
 		selectGroup = autoGroups[index]
@@ -193,6 +195,8 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 		if index > startGroupIndex {
 			startRetryIndex = param.GetRetry()
 			priorityRetry = 0
+			affinityRetryOffset = 0
+			param.Ctx.Set(ginKeyChannelAffinityRetryOffset, 0)
 		}
 		logger.LogDebug(param.Ctx, "Auto selecting group: %s, priorityRetry: %d", selectGroup, priorityRetry)
 
@@ -201,7 +205,7 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 		if IsIntelligentSchedulingForGroup(selectGroup) {
 			channel, err = selectIntelligentChannel(param, selectGroup)
 		} else if priorityRetry <= max(common.RetryTimes, 0) {
-			channel, err = selectLegacyChannel(param, selectGroup, priorityRetry)
+			channel, err = selectLegacyChannel(param, selectGroup, max(priorityRetry-affinityRetryOffset, 0))
 		}
 		if err != nil {
 			return nil, selectGroup, err
@@ -219,6 +223,8 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 		}
 		common.SetContextKey(param.Ctx, constant.ContextKeyAutoGroupIndex, index+1)
 		common.SetContextKey(param.Ctx, constant.ContextKeyAutoGroupRetryIndex, param.GetRetry())
+		affinityRetryOffset = 0
+		param.Ctx.Set(ginKeyChannelAffinityRetryOffset, 0)
 	}
 	return nil, selectGroup, nil
 }
@@ -227,37 +233,53 @@ func pinnedTaskPluginIdentities(c *gin.Context, expected string) ([]int, []strin
 	if c == nil || expected == "" {
 		return nil, nil
 	}
+	// A shared host endpoint and a native route several plugins declare both
+	// admit a channel of any candidate.
+	var generation *jsplugin.RoutingGeneration
+	var candidates []*jsplugin.LoadedPlugin
 	if value, exists := c.Get(jsplugin.ContextKeyPinnedEndpoint); exists {
-		pinned, ok := value.(jsplugin.PinnedEndpoint)
-		if ok && pinned.Generation != nil && len(pinned.Candidates) > 1 {
-			expectedFound := false
-			channelTypes := make([]int, 0, len(pinned.Candidates))
-			pluginKeys := make([]string, 0, len(pinned.Candidates))
-			seen := make(map[int]struct{}, len(pinned.Candidates))
+		if pinned, ok := value.(jsplugin.PinnedEndpoint); ok && len(pinned.Candidates) > 1 {
+			generation = pinned.Generation
 			for _, candidate := range pinned.Candidates {
-				if candidate.Plugin == nil {
+				candidates = append(candidates, candidate.Plugin)
+			}
+		}
+	} else if value, exists := c.Get(jsplugin.ContextKeyPinnedRoute); exists {
+		if pinned, ok := value.(jsplugin.PinnedRoute); ok && len(pinned.Candidates) > 1 {
+			generation = pinned.Generation
+			for _, candidate := range pinned.Candidates {
+				candidates = append(candidates, candidate.Plugin)
+			}
+		}
+	}
+	if generation != nil {
+		expectedFound := false
+		channelTypes := make([]int, 0, len(candidates))
+		pluginKeys := make([]string, 0, len(candidates))
+		seen := make(map[int]struct{}, len(candidates))
+		for _, candidate := range candidates {
+			if candidate == nil {
+				continue
+			}
+			if candidate.Meta.Key == expected {
+				expectedFound = true
+			}
+			pluginKeys = append(pluginKeys, candidate.Meta.Key)
+			for _, channelType := range candidate.Meta.ChannelTypes {
+				if channelType == 0 || channelType == constant.ChannelTypeTaskPlugin {
 					continue
 				}
-				if candidate.Plugin.Meta.Key == expected {
-					expectedFound = true
+				if _, duplicate := seen[channelType]; duplicate {
+					continue
 				}
-				pluginKeys = append(pluginKeys, candidate.Plugin.Meta.Key)
-				for _, channelType := range candidate.Plugin.Meta.ChannelTypes {
-					if channelType == 0 || channelType == constant.ChannelTypeTaskPlugin {
-						continue
-					}
-					if _, duplicate := seen[channelType]; duplicate {
-						continue
-					}
-					if plugin, indexed := pinned.Generation.GetByChannelType(channelType); indexed && plugin == candidate.Plugin {
-						seen[channelType] = struct{}{}
-						channelTypes = append(channelTypes, channelType)
-					}
+				if plugin, indexed := generation.GetByChannelType(channelType); indexed && plugin == candidate {
+					seen[channelType] = struct{}{}
+					channelTypes = append(channelTypes, channelType)
 				}
 			}
-			if expectedFound {
-				return channelTypes, pluginKeys
-			}
+		}
+		if expectedFound {
+			return channelTypes, pluginKeys
 		}
 	}
 	value, exists := c.Get(jsplugin.ContextKeyPinnedPlugin)

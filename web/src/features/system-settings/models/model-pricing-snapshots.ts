@@ -22,6 +22,7 @@ import { splitPluginBillingExprKey } from '@/features/pricing/lib/plugin-pricing
 import { safeJsonParse } from '../utils/json-parser'
 import {
   normalizePerSecondRules,
+  serializePerSecondRules,
   type PerSecondRuleDraft,
 } from './per-second-pricing'
 import { formatPricingNumber } from './pricing-format'
@@ -94,15 +95,6 @@ export const getModeLabel = (mode?: string) => {
   if (mode === 'per-second') return 'Per-second'
   if (mode === 'tiered_expr') return 'Expression'
   return 'Per-token (deprecated)'
-}
-
-export const getModeVariant = (
-  mode?: string
-): 'warning' | 'info' | 'success' => {
-  if (mode === 'per-request') return 'warning'
-  if (mode === 'per-second') return 'warning'
-  if (mode === 'tiered_expr') return 'info'
-  return 'success'
 }
 
 const getExpressionSummary = (
@@ -361,6 +353,29 @@ export const getSnapshotSignature = (snapshot?: ModelPricingSnapshot) => {
     pluginBillingExpr: Object.entries(snapshot.pluginBillingExpr ?? {}).sort(
       ([a], [b]) => a.localeCompare(b)
     ),
-    perSecondRules: snapshot.perSecondRules || [],
+    perSecondRules: serializePerSecondRules(snapshot.perSecondRules || []),
   })
+}
+
+/** One model's saved price next to its draft; the saved price is shown first. */
+export const buildModelRow = (
+  name: string,
+  saved?: ModelPricingSnapshot,
+  draft?: ModelPricingSnapshot
+): ModelRow => ({
+  ...(saved ?? draft ?? { name, billingMode: 'per-token', hasConflict: false }),
+  saved,
+  draft,
+  isDraftChanged: getSnapshotSignature(saved) !== getSnapshotSignature(draft),
+  isDraftDeleted: Boolean(saved && !draft),
+  isDraftNew: Boolean(!saved && draft),
+})
+
+export type PriceChangeKind = 'added' | 'modified' | 'deleted'
+
+export const getPriceChangeKind = (row: ModelRow): PriceChangeKind | null => {
+  if (row.isDraftDeleted) return 'deleted'
+  if (row.isDraftNew) return 'added'
+  if (row.isDraftChanged) return 'modified'
+  return null
 }

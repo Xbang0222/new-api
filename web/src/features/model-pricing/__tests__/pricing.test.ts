@@ -25,9 +25,29 @@ import {
   pricingFromDraft,
   pricingOptions,
   pricingRow,
+  buildPriceChangeRows,
 } from '../pricing'
 
 describe('shared model pricing', () => {
+  it('keeps identical per-second rules out of unsaved price changes', () => {
+    const options = pricingOptions({
+      ModelPrice: '{"video":0.1}',
+      BillingMode: '{"video":"per_second"}',
+      PerSecondRules: JSON.stringify({
+        video: [
+          {
+            name: 'HD',
+            price: 0.2,
+            conditions: [
+              { path: 'resolution', operator: 'eq', value: '1080p' },
+            ],
+          },
+        ],
+      }),
+    })
+    expect(buildPriceChangeRows(options, options)).toEqual([])
+  })
+
   it('preserves explicit zero prices and cache-write configuration', () => {
     expect(
       pricingFromDraft({
@@ -141,6 +161,21 @@ describe('shared model pricing', () => {
         pricingFromDraft({ name: 'example', billingMode: 'per-request', price })
       ).toThrow()
     }
+  })
+
+  it('reads expression drafts from the form fields over loaded option keys', () => {
+    const options = pricingOptions({
+      'billing_setting.billing_mode': '{}',
+      'billing_setting.billing_expr': '{}',
+      BillingMode: '{"example":"tiered_expr"}',
+      BillingExpr: '{"example":"tier(\\"base\\", p * 2)"}',
+    })
+    expect(JSON.parse(options['billing_setting.billing_expr'])).toEqual({
+      example: 'tier("base", p * 2)',
+    })
+    expect(JSON.parse(options['billing_setting.billing_mode'])).toEqual({
+      example: 'tiered_expr',
+    })
   })
 })
 

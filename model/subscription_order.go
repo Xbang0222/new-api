@@ -82,7 +82,7 @@ func UpdateSubscriptionDebitOrder(userId int, ids []int) error {
 	if err != nil {
 		return err
 	}
-	if err := updateUserSettingCache(userId, settingValue); err != nil {
+	if err := PublishUserAuthCache(userId); err != nil {
 		common.SysError("subscription order saved but user cache refresh failed: " + err.Error())
 	}
 	return nil
