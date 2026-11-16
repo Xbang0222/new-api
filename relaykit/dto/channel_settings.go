@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"regexp"
 	"slices"
 	"strings"
 	"sync"
 
+	"github.com/MoeForge/moego/regexp"
 	"github.com/QuantumNous/new-api/relaykit/routeexpr"
 	"github.com/QuantumNous/new-api/relaykit/routejs"
 	"github.com/QuantumNous/new-api/relaykit/types"
@@ -34,6 +34,9 @@ type ChannelSettings struct {
 	// TLSInsecureSkipVerify accepts upstream certificates that fail
 	// verification, such as self-signed ones, for this channel only.
 	TLSInsecureSkipVerify bool `json:"tls_insecure_skip_verify,omitempty"`
+	// RequestPlugins lists the request plugin instances the channel binds,
+	// by instance id, in run order.
+	RequestPlugins []string `json:"request_plugins,omitempty"`
 }
 
 // BindsTaskPlugin reports whether the channel is bound to the task plugin.
@@ -155,6 +158,9 @@ type ChannelOtherSettings struct {
 	// rejection. Empty follows the default allow policy. Accepted values:
 	// "", "allow", "safe", "strict".
 	ToolLossPolicy string `json:"tool_loss_policy,omitempty"`
+	// PluginConfig is the config a type-61 channel gives its plugin, checked
+	// against the plugin's meta.channelConfig when the channel is saved.
+	PluginConfig json.RawMessage `json:"plugin_config,omitempty"`
 }
 
 func (s *ChannelOtherSettings) IsOpenRouterEnterprise() bool {
@@ -216,12 +222,6 @@ type AdvancedCustomRoute struct {
 	ResponseBodyTemplate   json.RawMessage          `json:"response_body_template,omitempty"`
 	Task                   *AdvancedCustomTask      `json:"task,omitempty"`
 	PassThroughBodyEnabled bool                     `json:"pass_through_body_enabled,omitempty"`
-}
-
-// IsNative reports whether the route forwards without protocol conversion.
-func (r AdvancedCustomRoute) IsNative() bool {
-	converter := strings.TrimSpace(r.Converter)
-	return converter == "" || converter == advancedCustomConverterNone
 }
 
 // SupportsPassThroughBody reports whether the route converter leaves the body untouched.
@@ -321,6 +321,20 @@ const (
 	// AdvancedCustomBalancePath identifies the optional balance lookup route used by channel management.
 	AdvancedCustomBalancePath = "/v1/dashboard/billing/credit_grants"
 )
+
+// AcceptsModel reports whether the route's Models list admits model, as
+// MatchPathForModel matches it; an empty list admits every model.
+func (r AdvancedCustomRoute) AcceptsModel(model string) bool {
+	return matchAdvancedCustomRouteModel(r.Models, strings.TrimSpace(model))
+}
+
+// IsNative reports whether the route forwards requests without protocol
+// conversion. Validate normalizes an empty converter to none, but callers may
+// see configurations that were never saved.
+func (r AdvancedCustomRoute) IsNative() bool {
+	converter := strings.TrimSpace(r.Converter)
+	return converter == "" || converter == advancedCustomConverterNone
+}
 
 // MatchPath returns the first route whose IncomingPath matches requestPath.
 // Matching mirrors the relay adaptor: exact match, {model} placeholder, and

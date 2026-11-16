@@ -898,6 +898,46 @@ func TestManualModelDisableStopsAutomaticRecoveryUntilRestore(t *testing.T) {
 	assert.False(t, states[0].ManualDisabled)
 }
 
+func TestSchedulingStatusPreservesChannelMetadataAndSyncsManualChanges(t *testing.T) {
+	db := useNodeSync(t)
+	createSchedulerPersistenceChannel(t, db, 91024, common.ChannelStatusEnabled, "")
+	require.NoError(t, model.DisableChannelForScheduling(91024, "initial failure"))
+	_, err := model.UpdateChannelLocked(91024, func(channel *model.Channel) error {
+		channel.Key = "refreshed-fixture-key"
+		info := channel.GetOtherInfo()
+		info["account_label"] = "preserved account"
+		channel.SetOtherInfo(info)
+		return nil
+	})
+	require.NoError(t, err)
+	// A repeated failure updates the reason on an already disabled channel.
+	require.NoError(t, model.DisableChannelForScheduling(91024, "repeated failure"))
+	channel, err := model.GetChannelById(91024, true)
+	require.NoError(t, err)
+	assert.Equal(t, "refreshed-fixture-key", channel.Key)
+	assert.Equal(t, "preserved account", channel.GetOtherInfo()["account_label"])
+	assert.Equal(t, "repeated failure", model.GetChannelSchedulingFaultReason(channel))
+
+	before := storedSyncTopics(t)[model.SyncTopicChannels]
+	changed, err := model.RestoreChannelForScheduling(91024)
+	require.NoError(t, err)
+	require.True(t, changed)
+	assert.Greater(t, storedSyncTopics(t)[model.SyncTopicChannels], before)
+	channel, err = model.GetChannelById(91024, true)
+	require.NoError(t, err)
+	assert.Equal(t, common.ChannelStatusEnabled, channel.Status)
+
+	require.NoError(t, model.DisableChannelForScheduling(91024, "new failure"))
+	before = storedSyncTopics(t)[model.SyncTopicChannels]
+	changed, err = model.MarkChannelManualDisabledForScheduling(91024)
+	require.NoError(t, err)
+	require.True(t, changed)
+	assert.Greater(t, storedSyncTopics(t)[model.SyncTopicChannels], before)
+	changed, err = model.RestoreChannelForScheduling(91024)
+	require.NoError(t, err)
+	assert.False(t, changed, "manual disable must not be automatically restored")
+}
+
 func TestManualChannelDisableCannotBeAutomaticallyRestored(t *testing.T) {
 	db := setupChannelSchedulerPersistenceTest(t)
 	createSchedulerPersistenceChannel(t, db, 91022, common.ChannelStatusEnabled, "")

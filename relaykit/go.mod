@@ -3,7 +3,7 @@ module github.com/QuantumNous/new-api/relaykit
 go 1.25.1
 
 require (
-	github.com/MoeForge/moego v0.1.0-alpha.1
+	github.com/MoeForge/moego v0.1.0-alpha.3
 	github.com/dop251/goja v0.0.0-20260723142020-b4aef50fa347
 	github.com/evanw/esbuild v0.28.1
 	github.com/expr-lang/expr v1.17.8

@@ -52,19 +52,18 @@ func DisableChannelForScheduling(channelId int, reason string) error {
 	pollingLock.Lock()
 	defer pollingLock.Unlock()
 
-	channel, err := GetChannelById(channelId, true)
+	channel, err := UpdateChannelLocked(channelId, func(channel *Channel) error {
+		if channel.Status != common.ChannelStatusAutoDisabled {
+			return fmt.Errorf("channel %d was not disabled", channelId)
+		}
+		info := channel.GetOtherInfo()
+		info["status_reason"] = markedReason
+		info["status_time"] = common.GetTimestamp()
+		channel.SetOtherInfo(info)
+		return nil
+	})
 	if err != nil {
-		return err
-	}
-	if channel.Status != common.ChannelStatusAutoDisabled {
 		InitChannelCache()
-		return fmt.Errorf("channel %d was not disabled", channelId)
-	}
-	info := channel.GetOtherInfo()
-	info["status_reason"] = markedReason
-	info["status_time"] = common.GetTimestamp()
-	channel.SetOtherInfo(info)
-	if err := channel.saveStatusState(); err != nil {
 		return err
 	}
 	CacheUpdateChannel(channel)
@@ -102,6 +101,7 @@ func RestoreChannelForScheduling(channelId int) (bool, error) {
 		common.SysError(fmt.Sprintf("failed to restore channel abilities: channel_id=%d, error=%v", channelId, err))
 	}
 	CacheUpdateChannel(channel)
+	BumpSyncTopic(SyncTopicChannels)
 	return true, nil
 }
 
@@ -133,6 +133,7 @@ func MarkChannelManualDisabledForScheduling(channelId int) (bool, error) {
 		return false, nil
 	}
 	CacheUpdateChannel(channel)
+	BumpSyncTopic(SyncTopicChannels)
 	return true, nil
 }
 
