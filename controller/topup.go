@@ -543,53 +543,12 @@ func RequestAmount(c *gin.Context) {
 }
 
 func GetUserTopUps(c *gin.Context) {
-	userId := c.GetInt("id")
-	pageInfo := common.GetPageQuery(c)
-	keyword := c.Query("keyword")
-
-	var (
-		topups []*model.TopUp
-		total  int64
-		err    error
-	)
-	if keyword != "" {
-		topups, total, err = model.SearchUserTopUps(userId, keyword, pageInfo)
-	} else {
-		topups, total, err = model.GetUserTopUps(userId, pageInfo)
-	}
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-
-	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(topups)
-	common.ApiSuccess(c, pageInfo)
+	getTopUpHistory(c, true)
 }
 
 // GetAllTopUps 管理员获取全平台充值记录
 func GetAllTopUps(c *gin.Context) {
-	pageInfo := common.GetPageQuery(c)
-	keyword := c.Query("keyword")
-
-	var (
-		topups []*model.TopUp
-		total  int64
-		err    error
-	)
-	if keyword != "" {
-		topups, total, err = model.SearchAllTopUps(keyword, pageInfo)
-	} else {
-		topups, total, err = model.GetAllTopUps(pageInfo)
-	}
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-
-	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(topups)
-	common.ApiSuccess(c, pageInfo)
+	getTopUpHistory(c, false)
 }
 
 type AdminCompleteTopupRequest struct {

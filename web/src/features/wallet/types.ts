@@ -289,7 +289,7 @@ export interface InvitationDetails {
 /**
  * Topup record status
  */
-export type TopupStatus = 'success' | 'pending' | 'expired'
+export type TopupStatus = 'success' | 'pending' | 'expired' | 'failed'
 
 /**
  * Topup billing record
@@ -299,10 +299,15 @@ export interface TopupRecord {
   id: number
   /** User ID */
   user_id: number
+  username?: string
   /** Topup amount (quota) */
   amount: number
-  /** Payment amount (actual money paid) */
+  /** Stored payment value; legacy records may not identify its currency. */
   money: number
+  /** Exact verified payment amount, in paid_currency. Empty for legacy orders. */
+  paid_amount?: string
+  paid_currency?: string
+  payment_provider?: string
   /** Trade/order number */
   trade_no: string
   /** Payment method type */
@@ -321,6 +326,16 @@ export interface TopupRecord {
 export interface BillingHistoryResponse {
   items: TopupRecord[]
   total: number
+}
+
+export interface BillingHistoryFilters {
+  keyword?: string
+  username?: string
+  user_id?: string
+}
+
+export interface BillingHistoryExport extends BillingHistoryResponse {
+  generated_at: number
 }
 
 /**
