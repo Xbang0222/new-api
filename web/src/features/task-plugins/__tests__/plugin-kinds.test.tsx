@@ -104,6 +104,7 @@ async function renderPluginsPage(
       queries: { retry: false, staleTime: Number.POSITIVE_INFINITY },
     },
   })
+  client.setQueryData(['status'], { SidebarModulesAdmin: '' })
   client.setQueryData(['task-plugin-enabled'], true)
   client.setQueryData(['task-plugins'], plugins)
   client.setQueryData(

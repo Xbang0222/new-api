@@ -20,6 +20,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   createMemoryHistory,
   createRootRoute,
+  createRoute,
   createRouter,
   RouterProvider,
 } from '@tanstack/react-router'
@@ -31,6 +32,7 @@ import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth-store'
 
 import { TaskPlugins } from '../index'
+import { taskPluginsSearchSchema } from '../lib/plugin-kinds'
 import type { TaskPluginListItem } from '../types'
 
 let client: QueryClient
@@ -52,6 +54,7 @@ const item: TaskPluginListItem = {
   runtime_status: 'registered',
   channel_count: 0,
   in_flight_count: 0,
+  task: true,
 }
 beforeEach(() => {
   localStorage.clear()
@@ -83,9 +86,17 @@ function settings(installed: boolean, marketplace = true) {
 }
 async function showPlugins(installed = true, marketplace = true) {
   client.setQueryData(['status'], settings(installed, marketplace))
+  const root = createRootRoute()
+  const auth = createRoute({ getParentRoute: () => root, id: '_authenticated' })
+  const page = createRoute({
+    getParentRoute: () => auth,
+    path: '/task-plugins/',
+    validateSearch: taskPluginsSearchSchema,
+    component: TaskPlugins,
+  })
   const router = createRouter({
-    routeTree: createRootRoute({ component: TaskPlugins }),
-    history: createMemoryHistory({ initialEntries: ['/'] }),
+    routeTree: root.addChildren([auth.addChildren([page])]),
+    history: createMemoryHistory({ initialEntries: ['/task-plugins'] }),
   })
   await router.load()
   render(
