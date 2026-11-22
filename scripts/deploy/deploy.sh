@@ -5,8 +5,8 @@
 #   scripts/deploy/deploy.sh status           show running versions and recent deploys
 #   scripts/deploy/deploy.sh staging <tag>    isolated test instance: own SQLite, no Redis, 127.0.0.1:3041
 #   scripts/deploy/deploy.sh tunnel           open staging at http://localhost:3041 (Ctrl-C to close)
-#   scripts/deploy/deploy.sh prod <tag>       off-site DB backup, swap the container (about a minute at most),
-#                                             health-check within 30s, roll back automatically on failure
+#   scripts/deploy/deploy.sh prod <tag>       stop the old container at once, start the new one, health-check
+#                                             within 30s, roll back automatically on failure
 #   scripts/deploy/deploy.sh rollback         switch back to the previous container kept by the last deploy
 #   scripts/deploy/deploy.sh release [--staging] [notes]
 #                                             publish GitHub main (tag + Docker image), wait for the image, deploy it
@@ -74,16 +74,15 @@ NAME=new-api
 PREV=new-api-prev
 PORT=3031
 BASE=/opt/new-api
-OFFSITE_BACKUP=${OFFSITE_BACKUP:-/usr/local/bin/new-api-offsite-backup}
-OFFSITE_LOCK=${OFFSITE_LOCK:-/run/new-api-offsite-backup.lock}
-# The owner accepts at most about one minute without service. Worst case:
-# STOP_SECONDS for the old container, HEALTH_SECONDS for the new one, then a
-# few seconds to start the kept old container again.
-STOP_SECONDS=20
+# The owner wants the old version replaced at once, not drained: requests still
+# running when it stops are cut off. Worst case without service: STOP_SECONDS,
+# HEALTH_SECONDS for the new container, then a few seconds to restart the old one.
+# The database is not backed up here; the hourly off-site backup covers it.
+STOP_SECONDS=3
 HEALTH_SECONDS=30
-# Written into the new container so its own HTTP drain and final flush finish
-# before the next deploy's STOP_SECONDS deadline.
-APP_SHUTDOWN_SECONDS=15
+# Written into the new container so it stops its HTTP server and saves the
+# dashboard cache before the next deploy's STOP_SECONDS deadline.
+APP_SHUTDOWN_SECONDS=1
 
 healthy() {
   local deadline=$((SECONDS + HEALTH_SECONDS))
@@ -118,32 +117,11 @@ echo "$CURRENT" > "$DIR/previous-image"
 grep -v '^SHUTDOWN_TIMEOUT_SECONDS=' "$DIR/app.env" > "$DIR/app.env.next" || true
 echo "SHUTDOWN_TIMEOUT_SECONDS=$APP_SHUTDOWN_SECONDS" >> "$DIR/app.env.next"
 
-# The hourly off-site backup (everything except the logs table) runs once more
-# now, so the newest copy is seconds old. Production keeps serving meanwhile.
-echo "==> off-site database backup"
-backed_up=
-for attempt in 1 2 3; do
-  # Wait for an hourly run that may already hold the lock; the backup takes its own.
-  flock -w 120 "$OFFSITE_LOCK" true || true
-  # </dev/null: this payload itself arrives on stdin, so a child that reads
-  # stdin would swallow the rest of the deployment.
-  if out=$("$OFFSITE_BACKUP" 2>&1 </dev/null) && printf '%s' "$out" | grep -q ' ok '; then
-    echo "    $out"
-    backed_up=1
-    break
-  fi
-  echo "    attempt $attempt: $out" >&2
-  # The receiver names files by minute; a run in the same minute is refused.
-  [ "$attempt" -lt 3 ] && sleep 30
-done
-[ -n "$backed_up" ] || { echo "off-site backup failed; aborting before any change" >&2; exit 1; }
-
 echo "==> switching $CURRENT -> $IMAGE"
 mkdir -p "$BASE/logs-$TAG"
 switch_started=$SECONDS
-# SIGTERM, then SIGKILL after STOP_SECONDS. Once the old container has stopped
-# accepting requests there is no way back to it except a restart, so the
-# upgrade continues whatever its exit code is.
+# SIGTERM, then SIGKILL after STOP_SECONDS. A killed container exits 137; the
+# upgrade continues whatever the exit code, since only a restart brings it back.
 docker stop -t "$STOP_SECONDS" "$NAME" >/dev/null
 if [ "$(docker inspect -f '{{.State.Running}}' "$NAME")" != false ]; then
   echo "current container is still running; aborting upgrade" >&2
@@ -191,7 +169,7 @@ PREV=new-api-prev
 FAILED=new-api-rolled-back
 PORT=3031
 BASE=/opt/new-api
-STOP_SECONDS=20
+STOP_SECONDS=3
 HEALTH_SECONDS=30
 
 healthy() {
