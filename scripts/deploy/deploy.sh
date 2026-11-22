@@ -5,12 +5,12 @@
 #   scripts/deploy/deploy.sh status           show running versions and recent deploys
 #   scripts/deploy/deploy.sh staging <tag>    isolated test instance: own SQLite, no Redis, 127.0.0.1:3041
 #   scripts/deploy/deploy.sh tunnel           open staging at http://localhost:3041 (Ctrl-C to close)
-#   scripts/deploy/deploy.sh prod <tag>       back up MySQL, swap the container, health-check, roll back on failure
+#   scripts/deploy/deploy.sh prod <tag>       off-site DB backup, swap the container (about a minute at most),
+#                                             health-check within 30s, roll back automatically on failure
+#   scripts/deploy/deploy.sh rollback         switch back to the previous container kept by the last deploy
 #   scripts/deploy/deploy.sh release [--staging] [notes]
 #                                             publish GitHub main (tag + Docker image), wait for the image, deploy it
 #                                             to production; with --staging deploy it to staging only
-#
-# Roll back production by deploying the previous tag: scripts/deploy/deploy.sh prod <previous-tag>
 set -euo pipefail
 
 HOST=${DEPLOY_HOST:-netcup}
@@ -73,16 +73,26 @@ IMAGE=xbang0222/new-api:$TAG
 NAME=new-api
 PREV=new-api-prev
 PORT=3031
-MYSQL_CONTAINER=${MYSQL_CONTAINER:-1Panel-mysql-fTdn}
 BASE=/opt/new-api
+OFFSITE_BACKUP=${OFFSITE_BACKUP:-/usr/local/bin/new-api-offsite-backup}
+OFFSITE_LOCK=${OFFSITE_LOCK:-/run/new-api-offsite-backup.lock}
+# The owner accepts at most about one minute without service. Worst case:
+# STOP_SECONDS for the old container, HEALTH_SECONDS for the new one, then a
+# few seconds to start the kept old container again.
+STOP_SECONDS=20
+HEALTH_SECONDS=30
+# Written into the new container so its own HTTP drain and final flush finish
+# before the next deploy's STOP_SECONDS deadline.
+APP_SHUTDOWN_SECONDS=15
 
 healthy() {
-  for _ in $(seq 60); do
-    if curl -fsS "http://127.0.0.1:$PORT/api/status" 2>/dev/null | grep -q '"success":true'; then
+  local deadline=$((SECONDS + HEALTH_SECONDS))
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    if curl -fsS --max-time 2 "http://127.0.0.1:$PORT/api/status" 2>/dev/null | grep -q '"success":true'; then
       return 0
     fi
     [ "$(docker inspect -f '{{.State.Running}}' "$NAME" 2>/dev/null)" = true ] || return 1
-    sleep 2
+    sleep 1
   done
   return 1
 }
@@ -105,67 +115,133 @@ echo "==> saving current container config ($CURRENT)"
 docker inspect "$NAME" > "$DIR/container.inspect.json"
 docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$NAME" | grep -v -e '^PATH=' -e '^$' > "$DIR/app.env"
 echo "$CURRENT" > "$DIR/previous-image"
+grep -v '^SHUTDOWN_TIMEOUT_SECONDS=' "$DIR/app.env" > "$DIR/app.env.next" || true
+echo "SHUTDOWN_TIMEOUT_SECONDS=$APP_SHUTDOWN_SECONDS" >> "$DIR/app.env.next"
 
-# The application drains HTTP requests before flushing dashboard statistics.
-# Give that drain its configured budget, plus time for the final database writes.
-DRAIN_SECONDS=$(sed -n 's/^SHUTDOWN_TIMEOUT_SECONDS=//p' "$DIR/app.env")
-DRAIN_SECONDS=${DRAIN_SECONDS:-120}
-if ! [[ $DRAIN_SECONDS =~ ^[0-9]{1,9}$ ]] || [ "$((10#$DRAIN_SECONDS))" -le 0 ]; then
-  echo "invalid SHUTDOWN_TIMEOUT_SECONDS; aborting before stopping production" >&2
-  exit 1
-fi
-STOP_SECONDS=$((10#$DRAIN_SECONDS + 60))
-
-echo "==> backing up MySQL"
-DSN=$(sed -n 's/^SQL_DSN=//p' "$DIR/app.env")
-DB_USER=${DSN%%:*}
-DB_REST=${DSN#*:}
-DB_PASS=${DB_REST%%@tcp(*}
-DB_NAME=$(printf '%s' "$DSN" | sed -E 's#.*\)/([^?]+).*#\1#')
-docker exec -e MYSQL_PWD="$DB_PASS" "$MYSQL_CONTAINER" \
-  mysqldump -u"$DB_USER" --single-transaction --quick --routines --no-tablespaces "$DB_NAME" \
-  | gzip > "$DIR/db.sql.gz"
-gzip -t "$DIR/db.sql.gz"
-[ "$(stat -c %s "$DIR/db.sql.gz")" -gt 10240 ] || { echo "backup looks empty; aborting before any change" >&2; exit 1; }
-echo "    $(du -h "$DIR/db.sql.gz" | cut -f1) -> $DIR/db.sql.gz"
+# The hourly off-site backup (everything except the logs table) runs once more
+# now, so the newest copy is seconds old. Production keeps serving meanwhile.
+echo "==> off-site database backup"
+backed_up=
+for attempt in 1 2 3; do
+  # Wait for an hourly run that may already hold the lock; the backup takes its own.
+  flock -w 120 "$OFFSITE_LOCK" true || true
+  # </dev/null: this payload itself arrives on stdin, so a child that reads
+  # stdin would swallow the rest of the deployment.
+  if out=$("$OFFSITE_BACKUP" 2>&1 </dev/null) && printf '%s' "$out" | grep -q ' ok '; then
+    echo "    $out"
+    backed_up=1
+    break
+  fi
+  echo "    attempt $attempt: $out" >&2
+  # The receiver names files by minute; a run in the same minute is refused.
+  [ "$attempt" -lt 3 ] && sleep 30
+done
+[ -n "$backed_up" ] || { echo "off-site backup failed; aborting before any change" >&2; exit 1; }
 
 echo "==> switching $CURRENT -> $IMAGE"
 mkdir -p "$BASE/logs-$TAG"
+switch_started=$SECONDS
+# SIGTERM, then SIGKILL after STOP_SECONDS. Once the old container has stopped
+# accepting requests there is no way back to it except a restart, so the
+# upgrade continues whatever its exit code is.
 docker stop -t "$STOP_SECONDS" "$NAME" >/dev/null
-if [ "$(docker inspect -f '{{.State.Running}} {{.State.ExitCode}} {{.State.OOMKilled}}' "$NAME")" != 'false 0 false' ]; then
-  echo "current container did not exit cleanly; restoring it and aborting upgrade" >&2
-  docker start "$NAME" >/dev/null
-  healthy || echo "restored container failed health check; inspect production before retrying" >&2
+if [ "$(docker inspect -f '{{.State.Running}}' "$NAME")" != false ]; then
+  echo "current container is still running; aborting upgrade" >&2
   exit 1
 fi
+echo "    old container stopped after $((SECONDS - switch_started))s (exit $(docker inspect -f '{{.State.ExitCode}}' "$NAME"))"
 docker rm -f "$PREV" >/dev/null 2>&1 || true
 docker rename "$NAME" "$PREV"
+
+rollback() {
+  echo "!!> $1, rolling back to $CURRENT" >&2
+  docker logs --tail 80 "$NAME" > "$DIR/failed-start.log" 2>&1 || true
+  docker rm -f "$NAME" >/dev/null 2>&1 || true
+  docker rename "$PREV" "$NAME"
+  docker start "$NAME" >/dev/null
+  if healthy; then
+    echo "!!> rolled back after $((SECONDS - switch_started))s; production runs $CURRENT again. Failed logs: $DIR/failed-start.log" >&2
+  else
+    echo "!!> ROLLBACK ALSO FAILED. Check 'docker logs $NAME' now." >&2
+  fi
+  printf '%s\t%s\t->\t%s\tFAILED-ROLLED-BACK\t%s\n' "$TS" "$CURRENT" "$IMAGE" "$DIR" >> "$BASE/deploy-history.log"
+  exit 1
+}
+
 docker run -d --name "$NAME" --restart unless-stopped --network 1panel-network \
-  -p "127.0.0.1:$PORT:3000" --env-file "$DIR/app.env" \
+  -p "127.0.0.1:$PORT:3000" --env-file "$DIR/app.env.next" \
   -v "$BASE/data:/data" -v "$BASE/logs-$TAG:/app/logs" \
   --log-driver json-file --log-opt max-size=100m --log-opt max-file=5 \
-  "$IMAGE" >/dev/null
+  "$IMAGE" >/dev/null || rollback "new container did not start"
 
 if healthy; then
   docker update --restart no "$PREV" >/dev/null
   printf '%s\t%s\t->\t%s\t%s\n' "$TS" "$CURRENT" "$IMAGE" "$DIR" >> "$BASE/deploy-history.log"
-  echo "==> production is up on $IMAGE (previous container kept stopped as $PREV)"
+  echo "==> production is up on $IMAGE after $((SECONDS - switch_started))s (previous container kept stopped as $PREV)"
+  echo "    undo: scripts/deploy/deploy.sh rollback"
   exit 0
 fi
+rollback "health check failed within ${HEALTH_SECONDS}s"
+REMOTE
 
-echo "!!> health check failed, rolling back to $CURRENT" >&2
-docker logs --tail 80 "$NAME" > "$DIR/failed-start.log" 2>&1 || true
-docker rm -f "$NAME" >/dev/null
+read -r -d '' ROLLBACK_SCRIPT <<'REMOTE' || true
+set -euo pipefail
+NAME=new-api
+PREV=new-api-prev
+FAILED=new-api-rolled-back
+PORT=3031
+BASE=/opt/new-api
+STOP_SECONDS=20
+HEALTH_SECONDS=30
+
+healthy() {
+  local deadline=$((SECONDS + HEALTH_SECONDS))
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    if curl -fsS --max-time 2 "http://127.0.0.1:$PORT/api/status" 2>/dev/null | grep -q '"success":true'; then
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+docker inspect "$PREV" >/dev/null 2>&1 || { echo "no $PREV container to roll back to" >&2; exit 1; }
+TARGET=$(docker inspect -f '{{.Config.Image}}' "$PREV")
+started=$SECONDS
+# A deploy interrupted after renaming the old container leaves no $NAME at all.
+if docker inspect "$NAME" >/dev/null 2>&1; then
+  CURRENT=$(docker inspect -f '{{.Config.Image}}' "$NAME")
+  echo "==> rolling back $CURRENT -> $TARGET"
+  docker stop -t "$STOP_SECONDS" "$NAME" >/dev/null
+  docker rm -f "$FAILED" >/dev/null 2>&1 || true
+  docker rename "$NAME" "$FAILED"
+  docker update --restart no "$FAILED" >/dev/null
+else
+  CURRENT=none
+  echo "==> no $NAME container; starting $TARGET"
+fi
 docker rename "$PREV" "$NAME"
+docker update --restart unless-stopped "$NAME" >/dev/null
 docker start "$NAME" >/dev/null
 if healthy; then
-  echo "!!> rolled back; production runs $CURRENT again. Failed logs: $DIR/failed-start.log" >&2
-else
-  echo "!!> ROLLBACK ALSO FAILED. Check 'docker logs $NAME' now." >&2
+  printf '%s\t%s\t->\t%s\tMANUAL-ROLLBACK\n' "$(date +%Y%m%d-%H%M%S)" "$CURRENT" "$TARGET" >> "$BASE/deploy-history.log"
+  echo "==> production runs $TARGET again after $((SECONDS - started))s"
+  [ "$CURRENT" = none ] || echo "    $CURRENT kept stopped as $FAILED"
+  exit 0
 fi
-echo "!!> If the new version changed the database schema, restore with:" >&2
-echo "    gunzip -c $DIR/db.sql.gz | docker exec -i -e MYSQL_PWD=... $MYSQL_CONTAINER mysql -u$DB_USER $DB_NAME" >&2
-printf '%s\t%s\t->\t%s\tFAILED-ROLLED-BACK\t%s\n' "$TS" "$CURRENT" "$IMAGE" "$DIR" >> "$BASE/deploy-history.log"
+echo "!!> $TARGET did not pass the health check within ${HEALTH_SECONDS}s" >&2
+if [ "$CURRENT" != none ]; then
+  # Put back what was running before this rollback rather than leave it broken.
+  echo "!!> restoring $CURRENT" >&2
+  docker stop -t 5 "$NAME" >/dev/null 2>&1 || true
+  docker rename "$NAME" "$PREV"
+  docker update --restart no "$PREV" >/dev/null
+  docker rename "$FAILED" "$NAME"
+  docker update --restart unless-stopped "$NAME" >/dev/null
+  docker start "$NAME" >/dev/null
+  healthy && echo "!!> $CURRENT is serving again; rollback abandoned" >&2 && exit 1
+fi
+echo "!!> PRODUCTION IS NOT HEALTHY. Check 'docker logs $NAME' now." >&2
 exit 1
 REMOTE
 
@@ -188,6 +264,9 @@ case ${1:-} in
   prod)
     require_tag "${2:-}"
     remote "bash -s -- $2" <<< "$PROD_SCRIPT"
+    ;;
+  rollback)
+    remote "bash -s" <<< "$ROLLBACK_SCRIPT"
     ;;
   release)
     shift
