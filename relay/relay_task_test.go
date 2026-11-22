@@ -635,10 +635,10 @@ func TestRelayTaskSubmitPricesModelsAPluginAlsoRelays(t *testing.T) {
 	}{
 		{name: "per-call price prices chat and tasks", relay: chatRoute, price: "0.04", chatQuota: 20000, taskQuota: 40000},
 		{name: "token ratio alone leaves tasks unpriced", relay: chatRoute, ratio: "10", chatQuota: 10000, taskErr: notConfigured},
-		{name: "token expression is the chat price", relay: chatRoute, expr: tokenExpr, chatQuota: 33768, taskErr: notConfigured},
+		{name: "token expression is the chat price", relay: chatRoute, expr: tokenExpr, chatQuota: 1000, taskErr: notConfigured},
 		{name: "constant expression is the chat price", relay: chatRoute, expr: `tier("flat", 0.04)`, taskErr: notConfigured},
 		{name: "usage expression prices tasks only", relay: chatRoute, expr: usageExpr, chatErr: "task usage expression", taskExpr: usageExpr, taskQuota: 300000},
-		{name: "plugin price splits a chat price", relay: chatRoute, expr: tokenExpr, override: usageExpr, chatQuota: 33768, taskExpr: usageExpr, taskQuota: 300000},
+		{name: "plugin price splits a chat price", relay: chatRoute, expr: tokenExpr, override: usageExpr, chatQuota: 1000, taskExpr: usageExpr, taskQuota: 300000},
 		{name: "plugin price splits a token ratio", relay: chatRoute, ratio: "10", override: usageExpr, taskExpr: usageExpr, taskQuota: 300000},
 		{name: "plugin price reading token counts is rejected", expr: usageExpr, override: `tier("tokens", p * 2 + u("seconds"))`, taskErr: notConfigured},
 		{name: "task model token expression no longer bills zero", expr: tokenExpr, taskErr: notConfigured},
