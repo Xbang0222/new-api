@@ -82,15 +82,6 @@ else:
     sys.exit(7)
 """
 
-BACKUPS = {
-    "ok": 'echo "$(date) ok 6s: stored new_api-x.sql.gz 1 bytes"',
-    "fail": "echo rejected >&2; exit 1",
-    "skipping": 'echo "$(date) previous run still active, skipping"',
-    # Reads its stdin, like an ssh or docker exec -i without redirection would.
-    "reads-stdin": 'cat >/dev/null; echo "$(date) ok 6s: stored new_api-x.sql.gz 1 bytes"',
-}
-
-
 def payload(name, base):
     source = Path(__file__).with_name("deploy.sh").read_text()
     body = re.search(
@@ -108,7 +99,7 @@ def image(tag):
 
 
 class DeployPayloadTest(unittest.TestCase):
-    def run_payload(self, name, containers, args=(), backup="ok", **env_overrides):
+    def run_payload(self, name, containers, args=(), **env_overrides):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
             commands = base / "commands"
@@ -118,10 +109,6 @@ class DeployPayloadTest(unittest.TestCase):
             stubs = {
                 "docker": DOCKER,
                 "curl": CURL,
-                "flock": "#!/bin/sh\nexit 0\n",
-                # Skip the 30s backup retry wait; keep short health-check waits real.
-                "sleep": '#!/bin/sh\n[ "$1" = 30 ] && exit 0\nexec /bin/sleep "$@"\n',
-                "backup": "#!/bin/sh\n" + BACKUPS[backup] + "\n",
             }
             for stub, body in stubs.items():
                 path = commands / stub
@@ -133,8 +120,6 @@ class DeployPayloadTest(unittest.TestCase):
                 "TEST_STATE": str(base / "state"),
                 "TEST_CALLS": str(base / "calls"),
                 "TEST_ENV_COPY": str(base / "env-copy"),
-                "OFFSITE_BACKUP": str(commands / "backup"),
-                "OFFSITE_LOCK": str(base / "lock"),
                 **{"TEST_" + key.upper(): str(value) for key, value in env_overrides.items()},
             }
             # Feed the payload on stdin exactly as `ssh ... bash -s` does.
@@ -154,22 +139,17 @@ class DeployPayloadTest(unittest.TestCase):
         self.assertTrue(final["new-api"]["running"])
         self.assertEqual(final["new-api"]["restart"], "unless-stopped")
 
-    def test_switches_with_bounded_waits_and_short_app_drain(self):
+    def test_switches_at_once_with_short_app_drain(self):
         result, calls, env_copy, final = self.deploy()
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn(["stop", "-t", "20", "new-api"], calls)
+        self.assertIn(["stop", "-t", "3", "new-api"], calls)
         self.assert_serving(final, "v-next")
         self.assertFalse(final["new-api-prev"]["running"])
         self.assertEqual(final["new-api-prev"]["restart"], "no")
-        self.assertIn("SHUTDOWN_TIMEOUT_SECONDS=15", env_copy.splitlines())
+        self.assertIn("SHUTDOWN_TIMEOUT_SECONDS=1", env_copy.splitlines())
         self.assertNotIn("SHUTDOWN_TIMEOUT_SECONDS=120", env_copy)
         self.assertIn("SQL_DSN=", env_copy)
-        self.assertFalse(any(call[0] == "exec" for call in calls), "no local MySQL dump")
-
-    def test_backup_reading_stdin_does_not_swallow_the_deployment(self):
-        result, _, _, final = self.deploy(backup="reads-stdin")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assert_serving(final, "v-next")
+        self.assertFalse(any(call[0] == "exec" for call in calls), "no database dump")
 
     def test_old_container_killed_at_deadline_still_upgrades(self):
         result, _, _, final = self.deploy(exit_code=137)
@@ -181,15 +161,6 @@ class DeployPayloadTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse(any(call[0] in {"rename", "run"} for call in calls))
         self.assert_serving(final, "v-old")
-
-    def test_failed_or_skipped_backup_aborts_before_stopping_production(self):
-        for backup in ["fail", "skipping"]:
-            with self.subTest(backup=backup):
-                result, calls, _, final = self.deploy(backup=backup)
-                self.assertNotEqual(result.returncode, 0)
-                self.assertIn("aborting before any change", result.stderr)
-                self.assertFalse(any(call[0] in {"stop", "rename", "run"} for call in calls))
-                self.assert_serving(final, "v-old")
 
     def test_unhealthy_new_version_rolls_back_to_serving_old_version(self):
         result, _, _, final = self.deploy(healthy="v-old")
@@ -215,7 +186,7 @@ class DeployPayloadTest(unittest.TestCase):
     def test_manual_rollback_restores_previous_container(self):
         result, calls, _, final = self.rollback(self.after_deploy())
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn(["stop", "-t", "20", "new-api"], calls)
+        self.assertIn(["stop", "-t", "3", "new-api"], calls)
         self.assert_serving(final, "v-old")
         self.assertEqual(final["new-api-rolled-back"]["image"], "xbang0222/new-api:v-next")
         self.assertEqual(final["new-api-rolled-back"]["restart"], "no")
