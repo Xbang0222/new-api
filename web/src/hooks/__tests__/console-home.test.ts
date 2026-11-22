@@ -28,7 +28,7 @@ function createSidebarConfig() {
 
 describe('resolveConsoleHomePath', () => {
   it('uses the configured home page when its module is visible', () => {
-    expect(resolveConsoleHomePath(createSidebarConfig(), null, '/keys')).toBe(
+    expect(resolveConsoleHomePath(createSidebarConfig(), '/keys')).toBe(
       '/keys'
     )
   })
@@ -37,17 +37,9 @@ describe('resolveConsoleHomePath', () => {
     const config = createSidebarConfig()
     config.console.token = false
 
-    expect(resolveConsoleHomePath(config, null, '/keys')).toBe(
+    expect(resolveConsoleHomePath(config, '/keys')).toBe(
       '/dashboard/overview'
     )
   })
 
-  it('respects the user sidebar layer when resolving the configured page', () => {
-    const userConfig = createSidebarConfig()
-    userConfig.personal.topup = false
-
-    expect(
-      resolveConsoleHomePath(createSidebarConfig(), userConfig, '/wallet')
-    ).toBe('/dashboard/overview')
-  })
 })

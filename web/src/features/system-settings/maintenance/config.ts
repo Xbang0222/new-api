@@ -278,6 +278,22 @@ export function serializeHeaderNavModules(
   return JSON.stringify(config)
 }
 
+/** Administrators must always be able to reach this page to undo changes. */
+export const LOCKED_SIDEBAR_MODULES: ReadonlyArray<readonly [string, string]> =
+  [
+    ['admin', 'enabled'],
+    ['admin', 'setting'],
+    ['systemSettings', 'enabled'],
+    ['systemSettings', 'site'],
+  ]
+
+export function isSidebarModuleLocked(section: string, module: string) {
+  return LOCKED_SIDEBAR_MODULES.some(
+    ([lockedSection, lockedModule]) =>
+      lockedSection === section && lockedModule === module
+  )
+}
+
 export function parseSidebarModulesAdmin(
   value: string | null | undefined
 ): SidebarModulesAdminConfig {
@@ -344,52 +360,12 @@ export function parseSidebarModulesAdmin(
       })
     })
 
+    for (const [section, module] of LOCKED_SIDEBAR_MODULES) {
+      result[section][module] = true
+    }
     return result
   } catch {
     return defaults
-  }
-}
-
-/** Parse the optional user overlay without adding default entries. */
-export function parseSidebarModulesUser(
-  value: string | null | undefined
-): SidebarModulesAdminConfig | null {
-  if (!value || value.trim() === '') return null
-
-  try {
-    const parsed = JSON.parse(value) as Record<string, unknown>
-    if (!parsed || typeof parsed !== 'object') return null
-
-    const result: SidebarModulesAdminConfig = {}
-    Object.entries(parsed).forEach(([sectionKey, raw]) => {
-      if (!raw || typeof raw !== 'object') return
-      const rawSection = raw as Record<string, unknown>
-      const sectionConfig: SidebarSectionConfig = {
-        enabled: toBoolean(rawSection.enabled, true),
-      }
-      Object.entries(rawSection).forEach(([moduleKey, moduleValue]) => {
-        if (moduleKey !== 'enabled' && moduleKey !== 'setupGuide') {
-          sectionConfig[moduleKey] = toBoolean(moduleValue, true)
-        }
-      })
-      if (sectionKey === 'console') {
-        if (!('overview' in rawSection) && 'detail' in rawSection) {
-          sectionConfig.overview = toBoolean(rawSection.detail, true)
-        }
-        if (!('dashboard' in rawSection) && 'detail' in rawSection) {
-          sectionConfig.dashboard = toBoolean(rawSection.detail, true)
-        }
-        if (!('task' in rawSection) && 'midjourney' in rawSection) {
-          sectionConfig.task = toBoolean(rawSection.midjourney, true)
-        }
-        delete sectionConfig.detail
-        delete sectionConfig.midjourney
-      }
-      result[sectionKey] = sectionConfig
-    })
-    return result
-  } catch {
-    return null
   }
 }
 

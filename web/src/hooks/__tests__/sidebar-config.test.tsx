@@ -125,10 +125,8 @@ describe('security sidebar visibility', () => {
   it.each([
     [{ personal: { enabled: true, security: false } }, undefined],
     [{ personal: { enabled: false } }, { personal: { security: true } }],
-    [undefined, { personal: { enabled: true, security: false } }],
-    [undefined, { personal: { enabled: false } }],
   ])(
-    'admin or user disablement hides Security & Access (%j, %j)',
+    'administrator disablement hides Security & Access (%j, %j)',
     (admin, user) => {
       const { result } = sidebarFor(admin, user)
       expect(
@@ -138,18 +136,21 @@ describe('security sidebar visibility', () => {
       ).toBe(false)
     }
   )
-  it('users without sidebar configuration permission retain the admin view', () => {
-    const { result } = sidebarFor(
-      undefined,
-      { personal: { security: false } },
-      false
-    )
-    expect(
-      result.current
+  it.each([true, false])(
+    'ignores saved personal sidebar preferences (permission: %s)',
+    (canConfigure) => {
+      const { result } = sidebarFor(
+        undefined,
+        { personal: { enabled: false }, console: { audit: false } },
+        canConfigure
+      )
+      const titles = result.current
         .flatMap((group) => group.items)
-        .some((item) => item.title === 'Security & Access')
-    ).toBe(true)
-  })
+        .map((item) => item.title)
+      expect(titles).toContain('Security & Access')
+      expect(titles).toContain('Audit Logs')
+    }
+  )
 })
 
 describe('audit log sidebar entry', () => {
@@ -189,10 +190,8 @@ describe('audit log sidebar entry', () => {
   it.each([
     [{ console: { enabled: true, audit: false } }, undefined],
     [{ console: { enabled: false } }, { console: { audit: true } }],
-    [undefined, { console: { enabled: true, audit: false } }],
-    [undefined, { console: { enabled: false } }],
   ])(
-    'admin and personal visibility rules can hide Audit Logs (%j, %j)',
+    'administrator visibility rules hide Audit Logs (%j, %j)',
     (admin, user) => {
       const { result } = sidebarFor(admin, user)
       expect(
@@ -280,17 +279,16 @@ it.each(Object.entries(SIDEBAR_CHILD_SECTIONS))(
     for (const child of definition.modules) {
       admin[section][child.key] = true
       expect(
-        isSidebarModuleEnabledForConfig(section, child.key, admin, null)
+        isSidebarModuleEnabledForConfig(section, child.key, admin)
       ).toBe(true)
       admin[section][child.key] = false
-      const user = { [section]: { enabled: true, [child.key]: true } }
       expect(
-        isSidebarModuleEnabledForConfig(section, child.key, admin, user)
+        isSidebarModuleEnabledForConfig(section, child.key, admin)
       ).toBe(false)
       admin[section][child.key] = true
       admin[definition.parentSection][definition.parentModule] = false
       expect(
-        isSidebarModuleEnabledForConfig(section, child.key, admin, user)
+        isSidebarModuleEnabledForConfig(section, child.key, admin)
       ).toBe(false)
       admin[definition.parentSection][definition.parentModule] = true
     }
@@ -308,9 +306,9 @@ it.each([
   'hides the disabled destination %s even when opened directly',
   (url, section, key) => {
     const admin = parseSidebarModulesAdmin('')
-    expect(isSidebarModuleVisibleForConfig(url, admin, null)).toBe(true)
+    expect(isSidebarModuleVisibleForConfig(url, admin)).toBe(true)
     admin[section][key] = false
-    expect(isSidebarModuleVisibleForConfig(url, admin, null)).toBe(false)
+    expect(isSidebarModuleVisibleForConfig(url, admin)).toBe(false)
   }
 )
 

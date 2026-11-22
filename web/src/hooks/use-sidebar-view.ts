@@ -30,7 +30,6 @@ import { useModelPricingIssueBadge } from '@/features/system-settings/models/pri
 import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
 
-import { usePersonalSidebarRecoveryAllowed } from './use-personal-sidebar-recovery'
 import { useSidebarConfig } from './use-sidebar-config'
 import { useSidebarData } from './use-sidebar-data'
 
@@ -44,7 +43,7 @@ const ROOT_VIEW_KEY = '__root'
  *   groups) when the URL belongs to a registered drill-in workspace.
  * - Otherwise returns the root navigation, narrowed by:
  *     · admin-only group visibility (role-based);
- *     · `useSidebarConfig` (admin × user `sidebar_modules` overlay).
+ *     · `useSidebarConfig` (administrator `SidebarModulesAdmin`).
  *
  * Nested views use the same visibility preferences as the root navigation.
  * Route authorization remains enforced separately.
@@ -53,7 +52,6 @@ export function useSidebarView(): ResolvedSidebarView {
   const { t } = useTranslation()
   const pathname = useLocation({ select: (l) => l.pathname })
   const userRole = useAuthStore((s) => s.auth.user?.role)
-  const canRecoverPersonalSettings = usePersonalSidebarRecoveryAllowed()
   const modelPricingBadge = useModelPricingIssueBadge()
   const badges = useMemo<SidebarBadges>(
     () => ({ modelPricing: modelPricingBadge }),
@@ -81,49 +79,7 @@ export function useSidebarView(): ResolvedSidebarView {
     [view, t, badges]
   )
   const filteredNestedGroups = useSidebarConfig(nestedGroups)
-  const navGroups = useMemo<NavGroup[]>(() => {
-    const visibleGroups = view ? filteredNestedGroups : rootNavGroups
-    const groups: NavGroup[] = canRecoverPersonalSettings
-      ? [
-          ...visibleGroups,
-          {
-            id: 'personal-module-settings-recovery',
-            title: '',
-            items: [
-              {
-                title: t('Sidebar Personal Settings'),
-                url: '/profile/sidebar-modules',
-              },
-            ],
-          },
-        ]
-      : visibleGroups
-    const recoveryUrl = '/system-settings/site/sidebar-modules'
-    if (
-      userRole !== ROLE.SUPER_ADMIN ||
-      groups.some((group) =>
-        group.items.some((item) => 'url' in item && item.url === recoveryUrl)
-      )
-    ) {
-      return groups
-    }
-    // The owner must always be able to restore visibility preferences.
-    return [
-      ...groups,
-      {
-        id: 'module-settings-recovery',
-        title: '',
-        items: [{ title: t('Sidebar modules'), url: recoveryUrl }],
-      },
-    ]
-  }, [
-    view,
-    filteredNestedGroups,
-    rootNavGroups,
-    userRole,
-    canRecoverPersonalSettings,
-    t,
-  ])
+  const navGroups = view ? filteredNestedGroups : rootNavGroups
 
   if (view) {
     return {

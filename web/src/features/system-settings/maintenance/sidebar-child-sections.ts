@@ -98,7 +98,6 @@ export const SIDEBAR_CHILD_SECTIONS: Record<string, SidebarChildSection> = {
       { key: 'details', titleKey: 'Personal Settings' },
       { key: 'preferences', titleKey: 'Language Preferences' },
       { key: 'checkin', titleKey: 'Daily Check-in' },
-      { key: 'sidebar', titleKey: 'Sidebar modules' },
     ],
   },
   security: {
