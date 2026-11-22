@@ -18,6 +18,7 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -206,6 +207,11 @@ func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, request
 		return a.send(c, info, requestBody)
 	}
 
+	// The handler marked the upstream start before DoRequest, but up to the
+	// send this converts the client request, as ConvertOpenAIRequest does for
+	// other channels before that mark: its errors are the request's, not the
+	// upstream's. The start is marked again when the request is handed over.
+	info.UpstreamStartTime = time.Time{}
 	ctx := c.Request.Context()
 	input := jsplugin.ConvertInput{Path: c.Request.URL.Path, Model: info.UpstreamModelName, Stream: info.IsStream}
 	// files are the client's uploaded files by reference, nil for a JSON
@@ -232,6 +238,7 @@ func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, request
 			return nil, types.NewError(err, types.ErrorCodeConvertRequestFailed, types.ErrOptionWithSkipRetry())
 		}
 		if first.WebSocket != nil {
+			info.MarkUpstreamRequestStart()
 			return a.openWebSocket(c, info, first)
 		}
 		if first.HasBody() {
@@ -258,6 +265,7 @@ func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, request
 			return nil, types.NewError(fmt.Errorf("plugin %s convertRequest result: %w", a.plugin.Meta.Key, err), types.ErrorCodeConvertRequestFailed, types.ErrOptionWithSkipRetry())
 		}
 	}
+	info.MarkUpstreamRequestStart()
 	if pluginRoute {
 		return a.runChain(c, info, first, body, a.contentType, files)
 	}
