@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/relay/channel"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/constant"
@@ -160,6 +161,29 @@ func gcd(a int, b int) int {
 		return 1
 	}
 	return a
+}
+
+// imagenDefaultSampleCount is the number of images Imagen generates when a
+// request names none, as Google's GenAI SDK documents it ("currently 4").
+const imagenDefaultSampleCount = 4
+
+// OutboundImageCount reads the image count of an image request body:
+// Imagen generates parameters.sampleCount images, and its default without
+// one.
+func (a *Adaptor) OutboundImageCount(body []byte) (*uint, error) {
+	var request struct {
+		Instances  any `json:"instances"`
+		Parameters struct {
+			SampleCount *uint `json:"sampleCount"`
+		} `json:"parameters"`
+	}
+	if err := common.Unmarshal(body, &request); err != nil {
+		return nil, err
+	}
+	if request.Parameters.SampleCount == nil && request.Instances != nil {
+		return common.GetPointer(uint(imagenDefaultSampleCount)), nil
+	}
+	return request.Parameters.SampleCount, nil
 }
 
 func (a *Adaptor) Init(info *relaycommon.RelayInfo) {

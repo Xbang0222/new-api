@@ -16,10 +16,17 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Search, Copy, Check, ChevronLeft, ChevronRight } from 'lucide-react'
+import {
+  Search,
+  Download,
+  LoaderCircle,
+  ChevronLeft,
+  ChevronRight,
+} from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { CopyButton } from '@/components/copy-button'
 import { Dialog } from '@/components/dialog'
 import { StatusBadge } from '@/components/status-badge'
 import {
@@ -44,8 +51,10 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
-import { formatCurrencyFromUSD } from '@/lib/currency'
+import {
+  formatCurrencyFromUSD,
+  formatRecordedCurrencyAmount,
+} from '@/lib/currency'
 import { formatNumber } from '@/lib/format'
 
 import { useBillingHistory } from '../../hooks/use-billing-history'
@@ -73,15 +82,21 @@ export function BillingHistoryDialog({
     keyword,
     loading,
     completing,
+    exporting,
+    userSearch,
+    userSearchField,
+    invalidUserId,
     isAdmin,
     handlePageChange,
     handlePageSizeChange,
     handleSearch,
     handleCompleteOrder,
-  } = useBillingHistory()
+    handleExport,
+    handleUserSearch,
+    handleUserSearchField,
+  } = useBillingHistory({ enabled: open })
 
   const [confirmTradeNo, setConfirmTradeNo] = useState<string | null>(null)
-  const { copyToClipboard, copiedText } = useCopyToClipboard({ notify: false })
 
   const totalPages = Math.ceil(total / pageSize)
 
@@ -113,7 +128,9 @@ export function BillingHistoryDialog({
             <div className='relative flex-1'>
               <Search className='text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2' />
               <Input
+                aria-label={t('Order Number')}
                 placeholder={t('Search by order number...')}
+                maxLength={256}
                 value={keyword}
                 onChange={(e) => handleSearch(e.target.value)}
                 className='h-9 pl-10'
@@ -144,6 +161,94 @@ export function BillingHistoryDialog({
               </SelectContent>
             </Select>
           </div>
+
+          <div className='flex flex-col gap-2 sm:flex-row sm:items-start'>
+            {isAdmin && (
+              <div className='flex-1 space-y-1'>
+                <div className='flex gap-2'>
+                  <Select
+                    items={[
+                      { value: 'username', label: t('Username') },
+                      { value: 'user_id', label: t('User ID') },
+                    ]}
+                    value={userSearchField}
+                    onValueChange={(value) => {
+                      if (value === 'username' || value === 'user_id') {
+                        handleUserSearchField(value)
+                      }
+                    }}
+                  >
+                    <SelectTrigger
+                      aria-label={t('Search user by')}
+                      className='h-9 w-32 shrink-0'
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value='username'>{t('Username')}</SelectItem>
+                      <SelectItem value='user_id'>{t('User ID')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    aria-label={
+                      userSearchField === 'username'
+                        ? t('Username')
+                        : t('User ID')
+                    }
+                    placeholder={
+                      userSearchField === 'username'
+                        ? t('Enter username')
+                        : t('Enter user ID')
+                    }
+                    inputMode={
+                      userSearchField === 'user_id' ? 'numeric' : 'text'
+                    }
+                    value={userSearch}
+                    maxLength={256}
+                    onChange={(event) => handleUserSearch(event.target.value)}
+                    aria-invalid={invalidUserId}
+                    className='h-9 min-w-0'
+                  />
+                </div>
+                {invalidUserId && (
+                  <p role='alert' className='text-destructive text-xs'>
+                    {t('Invalid user ID')}
+                  </p>
+                )}
+              </div>
+            )}
+            <Button
+              variant='outline'
+              className='h-9 gap-2 sm:ml-auto'
+              onClick={() => void handleExport()}
+              disabled={
+                exporting ||
+                loading ||
+                completing ||
+                invalidUserId ||
+                total === 0 ||
+                total > 2000
+              }
+            >
+              {exporting ? (
+                <LoaderCircle className='size-4 animate-spin' />
+              ) : (
+                <Download className='size-4' />
+              )}
+              {exporting ? t('Exporting...') : t('Export PDF')}
+            </Button>
+          </div>
+          <p className='text-muted-foreground text-xs'>
+            {total > 2000
+              ? t(
+                  'Too many records to export. Narrow your search to {{limit}} orders or fewer.',
+                  { limit: 2000 }
+                )
+              : t(
+                  'Export all matching orders as a detailed top-up record. Up to {{limit}} orders per PDF.',
+                  { limit: 2000 }
+                )}
+          </p>
 
           {/* Records List */}
           <div className='max-h-[min(54vh,520px)] overflow-y-auto pr-1'>
@@ -178,7 +283,7 @@ export function BillingHistoryDialog({
                   {t('No billing records found')}
                 </p>
                 <p className='mt-1 text-xs'>
-                  {keyword
+                  {keyword || userSearch
                     ? t('Try adjusting your search')
                     : t('Your transaction history will appear here')}
                 </p>
@@ -188,6 +293,10 @@ export function BillingHistoryDialog({
               <div className='space-y-3'>
                 {records.map((record) => {
                   const statusConfig = getStatusConfig(record.status)
+                  const verifiedPayment = formatRecordedCurrencyAmount(
+                    record.paid_amount,
+                    record.paid_currency
+                  )
                   return (
                     <div
                       key={record.id}
@@ -200,18 +309,11 @@ export function BillingHistoryDialog({
                             <code className='text-foreground truncate font-mono text-sm'>
                               {record.trade_no}
                             </code>
-                            <Button
-                              variant='ghost'
-                              size='sm'
+                            <CopyButton
+                              value={record.trade_no}
                               className='h-5 w-5 p-0'
-                              onClick={() => copyToClipboard(record.trade_no)}
-                            >
-                              {copiedText === record.trade_no ? (
-                                <Check className='h-3 w-3' />
-                              ) : (
-                                <Copy className='h-3 w-3' />
-                              )}
-                            </Button>
+                              iconClassName='h-3 w-3'
+                            />
                             {isAdmin && record.user_id != null && (
                               <StatusBadge
                                 label={`${t('User ID')}: ${record.user_id}`}
@@ -221,6 +323,11 @@ export function BillingHistoryDialog({
                               />
                             )}
                           </div>
+                          {isAdmin && record.username && (
+                            <div className='text-muted-foreground text-xs break-all'>
+                              {t('Username')}: {record.username}
+                            </div>
+                          )}
                           <div className='text-muted-foreground text-xs'>
                             {formatTimestamp(record.create_time)}
                           </div>
@@ -264,8 +371,15 @@ export function BillingHistoryDialog({
                             {t('Payment')}
                           </Label>
                           <div className='text-sm font-semibold text-red-600'>
-                            {formatNumber(record.money)}
+                            {verifiedPayment === '-'
+                              ? formatNumber(record.money)
+                              : verifiedPayment}
                           </div>
+                          {verifiedPayment === '-' && (
+                            <p className='text-muted-foreground text-xs'>
+                              {t('Currency not recorded')}
+                            </p>
+                          )}
                         </div>
                       </div>
 

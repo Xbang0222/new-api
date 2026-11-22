@@ -21,7 +21,12 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { resolveSidebarView } from '@/components/layout/lib/sidebar-view-registry'
-import type { NavGroup, ResolvedSidebarView } from '@/components/layout/types'
+import type {
+  NavGroup,
+  ResolvedSidebarView,
+  SidebarBadges,
+} from '@/components/layout/types'
+import { useModelPricingIssueBadge } from '@/features/system-settings/models/pricing-issues'
 import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
 
@@ -49,7 +54,12 @@ export function useSidebarView(): ResolvedSidebarView {
   const pathname = useLocation({ select: (l) => l.pathname })
   const userRole = useAuthStore((s) => s.auth.user?.role)
   const canRecoverPersonalSettings = usePersonalSidebarRecoveryAllowed()
-  const rootSidebarData = useSidebarData()
+  const modelPricingBadge = useModelPricingIssueBadge()
+  const badges = useMemo<SidebarBadges>(
+    () => ({ modelPricing: modelPricingBadge }),
+    [modelPricingBadge]
+  )
+  const rootSidebarData = useSidebarData(badges)
   const configFilteredRoot = useSidebarConfig(rootSidebarData.navGroups)
 
   const rootNavGroups = useMemo<NavGroup[]>(() => {
@@ -66,7 +76,10 @@ export function useSidebarView(): ResolvedSidebarView {
   }, [configFilteredRoot, userRole])
 
   const view = resolveSidebarView(pathname)
-  const nestedGroups = useMemo(() => view?.getNavGroups(t) ?? [], [view, t])
+  const nestedGroups = useMemo(
+    () => view?.getNavGroups(t, badges) ?? [],
+    [view, t, badges]
+  )
   const filteredNestedGroups = useSidebarConfig(nestedGroups)
   const navGroups = useMemo<NavGroup[]>(() => {
     const visibleGroups = view ? filteredNestedGroups : rootNavGroups

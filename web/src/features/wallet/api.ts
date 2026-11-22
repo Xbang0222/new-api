@@ -33,6 +33,8 @@ import type {
   AffiliateTransferResponse,
   InvitationDetailsResponse,
   BillingHistoryResponse,
+  BillingHistoryFilters,
+  BillingHistoryExport,
   CompleteOrderRequest,
   CreemPaymentRequest,
   CreemPaymentResponse,
@@ -233,7 +235,8 @@ export async function getUserBillingHistory(
 export async function getAllBillingHistory(
   page: number,
   pageSize: number,
-  keyword?: string
+  keyword?: string,
+  userFilters?: Pick<BillingHistoryFilters, 'username' | 'user_id'>
 ): Promise<ApiResponse<BillingHistoryResponse>> {
   const params = new URLSearchParams({
     p: page.toString(),
@@ -242,7 +245,23 @@ export async function getAllBillingHistory(
   if (keyword) {
     params.append('keyword', keyword)
   }
+  if (userFilters?.username) params.set('username', userFilters.username)
+  if (userFilters?.user_id) params.set('user_id', userFilters.user_id)
   const res = await api.get(`/api/user/topup?${params.toString()}`)
+  return res.data
+}
+
+export async function getBillingHistoryExport(
+  isAdmin: boolean,
+  filters: BillingHistoryFilters
+): Promise<ApiResponse<BillingHistoryExport>> {
+  const res = await api.get(
+    isAdmin ? '/api/user/topup' : '/api/user/topup/self',
+    {
+      params: { ...filters, export: 'true' },
+      timeout: 20_000,
+    }
+  )
   return res.data
 }
 
