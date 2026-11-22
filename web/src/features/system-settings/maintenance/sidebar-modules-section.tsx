@@ -43,6 +43,7 @@ import {
   SIDEBAR_MODULES_DEFAULT,
   type SidebarModulesAdminConfig,
   serializeSidebarModulesAdmin,
+  isSidebarModuleLocked,
   isSidebarModuleSelected,
 } from './config'
 import { SidebarChildControls } from './sidebar-child-controls'
@@ -264,6 +265,10 @@ export function SidebarModulesSection({
                         <Switch
                           checked={Boolean(field.value)}
                           onCheckedChange={field.onChange}
+                          disabled={isSidebarModuleLocked(
+                            sectionKey,
+                            'enabled'
+                          )}
                         />
                       </FormControl>
                     </SettingsSwitchItem>
@@ -314,7 +319,10 @@ export function SidebarModulesSection({
                                   onCheckedChange={(checked) =>
                                     setModule(sectionKey, moduleKey, checked)
                                   }
-                                  disabled={moduleDisabled}
+                                  disabled={
+                                    moduleDisabled ||
+                                    isSidebarModuleLocked(sectionKey, moduleKey)
+                                  }
                                 />
                               </FormControl>
                             </SettingsSwitchItem>

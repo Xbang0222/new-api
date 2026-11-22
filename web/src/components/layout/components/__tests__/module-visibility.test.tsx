@@ -25,7 +25,6 @@ import {
   RouterProvider,
 } from '@tanstack/react-router'
 import { act, render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 import { DirectionProvider } from '@/context/direction-provider'
@@ -56,19 +55,13 @@ async function renderLayout(
   pendingStatus = false,
   config?: {
     admin?: Record<string, Record<string, boolean> | undefined>
-    user?: Record<string, Record<string, boolean>>
-    canConfigure?: boolean
   }
 ) {
-  useAuthStore
-    .getState()
-    .auth.setUser({
-      id: 1,
-      username: 'viewer',
-      role,
-      sidebar_modules: JSON.stringify(config?.user ?? {}),
-      permissions: { sidebar_settings: config?.canConfigure ?? true },
-    })
+  useAuthStore.getState().auth.setUser({
+    id: 1,
+    username: 'viewer',
+    role,
+  })
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
@@ -96,13 +89,8 @@ async function renderLayout(
     path: '/system-settings/site/sidebar-modules',
     component: () => <div>Module settings content</div>,
   })
-  const personalSettings = createRoute({
-    getParentRoute: () => root,
-    path: '/profile/sidebar-modules',
-    component: () => <div>Personal module preferences</div>,
-  })
   const router = createRouter({
-    routeTree: root.addChildren([wallet, settings, personalSettings]),
+    routeTree: root.addChildren([wallet, settings]),
     history: createMemoryHistory({ initialEntries: [initialPath] }),
   })
   await router.load()
@@ -119,65 +107,27 @@ async function renderLayout(
   )
 }
 
-it('gives the owner a working recovery link when every module is hidden', async () => {
-  await renderLayout(100)
-  expect(await screen.findByText('This module is hidden')).toBeVisible()
-  expect(screen.queryByText('Protected wallet content')).not.toBeInTheDocument()
-  await userEvent.click(screen.getByRole('link', { name: 'Sidebar modules' }))
-  expect(await screen.findByText('Module settings content')).toBeVisible()
-})
-
-it.each([1, 10])(
-  'lets role %s recover only personal preferences after hiding all own modules',
+it.each([1, 10, 100])(
+  'role %s sees no extra sidebar entries when every module is hidden',
   async (role) => {
-    await renderLayout(role, '/profile/sidebar-modules', false, {
-      admin: {},
-      user: {
-        chat: { enabled: false },
-        console: { enabled: false },
-        personal: { enabled: false },
-        admin: { enabled: false },
-        profile: { sidebar: false },
-      },
-    })
-    expect(await screen.findByText('Personal module preferences')).toBeVisible()
+    await renderLayout(role)
+    expect(await screen.findByText('This module is hidden')).toBeVisible()
     expect(
       screen.queryByText('Protected wallet content')
     ).not.toBeInTheDocument()
     expect(
-      screen.queryByText('Module settings content')
-    ).not.toBeInTheDocument()
-  }
-)
-
-it.each([
-  { admin: { profile: { sidebar: false } } },
-  { admin: { personal: { enabled: false } } },
-  { admin: {}, canConfigure: false },
-])(
-  'keeps personal recovery behind administrator settings and user permission: %j',
-  async (config) => {
-    await renderLayout(1, '/profile/sidebar-modules', false, config)
-    expect(await screen.findByText('This module is hidden')).toBeVisible()
-    expect(
-      screen.queryByText('Personal module preferences')
-    ).not.toBeInTheDocument()
-  }
-)
-
-it.each([1, 10])(
-  'does not grant configuration recovery to role %s',
-  async (role) => {
-    await renderLayout(role, '/system-settings/site/sidebar-modules')
-    expect(await screen.findByText('This module is hidden')).toBeVisible()
-    expect(
-      screen.queryByText('Module settings content')
-    ).not.toBeInTheDocument()
-    expect(
       screen.queryByRole('link', { name: 'Sidebar modules' })
     ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('link', { name: 'Sidebar Personal Settings' })
+    ).not.toBeInTheDocument()
   }
 )
+
+it('keeps sidebar module settings reachable when every other module is hidden', async () => {
+  await renderLayout(100, '/system-settings/site/sidebar-modules')
+  expect(await screen.findByText('Module settings content')).toBeVisible()
+})
 
 it.each([false, true])(
   'waits for server settings without mounting a hidden page, persisted snapshot: %s',

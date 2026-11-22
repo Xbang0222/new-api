@@ -180,3 +180,33 @@ it('restores disabled child groups through their parent switches without resetti
   cleanup()
   client.clear()
 })
+
+it('keeps the path back to sidebar modules switched on and locked', () => {
+  const client = new QueryClient()
+  const lockedOff = parseSidebarModulesAdmin(
+    JSON.stringify({
+      admin: { enabled: false, setting: false, user: false },
+      systemSettings: { enabled: false, site: false, auth: false },
+    })
+  )
+  expect(lockedOff.admin).toMatchObject({ enabled: true, setting: true })
+  expect(lockedOff.admin.user).toBe(false)
+  expect(lockedOff.systemSettings).toMatchObject({ enabled: true, site: true })
+  expect(lockedOff.systemSettings.auth).toBe(false)
+  render(
+    <QueryClientProvider client={client}>
+      <Fixture config={lockedOff} />
+    </QueryClientProvider>
+  )
+  for (const name of ['Admin area', 'System settings', 'Site & Branding']) {
+    const control = screen.getByRole('switch', { name })
+    expect(control).toBeChecked()
+    expect(control).toHaveAttribute('aria-disabled', 'true')
+  }
+  expect(screen.getByRole('switch', { name: 'Users' })).not.toHaveAttribute(
+    'aria-disabled',
+    'true'
+  )
+  cleanup()
+  client.clear()
+})

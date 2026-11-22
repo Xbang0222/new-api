@@ -18,10 +18,9 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import {
   isSidebarModuleContentVisibleForConfig,
-  parseSidebarModuleLayers,
+  getSidebarModulesAdminConfig,
 } from '@/hooks/use-sidebar-config'
 import { useStatus } from '@/hooks/use-status'
-import { useAuthStore } from '@/stores/auth-store'
 
 import type { AnnouncementItem, ApiInfoItem, FAQItem } from '../types'
 
@@ -68,18 +67,12 @@ export function useFAQ() {
  */
 export function useDashboardContentVisibility() {
   const { status, ready } = useStatus()
-  const user = useAuthStore((state) => state.auth.user)
-  const { adminConfig, userConfig } = parseSidebarModuleLayers(status, user)
+  const adminConfig = getSidebarModulesAdminConfig(status)
   const panels = Object.fromEntries(
     Object.keys(adminConfig.overview).map((key) => [
       key,
       ready &&
-        isSidebarModuleContentVisibleForConfig(
-          'overview',
-          key,
-          adminConfig,
-          userConfig
-        ),
+        isSidebarModuleContentVisibleForConfig('overview', key, adminConfig),
     ])
   )
 

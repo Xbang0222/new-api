@@ -19,10 +19,9 @@ For commercial licensing, please contact support@quantumnous.com
 import { createFileRoute, redirect } from '@tanstack/react-router'
 
 import {
-  parseSidebarModuleLayers,
+  getSidebarModulesAdminConfig,
   resolveConsoleHomePath,
 } from '@/hooks/use-sidebar-config'
-import { useAuthStore } from '@/stores/auth-store'
 
 export const Route = createFileRoute('/_authenticated/dashboard/')({
   beforeLoad: ({ context }) => {
@@ -40,12 +39,8 @@ export const Route = createFileRoute('/_authenticated/dashboard/')({
       }
     }
 
-    const user = useAuthStore.getState().auth.user
-    const { adminConfig, userConfig } = parseSidebarModuleLayers(status, user)
-
     const destination = resolveConsoleHomePath(
-      adminConfig,
-      userConfig,
+      getSidebarModulesAdminConfig(status),
       status?.console_home_page
     )
 

@@ -21,7 +21,6 @@ import { useCallback, useMemo } from 'react'
 import type { NavGroup, NavItem } from '@/components/layout/types'
 import {
   parseSidebarModulesAdmin,
-  parseSidebarModulesUser,
   type SidebarModulesAdminConfig,
 } from '@/features/system-settings/maintenance/config'
 import {
@@ -29,19 +28,6 @@ import {
   getSidebarChildSection,
 } from '@/features/system-settings/maintenance/sidebar-child-sections'
 import { useStatus } from '@/hooks/use-status'
-import { useAuthStore } from '@/stores/auth-store'
-
-// User-layer config is shape-identical to admin, but may be null
-// to signal "no narrowing" (empty/invalid/legacy users).
-type SidebarModulesUserConfig = SidebarModulesAdminConfig | null
-
-type SidebarConfigUser =
-  | {
-      sidebar_modules?: string
-      permissions?: { sidebar_settings?: boolean }
-    }
-  | null
-  | undefined
 
 export type ConsoleHomePath =
   | '/dashboard/overview'
@@ -68,13 +54,10 @@ const CONSOLE_HOME_CANDIDATES: ReadonlyArray<{
   { section: 'personal', module: 'personal', path: '/profile' },
 ]
 
-export function parseSidebarModuleLayers(
-  status: unknown,
-  user: SidebarConfigUser
-): {
-  adminConfig: SidebarModulesAdminConfig
-  userConfig: SidebarModulesUserConfig
-} {
+/** Sidebar module visibility is configured by administrators only. */
+export function getSidebarModulesAdminConfig(
+  status: unknown
+): SidebarModulesAdminConfig {
   const rawAdminConfig =
     status &&
     typeof status === 'object' &&
@@ -83,18 +66,11 @@ export function parseSidebarModuleLayers(
       status.SidebarModulesAdmin === null)
       ? status.SidebarModulesAdmin
       : undefined
-  const adminConfig = parseSidebarModulesAdmin(rawAdminConfig)
-  const userConfig =
-    user?.permissions?.sidebar_settings === false
-      ? null
-      : parseSidebarModulesUser(user?.sidebar_modules)
-
-  return { adminConfig, userConfig }
+  return parseSidebarModulesAdmin(rawAdminConfig)
 }
 
 export function resolveConsoleHomePath(
   adminConfig: SidebarModulesAdminConfig,
-  userConfig: SidebarModulesUserConfig,
   preferredPath?: string
 ): ConsoleHomePath {
   const preferred = CONSOLE_HOME_CANDIDATES.find(
@@ -102,13 +78,13 @@ export function resolveConsoleHomePath(
   )
   if (
     preferred &&
-    isSidebarModuleVisibleForConfig(preferred.path, adminConfig, userConfig)
+    isSidebarModuleVisibleForConfig(preferred.path, adminConfig)
   ) {
     return preferred.path
   }
 
   const destination = CONSOLE_HOME_CANDIDATES.find((candidate) =>
-    isSidebarModuleVisibleForConfig(candidate.path, adminConfig, userConfig)
+    isSidebarModuleVisibleForConfig(candidate.path, adminConfig)
   )
 
   return destination?.path ?? '/profile'
@@ -169,8 +145,7 @@ for (const [section, config] of Object.entries(SIDEBAR_CHILD_SECTIONS)) {
  */
 export function isSidebarModuleVisibleForConfig(
   url: string,
-  adminConfig: SidebarModulesAdminConfig,
-  userConfig: SidebarModulesUserConfig
+  adminConfig: SidebarModulesAdminConfig
 ): boolean {
   const normalizedUrl = url.split('?')[0].replace(/\/$/, '')
   const mapping =
@@ -186,8 +161,7 @@ export function isSidebarModuleVisibleForConfig(
   return isSidebarModuleContentVisibleForConfig(
     mapping.section,
     mapping.module,
-    adminConfig,
-    userConfig
+    adminConfig
   )
 }
 
@@ -195,12 +169,9 @@ export function isSidebarModuleVisibleForConfig(
 export function isSidebarModuleContentVisibleForConfig(
   section: string,
   module: string,
-  adminConfig: SidebarModulesAdminConfig,
-  userConfig: SidebarModulesUserConfig
+  adminConfig: SidebarModulesAdminConfig
 ): boolean {
-  if (
-    !isSidebarModuleEnabledForConfig(section, module, adminConfig, userConfig)
-  ) {
+  if (!isSidebarModuleEnabledForConfig(section, module, adminConfig)) {
     return false
   }
   const childEntry = getSidebarChildSection(section, module)
@@ -210,8 +181,7 @@ export function isSidebarModuleContentVisibleForConfig(
       isSidebarModuleContentVisibleForConfig(
         childEntry[0],
         child.key,
-        adminConfig,
-        userConfig
+        adminConfig
       )
     )
   )
@@ -220,8 +190,7 @@ export function isSidebarModuleContentVisibleForConfig(
 export function isSidebarModuleEnabledForConfig(
   section: string,
   module: string,
-  adminConfig: SidebarModulesAdminConfig,
-  userConfig: SidebarModulesUserConfig
+  adminConfig: SidebarModulesAdminConfig
 ): boolean {
   const adminSection = adminConfig[section]
   if (!adminSection?.enabled || adminSection[module] !== true) return false
@@ -240,21 +209,10 @@ export function isSidebarModuleEnabledForConfig(
     !isSidebarModuleEnabledForConfig(
       parent.parentSection,
       parent.parentModule,
-      adminConfig,
-      userConfig
+      adminConfig
     )
   ) {
     return false
-  }
-
-  const userSection = userConfig?.[section]
-  if (!userSection) return true
-  if (userSection.enabled === false || userSection[module] === false) {
-    return false
-  }
-
-  if (section === 'console' && module === 'setupGuide') {
-    return userSection.overview !== false
   }
 
   return true
@@ -265,26 +223,19 @@ export function isSidebarModuleEnabledForConfig(
  */
 function isNavItemVisible(
   item: NavItem,
-  adminConfig: SidebarModulesAdminConfig,
-  userConfig: SidebarModulesUserConfig
+  adminConfig: SidebarModulesAdminConfig
 ): boolean {
-  // Handle dynamic chat presets type — also runs the admin × user AND gate
+  // Handle dynamic chat presets type
   if ('type' in item && item.type === 'chat-presets') {
     const adminChat = adminConfig.chat
-    const adminAllowed = Boolean(adminChat?.enabled && adminChat.chat === true)
-    if (!adminAllowed) return false
-    if (!userConfig) return true
-    const userChat = userConfig.chat
-    if (!userChat) return true
-    if (userChat.enabled === false) return false
-    return userChat.chat !== false
+    return Boolean(adminChat?.enabled && adminChat.chat === true)
   }
 
   // Handle direct link type
   if ('url' in item && item.url) {
     const configUrls = item.configUrls ?? [item.url]
     return configUrls.some((url) =>
-      isSidebarModuleVisibleForConfig(url as string, adminConfig, userConfig)
+      isSidebarModuleVisibleForConfig(url as string, adminConfig)
     )
   }
 
@@ -292,11 +243,7 @@ function isNavItemVisible(
   if ('items' in item && item.items) {
     // If has sub-items, show this collapsible item if at least one sub-item is visible
     return item.items.some((subItem) =>
-      isSidebarModuleVisibleForConfig(
-        subItem.url as string,
-        adminConfig,
-        userConfig
-      )
+      isSidebarModuleVisibleForConfig(subItem.url as string, adminConfig)
     )
   }
 
@@ -308,8 +255,7 @@ function isNavItemVisible(
  */
 function filterNavItems(
   items: NavItem[],
-  adminConfig: SidebarModulesAdminConfig,
-  userConfig: SidebarModulesUserConfig
+  adminConfig: SidebarModulesAdminConfig
 ): NavItem[] {
   return items
     .map((item) => {
@@ -317,29 +263,17 @@ function filterNavItems(
         item.type !== 'chat-presets' &&
         typeof item.url === 'string' &&
         item.configUrls &&
-        !isSidebarModuleVisibleForConfig(
-          item.url as string,
-          adminConfig,
-          userConfig
-        )
+        !isSidebarModuleVisibleForConfig(item.url as string, adminConfig)
       ) {
         const url = item.configUrls.find((candidate) =>
-          isSidebarModuleVisibleForConfig(
-            candidate as string,
-            adminConfig,
-            userConfig
-          )
+          isSidebarModuleVisibleForConfig(candidate as string, adminConfig)
         )
         if (url) return { ...item, url }
       }
       // If collapsible item, also filter its sub-items
       if ('items' in item && item.items) {
         const filteredSubItems = item.items.filter((subItem) =>
-          isSidebarModuleVisibleForConfig(
-            subItem.url as string,
-            adminConfig,
-            userConfig
-          )
+          isSidebarModuleVisibleForConfig(subItem.url as string, adminConfig)
         )
 
         return {
@@ -349,32 +283,19 @@ function filterNavItems(
       }
       return item
     })
-    .filter((item) => isNavItemVisible(item, adminConfig, userConfig))
+    .filter((item) => isNavItemVisible(item, adminConfig))
 }
 
 /**
- * Filter sidebar navigation groups by admin × user sidebar_modules config.
- *
- * Two layers, AND-combined:
- *   1. Admin (status.SidebarModulesAdmin) — authoritative, falls back to
- *      DEFAULT_SIDEBAR_MODULES when empty/invalid. Disabling here hides the
- *      item for everyone regardless of user preference.
- *   2. User (auth.user.sidebar_modules) — narrower overlay, null sentinel
- *      means "don't narrow". A section/module is only hidden if the user
- *      explicitly set it to false; undefined fields default to visible so
- *      legacy users with empty sidebar_modules keep the full admin view.
- *      The overlay is also skipped entirely when the backend tells us the
- *      user cannot configure sidebar_settings (e.g. root accounts), so a
- *      stale historical value cannot lock them out of entries they have no
- *      UI to restore.
+ * Filter sidebar navigation groups by the administrator's
+ * status.SidebarModulesAdmin, which falls back to the defaults when
+ * empty/invalid. Saved personal sidebar preferences are ignored.
  */
 export function useSidebarConfig(navGroups: NavGroup[]): NavGroup[] {
   const { status, ready } = useStatus()
-  const { auth } = useAuthStore()
-
-  const { adminConfig, userConfig } = useMemo(
-    () => parseSidebarModuleLayers(status, auth?.user),
-    [status, auth?.user]
+  const adminConfig = useMemo(
+    () => getSidebarModulesAdminConfig(status),
+    [status]
   )
 
   const filteredNavGroups = useMemo(
@@ -382,10 +303,10 @@ export function useSidebarConfig(navGroups: NavGroup[]): NavGroup[] {
       navGroups
         .map((group) => ({
           ...group,
-          items: filterNavItems(group.items, adminConfig, userConfig),
+          items: filterNavItems(group.items, adminConfig),
         }))
         .filter((group) => group.items.length > 0), // Only show navigation groups with visible items
-    [navGroups, adminConfig, userConfig]
+    [navGroups, adminConfig]
   )
 
   return ready ? filteredNavGroups : []
@@ -398,14 +319,10 @@ export function useSidebarConfig(navGroups: NavGroup[]): NavGroup[] {
  */
 export function useIsSidebarModuleVisible(url: string): boolean {
   const { status, ready } = useStatus()
-  const { auth } = useAuthStore()
-
-  const { adminConfig, userConfig } = parseSidebarModuleLayers(
-    status,
-    auth?.user
+  return (
+    ready &&
+    isSidebarModuleVisibleForConfig(url, getSidebarModulesAdminConfig(status))
   )
-
-  return ready && isSidebarModuleVisibleForConfig(url, adminConfig, userConfig)
 }
 
 export function useIsSidebarModuleEnabled(
@@ -413,18 +330,12 @@ export function useIsSidebarModuleEnabled(
   module: string
 ): boolean {
   const { status, ready } = useStatus()
-  const { auth } = useAuthStore()
-  const { adminConfig, userConfig } = parseSidebarModuleLayers(
-    status,
-    auth?.user
-  )
   return (
     ready &&
     isSidebarModuleContentVisibleForConfig(
       section,
       module,
-      adminConfig,
-      userConfig
+      getSidebarModulesAdminConfig(status)
     )
   )
 }
@@ -432,20 +343,14 @@ export function useIsSidebarModuleEnabled(
 /** Visibility preferences only; server authorization remains authoritative. */
 export function useSidebarModules() {
   const { status, ready } = useStatus()
-  const user = useAuthStore((state) => state.auth.user)
-  const { adminConfig, userConfig } = useMemo(
-    () => parseSidebarModuleLayers(status, user),
-    [status, user]
+  const adminConfig = useMemo(
+    () => getSidebarModulesAdminConfig(status),
+    [status]
   )
   return useCallback(
     (section: string, module: string) =>
       ready &&
-      isSidebarModuleContentVisibleForConfig(
-        section,
-        module,
-        adminConfig,
-        userConfig
-      ),
-    [ready, adminConfig, userConfig]
+      isSidebarModuleContentVisibleForConfig(section, module, adminConfig),
+    [ready, adminConfig]
   )
 }

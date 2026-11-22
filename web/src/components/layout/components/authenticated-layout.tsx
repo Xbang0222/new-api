@@ -27,7 +27,6 @@ import { AnimatedOutlet } from '@/components/page-transition'
 import { SkipToMain } from '@/components/skip-to-main'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { LayoutProvider } from '@/context/layout-provider'
-import { usePersonalSidebarRecoveryAllowed } from '@/hooks/use-personal-sidebar-recovery'
 import { useIsSidebarModuleVisible } from '@/hooks/use-sidebar-config'
 import { useStatus } from '@/hooks/use-status'
 import { getCookie } from '@/lib/cookies'
@@ -46,17 +45,13 @@ export function AuthenticatedLayout(props: AuthenticatedLayoutProps) {
   const { t } = useTranslation()
   const pathname = useLocation({ select: (location) => location.pathname })
   const moduleVisible = useIsSidebarModuleVisible(pathname)
-  const canRecoverPersonalSettings = usePersonalSidebarRecoveryAllowed()
   const userRole = useAuthStore((state) => state.auth.user?.role)
   const { ready, loading } = useStatus()
   const queryClient = useQueryClient()
-  let canShowPage =
+  const canShowPage =
     moduleVisible ||
     (userRole === ROLE.SUPER_ADMIN &&
       pathname === '/system-settings/site/sidebar-modules')
-  if (pathname === '/profile/sidebar-modules') {
-    canShowPage = canRecoverPersonalSettings
-  }
   const defaultOpen = getCookie('sidebar_state') !== 'false'
   let content = props.children ?? <AnimatedOutlet />
   if (!ready && !canShowPage) {

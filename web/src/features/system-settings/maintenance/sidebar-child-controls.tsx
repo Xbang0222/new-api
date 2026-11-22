@@ -24,6 +24,7 @@ import {
   SettingsSwitchField,
 } from '../components/settings-form-layout'
 import {
+  isSidebarModuleLocked,
   isSidebarModuleSelected,
   type SidebarModulesAdminConfig,
 } from './config'
@@ -37,7 +38,6 @@ type SidebarChildControlsProps = {
   config: SidebarModulesAdminConfig
   disabled?: boolean
   controlPrefix: string
-  isAllowed?: (section: string, module: string) => boolean
   onChange: (section: string, module: string, checked: boolean) => void
 }
 
@@ -49,11 +49,13 @@ export function SidebarChildControls(props: SidebarChildControlsProps) {
   return (
     <SettingsControlChildren className='grid gap-x-6 sm:grid-cols-2'>
       {definition.modules.map((module) => {
-        const allowed = props.isAllowed?.(props.section, module.key) ?? true
-        const checked =
-          allowed &&
-          isSidebarModuleSelected(props.config, props.section, module.key)
-        const disabled = props.disabled || !allowed
+        const checked = isSidebarModuleSelected(
+          props.config,
+          props.section,
+          module.key
+        )
+        const disabled =
+          props.disabled || isSidebarModuleLocked(props.section, module.key)
         const child = getSidebarChildSection(props.section, module.key)
         return (
           <Fragment key={module.key}>
