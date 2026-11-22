@@ -58,6 +58,10 @@ export function AuthenticatedLayout(props: AuthenticatedLayoutProps) {
     canShowPage = canRecoverPersonalSettings
   }
   const defaultOpen = getCookie('sidebar_state') !== 'false'
+  const signedIn = useAuthStore((s) => !!s.auth.user)
+  // Unmount pages on sign-out, otherwise their queries refetch and toast "Session expired!" / "invalid access token"
+  if (!signedIn) return null
+
   let content = props.children ?? <AnimatedOutlet />
   if (!ready && !canShowPage) {
     content = loading ? (

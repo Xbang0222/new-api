@@ -635,3 +635,19 @@ export function formatLocalCurrencyAmount(
 
   return formatCurrencyValue(amount, merged, meta)
 }
+
+/** Historical receipt amounts must keep their recorded currency and precision. */
+export function formatRecordedCurrencyAmount(
+  amount: string | undefined,
+  currency: string | undefined
+): string {
+  if (
+    !amount ||
+    !currency ||
+    !/^\d+(?:\.\d+)?$/.test(amount) ||
+    !/^[A-Z]{3}$/.test(currency)
+  ) {
+    return '-'
+  }
+  return `${currency} ${amount}`
+}

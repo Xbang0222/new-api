@@ -23,21 +23,25 @@ const (
 	ContextKeyTokenAutoGroups        ContextKey = "token_auto_groups"
 
 	/* channel related keys */
-	ContextKeyChannelId              ContextKey = "channel_id"
-	ContextKeyChannelName            ContextKey = "channel_name"
-	ContextKeyChannelCreateTime      ContextKey = "channel_create_time"
-	ContextKeyChannelBaseUrl         ContextKey = "base_url"
-	ContextKeyChannelType            ContextKey = "channel_type"
-	ContextKeyChannelSetting         ContextKey = "channel_setting"
-	ContextKeyChannelOtherSetting    ContextKey = "channel_other_setting"
-	ContextKeyChannelParamOverride   ContextKey = "param_override"
-	ContextKeyChannelHeaderOverride  ContextKey = "header_override"
-	ContextKeyChannelOrganization    ContextKey = "channel_organization"
-	ContextKeyChannelAutoBan         ContextKey = "auto_ban"
-	ContextKeyChannelModelMapping    ContextKey = "model_mapping"
-	ContextKeyChannelIsMultiKey      ContextKey = "channel_is_multi_key"
-	ContextKeyChannelMultiKeyIndex   ContextKey = "channel_multi_key_index"
-	ContextKeyChannelKey             ContextKey = "channel_key"
+	ContextKeyChannelId                ContextKey = "channel_id"
+	ContextKeyChannelName              ContextKey = "channel_name"
+	ContextKeyChannelCreateTime        ContextKey = "channel_create_time"
+	ContextKeyChannelBaseUrl           ContextKey = "base_url"
+	ContextKeyChannelType              ContextKey = "channel_type"
+	ContextKeyChannelSetting           ContextKey = "channel_setting"
+	ContextKeyChannelOtherSetting      ContextKey = "channel_other_setting"
+	ContextKeyChannelParamOverride     ContextKey = "param_override"
+	ContextKeyChannelHeaderOverride    ContextKey = "header_override"
+	ContextKeyChannelOrganization      ContextKey = "channel_organization"
+	ContextKeyChannelAutoBan           ContextKey = "auto_ban"
+	ContextKeyChannelModelMapping      ContextKey = "model_mapping"
+	ContextKeyChannelStatusCodeMapping ContextKey = "status_code_mapping"
+	ContextKeyChannelIsMultiKey        ContextKey = "channel_is_multi_key"
+	ContextKeyChannelMultiKeyIndex     ContextKey = "channel_multi_key_index"
+	ContextKeyChannelKey               ContextKey = "channel_key"
+	// ContextKeyProviderPlugin holds the jsplugin.PinnedPlugin whose relay
+	// routes serve this request on a task plugin channel.
+	ContextKeyProviderPlugin         ContextKey = "provider_plugin"
 	ContextKeyChannelRetryPriorities ContextKey = "channel_retry_priorities"
 	ContextKeyRelayKeepAliveBytes    ContextKey = "relay_keepalive_bytes"
 
@@ -75,6 +79,9 @@ const (
 	ContextKeyLanguage             ContextKey = "language"
 	ContextKeyIsStream             ContextKey = "is_stream"
 	ContextKeyResponseStreamStatus ContextKey = "response_stream_status"
+	// ContextKeyConsumeLog holds the *model.RecordConsumeLogParams of the
+	// request's last consume log, which request plugin report hooks read.
+	ContextKeyConsumeLog ContextKey = "consume_log"
 
 	// ContextKeyAuditLogged marks that the current request has already recorded
 	// a manage/operation audit log inside the handler. When set, the admin-audit

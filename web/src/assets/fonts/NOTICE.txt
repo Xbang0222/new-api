@@ -1,0 +1,33 @@
+Noto Sans CJK SC Regular
+
+Copyright © 2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'.
+Licensed under the SIL Open Font License 1.1; see OFL.txt.
+
+Source: https://github.com/notofonts/noto-cjk/tree/Sans2.004
+Original font: Sans/Variable/TTF/NotoSansCJKsc-VF.ttf
+
+This bundled font is a static weight-400 instance generated with fontTools 4.60.1.
+All 44,810 encoded Unicode characters are retained. Hinting and optional layout
+features are removed to reduce download size; only the glyphs needed by each
+statement are embedded in its PDF.
+
+Reproduction with fontTools:
+  from fontTools.ttLib import TTFont
+  from fontTools.varLib.instancer import instantiateVariableFont
+  from fontTools import subset
+  font = TTFont('NotoSansCJKsc-VF.ttf')
+  instantiateVariableFont(font, {'wght': 400}, inplace=True)
+  options = subset.Options()
+  options.hinting = False
+  options.layout_features = []
+  subsetter = subset.Subsetter(options=options)
+  subsetter.populate(unicodes=font.getBestCmap().keys())
+  subsetter.subset(font)
+  font['glyf'].padding = 2
+  font.save('NotoSansCJKsc-Regular.ttf')
+
+Even-byte glyph padding is required by @pdf-lib/fontkit 1.1.1's TrueType subset
+encoder. Without it, glyph offsets can be truncated and PDF characters disappear.
+Background: https://github.com/Hopding/pdf-lib/issues/1232
+When replacing the font or PDF library, render the generated PDFs and inspect
+Chinese, Japanese, Cyrillic, accented Latin, digits, and multi-page statements.

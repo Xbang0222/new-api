@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { getRouteApi } from '@tanstack/react-router'
 import { CircleHelp, Upload } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -33,6 +34,7 @@ import {
 } from '@/components/ui/popover'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { NodeSyncIndicator } from '@/features/system-info/components/node-sync-indicator'
 import { useSidebarModules } from '@/hooks/use-sidebar-config'
 import { handleServerError } from '@/lib/handle-server-error'
 
@@ -45,13 +47,19 @@ import { MarketplacePanel } from './components/marketplace-panel'
 import { PluginDetailSheet } from './components/plugin-detail-sheet'
 import { PluginsTable } from './components/plugins-table'
 import { UploadDialog } from './components/upload-dialog'
+import type { PluginKind } from './lib/plugin-kinds'
+import { localizedPluginName } from './lib/plugin-name'
 import type { TaskPluginListItem } from './types'
+
+const route = getRouteApi('/_authenticated/task-plugins/')
 
 export function TaskPlugins() {
   const isModuleEnabled = useSidebarModules()
   const installedVisible = isModuleEnabled('taskPlugins', 'installed')
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
+  const search = route.useSearch()
+  const navigate = route.useNavigate()
   const [detail, setDetail] = useState<TaskPluginListItem | null>(null)
   const [selectedTab, setTab] = useState('installed')
   const visibleTabs = ['installed', 'marketplace'].filter((key) =>
@@ -84,10 +92,12 @@ export function TaskPlugins() {
     mutationFn: setTaskPluginEnabledOption,
     onSuccess: (_, enabled) => {
       queryClient.setQueryData(['task-plugin-enabled'], enabled)
-      toast.success(t('Task plugin setting updated'))
+      toast.success(t('Plugin setting updated'))
     },
     onError: (error) => handleServerError(error),
   })
+  const setKind = (kind: PluginKind) =>
+    void navigate({ search: (prev) => ({ ...prev, kind }) })
   const openUpload = (key?: string) => {
     setUploadKey(key ?? null)
     setUploadOpen(true)
@@ -95,8 +105,17 @@ export function TaskPlugins() {
   return (
     <>
       <SectionPageLayout fixedContent>
-        <SectionPageLayout.Title>{t('Task Plugins')}</SectionPageLayout.Title>
+        <SectionPageLayout.Title>{t('Plugins')}</SectionPageLayout.Title>
         <SectionPageLayout.Actions>
+          <NodeSyncIndicator
+            topics={['plugins', 'options']}
+            pluginNames={Object.fromEntries(
+              (pluginsQuery.data ?? []).map((plugin) => [
+                plugin.meta.key,
+                localizedPluginName(plugin.meta, i18n.language),
+              ])
+            )}
+          />
           <div className='flex items-center gap-2'>
             <Switch
               id='task-plugin-enabled-switch'
@@ -111,7 +130,7 @@ export function TaskPlugins() {
               htmlFor='task-plugin-enabled-switch'
               className='hidden text-sm font-normal sm:inline'
             >
-              {t('Enable task plugins')}
+              {t('Enable plugins')}
             </Label>
             <Popover>
               <PopoverTrigger
@@ -119,7 +138,7 @@ export function TaskPlugins() {
                   <Button
                     variant='ghost'
                     size='icon-sm'
-                    aria-label={t('Factory and custom plugin behavior')}
+                    aria-label={t('Built-in and custom plugins')}
                   />
                 }
               >
@@ -127,18 +146,18 @@ export function TaskPlugins() {
               </PopoverTrigger>
               <PopoverContent align='end' className='w-80'>
                 <div className='space-y-2 text-sm'>
-                  <p className='font-medium'>{t('Enable task plugins')}</p>
+                  <p className='font-medium'>{t('Enable plugins')}</p>
                   <p className='text-muted-foreground'>
                     {t(
-                      'When disabled, the entire task plugin system stops serving, including factory and custom plugins.'
+                      'Turn this off to stop plugin tasks and channels. Request processing keeps running.'
                     )}
                   </p>
                   <p className='font-medium'>
-                    {t('Factory and custom plugin behavior')}
+                    {t('Built-in and custom plugins')}
                   </p>
                   <p className='text-muted-foreground'>
                     {t(
-                      'Factory plugins cannot be deleted or disabled individually. A custom version can override them; deleting or disabling that version restores the factory plugin. Third-party-only platforms become unavailable when their plugin is deleted or disabled.'
+                      'A custom version replaces the built-in plugin of the same name. Deleting or turning off the custom version brings the built-in one back.'
                     )}
                   </p>
                 </div>
@@ -156,21 +175,28 @@ export function TaskPlugins() {
           <Tabs
             value={tab}
             onValueChange={setTab}
-            className='flex h-full min-h-0 flex-col gap-3'
+            className='flex h-full min-h-0 flex-col gap-4'
           >
-            <TabsList className='max-w-full flex-wrap justify-start group-data-horizontal/tabs:h-auto'>
-              {isModuleEnabled('taskPlugins', 'installed') && (
-                <TabsTrigger value='installed'>{t('Installed')}</TabsTrigger>
-              )}
-              {isModuleEnabled('taskPlugins', 'marketplace') && (
-                <TabsTrigger value='marketplace'>
-                  {t('Marketplace')}
-                </TabsTrigger>
-              )}
-            </TabsList>
+            <div className='shrink-0 border-b'>
+              <TabsList
+                variant='line'
+                className='justify-start gap-4 group-data-horizontal/tabs:h-10'
+              >
+                {isModuleEnabled('taskPlugins', 'installed') && (
+                  <TabsTrigger value='installed'>{t('Installed')}</TabsTrigger>
+                )}
+                {isModuleEnabled('taskPlugins', 'marketplace') && (
+                  <TabsTrigger value='marketplace'>
+                    {t('Marketplace')}
+                  </TabsTrigger>
+                )}
+              </TabsList>
+            </div>
             {isModuleEnabled('taskPlugins', 'installed') && (
               <TabsContent value='installed' className='min-h-0 flex-1'>
                 <PluginsTable
+                  kind={search.kind}
+                  onKindChange={setKind}
                   onDetails={setDetail}
                   onUpload={(key) => openUpload(key)}
                 />
@@ -178,7 +204,7 @@ export function TaskPlugins() {
             )}
             {isModuleEnabled('taskPlugins', 'marketplace') && (
               <TabsContent value='marketplace' className='min-h-0 flex-1'>
-                <MarketplacePanel />
+                <MarketplacePanel kind={search.kind} onKindChange={setKind} />
               </TabsContent>
             )}
           </Tabs>
@@ -203,12 +229,12 @@ export function TaskPlugins() {
       <ConfirmDialog
         open={confirmDisable && tab !== ''}
         onOpenChange={setConfirmDisable}
-        title={t('Disable task plugins?')}
+        title={t('Turn off plugin tasks and channels?')}
         desc={
           <div className='space-y-2'>
             <p>
               {t(
-                'Factory and custom plugins all stop serving immediately. In-flight tasks will be handled by timeout cleanup.'
+                'Plugin tasks and channels stop at once. Unfinished tasks end when they time out. Request processing keeps running.'
               )}
             </p>
             <ul className='list-disc pl-5'>
@@ -216,7 +242,8 @@ export function TaskPlugins() {
                 .filter((plugin) => plugin.source === 'override')
                 .map((plugin) => (
                   <li key={plugin.meta.key}>
-                    {plugin.meta.name} ({plugin.meta.key}):{' '}
+                    {localizedPluginName(plugin.meta, i18n.language)} (
+                    {plugin.meta.key}):{' '}
                     {t('{{channels}} channels, {{tasks}} in-flight tasks', {
                       channels: plugin.channel_count,
                       tasks: plugin.in_flight_count,
