@@ -127,8 +127,7 @@ func TestGapsChainedRequests(t *testing.T) {
 
 		outcome := harness.post(t, "/v1/chat/completions", relayTestBody)
 
-		assert.GreaterOrEqual(t, outcome.status, http.StatusBadRequest, outcome.body)
-		assert.Contains(t, outcome.body, fmt.Sprintf("chained more than %d requests", providerplugin.MaxFollowUps))
+		assertUpstreamErrorMasked(t, outcome, http.StatusInternalServerError, fmt.Sprintf("chained more than %d requests", providerplugin.MaxFollowUps))
 		assert.Len(t, harness.upstream.captured(), 1+providerplugin.MaxFollowUps)
 		assert.Zero(t, outcome.quota)
 		assert.Zero(t, consumeLogCount(t))
@@ -427,15 +426,19 @@ func TestGapsKeyExchange(t *testing.T) {
 		rejected func(bearer string) bool
 		posts    int
 		status   int
+		// upstreamStatus and upstreamMessage are what the error log keeps of
+		// a failure the client sees as 500 model_unavailable.
+		upstreamStatus  int
+		upstreamMessage string
 		// exchanges and sends are the requests to /token and /chat.
 		exchanges, sends int32
 		disabled         bool
 	}{
 		"a token serves many requests":        {posts: 2, status: http.StatusOK, exchanges: 1, sends: 2},
 		"a rejected token is exchanged again": {rejected: func(bearer string) bool { return bearer == "Bearer tok-1" }, posts: 1, status: http.StatusOK, exchanges: 2, sends: 2},
-		"a second rejection is an error":      {rejected: func(string) bool { return true }, posts: 1, status: http.StatusUnauthorized, exchanges: 2, sends: 2, disabled: true},
-		"a returned error is a channel error": {tokenStatus: http.StatusForbidden, posts: 1, status: http.StatusUnauthorized, exchanges: 1, disabled: true},
-		"a throw keeps the channel":           {tokenStatus: http.StatusBadGateway, posts: 1, status: http.StatusInternalServerError, exchanges: 1},
+		"a second rejection is an error":      {rejected: func(string) bool { return true }, posts: 1, status: http.StatusInternalServerError, upstreamStatus: http.StatusUnauthorized, upstreamMessage: "token expired", exchanges: 2, sends: 2, disabled: true},
+		"a returned error is a channel error": {tokenStatus: http.StatusForbidden, posts: 1, status: http.StatusInternalServerError, upstreamStatus: http.StatusUnauthorized, upstreamMessage: "key revoked", exchanges: 1, disabled: true},
+		"a throw keeps the channel":           {tokenStatus: http.StatusBadGateway, posts: 1, status: http.StatusInternalServerError, upstreamStatus: http.StatusInternalServerError, upstreamMessage: "plugin key exchange failed", exchanges: 1},
 	} {
 		t.Run(name, func(t *testing.T) {
 			harness := newRelayHarness(t)
@@ -470,6 +473,9 @@ func TestGapsKeyExchange(t *testing.T) {
 			for range tc.posts {
 				outcome = harness.post(t, "/v1/chat/completions", relayTestBody)
 				assert.Equal(t, tc.status, outcome.status, outcome.body)
+			}
+			if tc.upstreamStatus != 0 {
+				assertUpstreamErrorMasked(t, outcome, tc.upstreamStatus, tc.upstreamMessage)
 			}
 
 			assert.Equal(t, tc.exchanges, exchanges.Load())
@@ -630,8 +636,7 @@ export function convertStreamEvent(ctx, input) {
 	t.Run("an exception is a plugin error", func(t *testing.T) {
 		outcome := newVendor(t, eventStreamFrame("exception", "throttlingException", `{"message":"slow down"}`))
 
-		assert.Equal(t, http.StatusTooManyRequests, outcome.status, outcome.body)
-		assert.Contains(t, outcome.body, "slow down")
+		assertUpstreamErrorMasked(t, outcome, http.StatusTooManyRequests, "slow down")
 		assert.Zero(t, outcome.quota)
 	})
 

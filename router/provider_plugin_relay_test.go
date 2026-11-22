@@ -136,10 +136,10 @@ func newRelayHarness(t *testing.T) *relayHarness {
 	ratio_setting.InitRatioSettings()
 	require.NoError(t, model.DB.AutoMigrate(&model.Channel{}, &model.Log{}, &model.Option{}, &model.Task{}, &model.QuotaData{},
 		&model.UserSubscription{}, &model.SubscriptionPreConsumeRecord{}, &model.UserAccessToken{}))
-	previousMemory, previousLog, previousBatch, previousTimeout := common.MemoryCacheEnabled, common.LogConsumeEnabled, common.BatchUpdateEnabled, constant.StreamingTimeout
-	common.MemoryCacheEnabled, common.LogConsumeEnabled, common.BatchUpdateEnabled, constant.StreamingTimeout = true, true, false, 30
+	previousMemory, previousLog, previousBatch, previousTimeout, previousErrorLog := common.MemoryCacheEnabled, common.LogConsumeEnabled, common.BatchUpdateEnabled, constant.StreamingTimeout, constant.ErrorLogEnabled
+	common.MemoryCacheEnabled, common.LogConsumeEnabled, common.BatchUpdateEnabled, constant.StreamingTimeout, constant.ErrorLogEnabled = true, true, false, 30, true
 	t.Cleanup(func() {
-		common.MemoryCacheEnabled, common.LogConsumeEnabled, common.BatchUpdateEnabled, constant.StreamingTimeout = previousMemory, previousLog, previousBatch, previousTimeout
+		common.MemoryCacheEnabled, common.LogConsumeEnabled, common.BatchUpdateEnabled, constant.StreamingTimeout, constant.ErrorLogEnabled = previousMemory, previousLog, previousBatch, previousTimeout, previousErrorLog
 	})
 	service.InitHttpClient()
 	user := model.User{Username: "provider-relay", Status: common.UserStatusEnabled, Group: "default", Quota: 100_000_000}
@@ -187,6 +187,8 @@ type relayOutcome struct {
 	body   string
 	quota  int
 	log    model.Log
+	// errorLog is the request's last error log, empty when it has none.
+	errorLog model.Log
 }
 
 func (h *relayHarness) post(t *testing.T, path, body string) relayOutcome {
@@ -218,7 +220,24 @@ func (h *relayHarness) send(t *testing.T, path, contentType, body string) relayO
 	require.NoError(t, model.DB.First(&after, h.tokenID).Error)
 	outcome.quota = before.RemainQuota - after.RemainQuota
 	_ = model.LOG_DB.Where("id > ? AND type = ?", lastLog, model.LogTypeConsume).Order("id DESC").First(&outcome.log).Error
+	_ = model.LOG_DB.Where("id > ? AND type = ?", lastLog, model.LogTypeError).Order("id DESC").First(&outcome.errorLog).Error
 	return outcome
+}
+
+// assertUpstreamErrorMasked checks the gateway's upstream error isolation: an
+// error from the vendor or its plugin reaches the client as 500
+// model_unavailable in the client's protocol, without the vendor's text,
+// while the error log keeps the vendor's status and message for
+// administrators.
+func assertUpstreamErrorMasked(t *testing.T, outcome relayOutcome, status int, message string) {
+	t.Helper()
+	assert.Equal(t, http.StatusInternalServerError, outcome.status, outcome.body)
+	assert.Contains(t, outcome.body, "model_unavailable")
+	assert.NotContains(t, outcome.body, message)
+	upstream := gjson.Get(outcome.errorLog.Other, "admin_info.upstream_error")
+	require.True(t, upstream.Exists(), outcome.errorLog.Other)
+	assert.EqualValues(t, status, upstream.Get("status_code").Int())
+	assert.Contains(t, upstream.Get("body").Str, message)
 }
 
 func registerRelayPlugin(t *testing.T, source string) *jsplugin.LoadedPlugin {
@@ -515,7 +534,7 @@ func TestSecondRejectionTakesTheUsualErrorPath(t *testing.T) {
 
 	outcome := harness.post(t, "/v1/chat/completions", relayTestBody)
 
-	assert.Equal(t, http.StatusUnauthorized, outcome.status, outcome.body)
+	assertUpstreamErrorMasked(t, outcome, http.StatusUnauthorized, "still rejected")
 	requests := harness.upstream.captured()
 	assert.Len(t, requestsTo(requests, "/oauth/token"), 1)
 	assert.Len(t, requests, 3, "one send, one refresh, one resend")
@@ -535,7 +554,7 @@ func TestRejectionWithoutRefreshIsAnOrdinaryError(t *testing.T) {
 
 	outcome := harness.post(t, "/v1/chat/completions", relayTestBody)
 
-	assert.Equal(t, http.StatusUnauthorized, outcome.status, outcome.body)
+	assertUpstreamErrorMasked(t, outcome, http.StatusUnauthorized, `"message":"rejected"`)
 	assert.Len(t, harness.upstream.captured(), 1)
 }
 
@@ -593,8 +612,9 @@ func TestFailedRefreshBeforeTheRequest(t *testing.T) {
 
 // A key whose credential needs a new login never reaches the upstream: the
 // request disables the key for the reason a login clears, whatever the
-// automatic disabling setting is, and a retry can serve the request with
-// another key.
+// automatic disabling setting is, and another key serves the next request. A
+// retry never returns to a channel the request tried (docs/model-api.md), so
+// the request that found the key needing a login fails.
 func TestNeedsLoginCredentialFailsWithoutReachingTheUpstream(t *testing.T) {
 	previousAutoDisable, previousRetry := common.AutomaticDisableChannelEnabled, common.RetryTimes
 	t.Cleanup(func() { common.AutomaticDisableChannelEnabled, common.RetryTimes = previousAutoDisable, previousRetry })
@@ -620,11 +640,17 @@ func TestNeedsLoginCredentialFailsWithoutReachingTheUpstream(t *testing.T) {
 			assert.Equal(t, common.ChannelStatusAutoDisabled, stored.Status)
 			assert.Equal(t, model.ChannelStatusReasonPluginNeedsLogin, stored.GetOtherInfo()["status_reason"], "disabled for the reason a login clears")
 
-			// The channel's other key serves the retry.
+			// The channel's other key serves the next request.
 			common.RetryTimes = 1
 			multi := harness.pluginChannel("relay-needs-login", line+"\n"+credentialFor(t, "relay-needs-login", 0))
 			multi.ChannelInfo = model.ChannelInfo{IsMultiKey: true, MultiKeySize: 2, MultiKeyMode: constant.MultiKeyModePolling}
 			multi = harness.install(t, multi)
+
+			outcome = harness.post(t, "/v1/chat/completions", relayTestBody)
+
+			assert.GreaterOrEqual(t, outcome.status, http.StatusBadRequest, outcome.body)
+			assert.Empty(t, harness.upstream.captured(), "the retry does not return to the channel")
+			assert.Zero(t, outcome.quota)
 
 			outcome = harness.post(t, "/v1/chat/completions", relayTestBody)
 
@@ -945,8 +971,7 @@ func TestPluginConverterLeavesErrorsToTheHost(t *testing.T) {
 
 	outcome := harness.post(t, "/v1/chat/completions", relayTestBody)
 
-	assert.Equal(t, http.StatusBadRequest, outcome.status, outcome.body)
-	assert.Contains(t, outcome.body, "bad prompt")
+	assertUpstreamErrorMasked(t, outcome, http.StatusBadRequest, "bad prompt")
 	assert.Zero(t, outcome.quota)
 }
 
@@ -1035,8 +1060,7 @@ export function convertStreamEvent() { throw new Error("a native response skips 
 		_, _ = io.WriteString(w, `{"message":"slow down"}`)
 	}
 	outcome := harness.post(t, "/v1/chat/completions", relayTestBody)
-	assert.Equal(t, http.StatusTooManyRequests, outcome.status, outcome.body)
-	assert.Contains(t, outcome.body, "vendor said slow down")
+	assertUpstreamErrorMasked(t, outcome, http.StatusTooManyRequests, "vendor said slow down")
 	assert.Zero(t, outcome.quota)
 }
 
@@ -1129,10 +1153,10 @@ func respondWith(status int, contentType, body string) func(w http.ResponseWrite
 func TestPluginConverterMapsVendorErrors(t *testing.T) {
 	const rateLimited = `{"code":1302,"msg":"too many requests"}`
 	protocols := map[string]struct{ path, body, format string }{
-		"chat":      {path: "/v1/chat/completions", body: relayTestBody, format: `"code":"1302"`},
-		"responses": {path: "/v1/responses", body: `{"model":"` + relayTestModel + `","input":"hello there"}`, format: `"code":"1302"`},
+		"chat":      {path: "/v1/chat/completions", body: relayTestBody, format: `"code":"model_unavailable"`},
+		"responses": {path: "/v1/responses", body: `{"model":"` + relayTestModel + `","input":"hello there"}`, format: `"code":"model_unavailable"`},
 		"messages":  {path: "/v1/messages", body: `{"model":"` + relayTestModel + `","max_tokens":32,"messages":[{"role":"user","content":"hello there"}]}`, format: `"type":"error"`},
-		"gemini":    {path: "/v1beta/models/" + relayTestModel + ":generateContent", body: `{"contents":[{"role":"user","parts":[{"text":"hello there"}]}]}`, format: `"code":"1302"`},
+		"gemini":    {path: "/v1beta/models/" + relayTestModel + ":generateContent", body: `{"contents":[{"role":"user","parts":[{"text":"hello there"}]}]}`, format: `"code":"model_unavailable"`},
 	}
 	for name, protocol := range protocols {
 		t.Run("200 with an error code on "+name, func(t *testing.T) {
@@ -1143,9 +1167,9 @@ func TestPluginConverterMapsVendorErrors(t *testing.T) {
 
 			outcome := harness.post(t, protocol.path, protocol.body)
 
-			assert.Equal(t, http.StatusTooManyRequests, outcome.status, outcome.body)
-			assert.Contains(t, outcome.body, "too many requests")
+			assertUpstreamErrorMasked(t, outcome, http.StatusTooManyRequests, "too many requests")
 			assert.Contains(t, outcome.body, protocol.format, "the error comes in the client's protocol")
+			assert.Contains(t, gjson.Get(outcome.errorLog.Other, "admin_info.upstream_error.body").Str, `"code":"1302"`)
 			assert.Len(t, harness.upstream.captured(), 1)
 			assert.Zero(t, outcome.quota, "an error reply is refunded")
 		})
@@ -1158,9 +1182,8 @@ func TestPluginConverterMapsVendorErrors(t *testing.T) {
 
 		outcome := harness.post(t, "/v1/chat/completions", relayTestBody)
 
-		assert.Equal(t, http.StatusBadRequest, outcome.status, outcome.body)
-		assert.Contains(t, outcome.body, "prompt too long")
-		assert.Contains(t, outcome.body, `"code":"1214"`)
+		assertUpstreamErrorMasked(t, outcome, http.StatusBadRequest, "prompt too long")
+		assert.Contains(t, gjson.Get(outcome.errorLog.Other, "admin_info.upstream_error.body").Str, `"code":"1214"`)
 		assert.Zero(t, outcome.quota)
 	})
 	for name, tc := range map[string]struct {
@@ -1178,6 +1201,9 @@ func TestPluginConverterMapsVendorErrors(t *testing.T) {
 			registerRelayPlugin(t, strings.ReplaceAll(vendorPlugin, "%KEY%", "relay-vendor"))
 			harness.upstream.respond = respondWith(tc.status, "application/json", tc.reply)
 			harness.install(t, harness.pluginChannel("relay-vendor", "sk-static"))
+			// A retry goes to a channel the request has not tried.
+			require.NoError(t, harness.pluginChannel("relay-vendor", "sk-static").Insert())
+			model.InitChannelCache()
 
 			outcome := harness.post(t, "/v1/chat/completions", relayTestBody)
 
@@ -1203,9 +1229,8 @@ func TestPluginStreamErrors(t *testing.T) {
 
 		outcome := harness.post(t, "/v1/chat/completions", streamBody)
 
-		assert.Equal(t, http.StatusTooManyRequests, outcome.status, outcome.body)
+		assertUpstreamErrorMasked(t, outcome, http.StatusTooManyRequests, "busy")
 		assert.False(t, strings.HasPrefix(outcome.header.Get("Content-Type"), "text/event-stream"))
-		assert.Contains(t, outcome.body, "busy")
 		assert.Zero(t, outcome.quota)
 	})
 
