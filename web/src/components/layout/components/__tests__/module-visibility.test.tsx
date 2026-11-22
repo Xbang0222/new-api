@@ -121,6 +121,10 @@ it.each([1, 10, 100])(
     expect(
       screen.queryByRole('link', { name: 'Sidebar Personal Settings' })
     ).not.toBeInTheDocument()
+    // Admin settings cannot be hidden, so the owner can always undo changes.
+    expect(
+      screen.queryAllByRole('link', { name: 'System Settings' }).length > 0
+    ).toBe(role === 100)
   }
 )
 

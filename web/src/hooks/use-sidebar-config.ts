@@ -138,10 +138,7 @@ for (const [section, config] of Object.entries(SIDEBAR_CHILD_SECTIONS)) {
 }
 
 /**
- * Check if a module is enabled. Admin config is the first (authoritative)
- * layer: if admin disables a section/module it is always hidden. User config
- * is a second narrower layer: it can only further hide what admin allowed.
- * A null user config means "do not narrow" (legacy/empty users).
+ * Check whether the administrator's sidebar configuration shows a route.
  */
 export function isSidebarModuleVisibleForConfig(
   url: string,
@@ -313,8 +310,8 @@ export function useSidebarConfig(navGroups: NavGroup[]): NavGroup[] {
 }
 
 /**
- * Check whether a single route is visible under the current sidebar_modules
- * config. Used by entries living outside the sidebar (e.g. the profile
+ * Check whether a single route is visible under the administrator's sidebar
+ * configuration. Used by entries living outside the sidebar (e.g. the profile
  * dropdown's wallet link) so they honour the same "wallet display" toggle.
  */
 export function useIsSidebarModuleVisible(url: string): boolean {
