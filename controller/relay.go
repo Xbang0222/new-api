@@ -668,6 +668,7 @@ func processChannelError(c *gin.Context, channelError types.ChannelError, err *t
 			other.SetPublic("status_code", err.StatusCode)
 		}
 		service.AppendRelayLogAdminInfo(c, relayInfo, other)
+		service.AppendRequestPluginRecord(relayInfo, other)
 		usedChannels := c.GetStringSlice("use_channel")
 		other.SetAdmin("channel_id", channelError.ChannelId)
 		other.SetAdmin("channel_name", channelError.ChannelName)

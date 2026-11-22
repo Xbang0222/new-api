@@ -162,7 +162,7 @@ func GenerateTextOtherInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, m
 	appendFinalRequestFormat(relayInfo, other)
 	appendBillingInfo(relayInfo, other)
 	appendParamOverrideInfo(relayInfo, other)
-	appendRequestPluginRecord(relayInfo, other)
+	AppendRequestPluginRecord(relayInfo, other)
 	appendStreamStatus(relayInfo, other)
 	return other
 }
@@ -187,10 +187,10 @@ func appendParamOverrideInfo(relayInfo *relaycommon.RelayInfo, other *model.LogO
 	other.SetPublic("po", relayInfo.ParamOverrideAudit)
 }
 
-// appendRequestPluginRecord shows users what the request plugins changed in
+// AppendRequestPluginRecord shows users what the request plugins changed in
 // their request. A retry rewrites the attempt's entries in place, so the
 // log keeps a copy.
-func appendRequestPluginRecord(relayInfo *relaycommon.RelayInfo, other *model.LogOther) {
+func AppendRequestPluginRecord(relayInfo *relaycommon.RelayInfo, other *model.LogOther) {
 	if relayInfo == nil || other == nil || len(relayInfo.RequestPluginRecord) == 0 {
 		return
 	}
@@ -371,7 +371,7 @@ func GenerateMjOtherInfo(relayInfo *relaycommon.RelayInfo, priceData hosttypes.P
 	}
 	attachChannelRateLimitQueueTime(other, relayInfo)
 	appendRequestPath(nil, relayInfo, other)
-	appendRequestPluginRecord(relayInfo, other)
+	AppendRequestPluginRecord(relayInfo, other)
 	return other
 }
 
