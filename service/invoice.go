@@ -22,7 +22,7 @@ import (
 )
 
 // The per-order quotes of one application are stored in a TEXT column, which
-// holds 65,535 bytes on MySQL. A quote is at most about 179 bytes.
+// holds 65,535 bytes on MySQL. A quote is under 190 bytes.
 const maxInvoiceOrdersPerApplication = 300
 const maxInvoiceAmountCents = int64(100_000_000_000)
 const InvoiceFileMaxBytes = int64(20 << 20)

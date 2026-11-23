@@ -14,6 +14,7 @@ import {
   waitFor,
   within,
 } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
 import { InvoiceApplicationDialog } from '../components/invoice-application-dialog'
@@ -91,6 +92,29 @@ describe('invoice paid order selection', () => {
       screen.getByRole('checkbox', { name: 'Select all' })
     ).toHaveAttribute('aria-checked', 'mixed')
     expect(screen.getByText('Selected 1 / 3')).toBeInTheDocument()
+  })
+
+  it('selects every order when Select all is clicked with a partial selection', () => {
+    renderApplicationDialog(3)
+    const selectAll = screen.getByRole('checkbox', { name: 'Select all' })
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /paid-order-2/ }))
+    fireEvent.click(selectAll)
+
+    expect(selectAll).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByText('Selected 3 / 3')).toBeInTheDocument()
+  })
+
+  it('selects every order when Space is pressed on the focused Select all checkbox', async () => {
+    const user = userEvent.setup()
+    renderApplicationDialog(3)
+    const selectAll = screen.getByRole('checkbox', { name: 'Select all' })
+
+    selectAll.focus()
+    await user.keyboard(' ')
+
+    expect(selectAll).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByText('Selected 3 / 3')).toBeInTheDocument()
   })
 
   it('clears the selection when Select all is clicked while every order is selected', () => {

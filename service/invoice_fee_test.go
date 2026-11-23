@@ -246,18 +246,21 @@ func runInvoiceFeeDatabaseContracts(t *testing.T) {
 
 	t.Run("one application accepts 300 paid orders and rejects 301", func(t *testing.T) {
 		setupInvoiceFeeSettings(t)
-		user, first, input := createInvoiceFeeFixture(t, 40_000_000, 50)
-		others := make([]model.TopUp, 300)
-		for i := range others {
-			others[i] = first
-			others[i].Id = 0
-			others[i].TradeNo = fmt.Sprintf("%s-%d", first.TradeNo, i)
+		invoice_setting.GetInvoiceSetting().FeeRateBasisPoints = 0
+		user, template, input := createInvoiceFeeFixture(t, 0, 50)
+		// Ten-digit order ids and nine-digit amounts make each stored quote close
+		// to its largest size, so the snapshot length below is near the worst case.
+		orders := make([]model.TopUp, 301)
+		ids := make([]int, 0, len(orders))
+		for i := range orders {
+			orders[i] = template
+			orders[i].Id = 2_000_000_000 + i
+			orders[i].TradeNo = fmt.Sprintf("%s-%d", template.TradeNo, i)
+			orders[i].Money = 3_333_333.33
+			orders[i].PaidAmountMinor = 333_333_333
+			ids = append(ids, orders[i].Id)
 		}
-		require.NoError(t, model.DB.Create(&others).Error)
-		ids := []int{first.Id}
-		for _, order := range others {
-			ids = append(ids, order.Id)
-		}
+		require.NoError(t, model.DB.Create(&orders).Error)
 
 		input.TopUpIds = ids
 		_, err := CreateInvoiceApplication(user.Id, input)
@@ -267,13 +270,12 @@ func runInvoiceFeeDatabaseContracts(t *testing.T) {
 		application, err := CreateInvoiceApplication(user.Id, input)
 		require.NoError(t, err)
 		assert.Len(t, application.Orders, 300)
-		assert.Equal(t, int64(1_500_000), application.InvoiceAmountCents)
-		assert.Equal(t, 30_000_000, application.ChargedQuota)
-		// The per-order quotes must fit a MySQL TEXT column without truncation.
+		assert.Equal(t, int64(99_999_999_900), application.InvoiceAmountCents)
+		// The quotes must fit a MySQL TEXT column and be stored without truncation.
+		assert.LessOrEqual(t, len(application.RuleSnapshot), 65_535)
 		var stored model.InvoiceApplication
 		require.NoError(t, model.DB.First(&stored, application.Id).Error)
 		assert.Equal(t, application.RuleSnapshot, stored.RuleSnapshot)
-		assert.LessOrEqual(t, len(stored.RuleSnapshot), 65_535)
 	})
 
 	t.Run("unknown historical cash is excluded and cannot charge", func(t *testing.T) {

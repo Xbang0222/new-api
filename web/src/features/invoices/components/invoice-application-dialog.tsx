@@ -98,7 +98,10 @@ export function InvoiceApplicationDialog(props: InvoiceApplicationDialogProps) {
     invoiceOrders.length,
     MAX_INVOICE_ORDERS_PER_APPLICATION
   )
-  const allSelected = selectedIds.length === selectableCount
+  const selectedCount = invoiceOrders.filter((order) =>
+    selectedIds.includes(order.id)
+  ).length
+  const allSelected = selectedCount === selectableCount
   const hasUnavailableSelection = selectedIds.some(
     (id) => !invoiceOrders.some((order) => order.id === id)
   )
@@ -241,15 +244,12 @@ export function InvoiceApplicationDialog(props: InvoiceApplicationDialogProps) {
     )
   } else {
     orderSelectionContent = (
-      <div className='max-h-[22rem] overflow-y-auto rounded-lg border'>
-        <Field
-          orientation='horizontal'
-          className='bg-popover sticky top-0 z-10 border-b p-3'
-        >
+      <div className='rounded-lg border'>
+        <Field orientation='horizontal' className='border-b p-3'>
           <Checkbox
             id='invoice-order-select-all'
             checked={allSelected}
-            indeterminate={selectedIds.length > 0 && !allSelected}
+            indeterminate={selectedCount > 0 && !allSelected}
             onCheckedChange={(value) => toggleAllOrders(value === true)}
           />
           <FieldLabel htmlFor='invoice-order-select-all'>
@@ -257,49 +257,51 @@ export function InvoiceApplicationDialog(props: InvoiceApplicationDialogProps) {
           </FieldLabel>
           <span className='text-muted-foreground ml-auto text-xs tabular-nums'>
             {t('Selected {{selected}} / {{total}}', {
-              selected: selectedIds.length,
+              selected: selectedCount,
               total: invoiceOrders.length,
             })}
           </span>
         </Field>
-        {invoiceOrders.map((order) => {
-          const checked = selectedIds.includes(order.id)
-          return (
-            <Field
-              key={order.id}
-              orientation='horizontal'
-              className='border-b p-3 last:border-b-0'
-            >
-              <Checkbox
-                id={`invoice-order-${order.id}`}
-                checked={checked}
-                onCheckedChange={(value) =>
-                  toggleOrder(order.id, value === true)
-                }
-              />
-              <FieldLabel htmlFor={`invoice-order-${order.id}`}>
-                <span className='flex min-w-0 flex-1 flex-col gap-0.5'>
-                  <span className='truncate font-mono text-xs'>
-                    {order.trade_no}
+        <div className='max-h-[22rem] overflow-y-auto'>
+          {invoiceOrders.map((order) => {
+            const checked = selectedIds.includes(order.id)
+            return (
+              <Field
+                key={order.id}
+                orientation='horizontal'
+                className='border-b p-3 last:border-b-0'
+              >
+                <Checkbox
+                  id={`invoice-order-${order.id}`}
+                  checked={checked}
+                  onCheckedChange={(value) =>
+                    toggleOrder(order.id, value === true)
+                  }
+                />
+                <FieldLabel htmlFor={`invoice-order-${order.id}`}>
+                  <span className='flex min-w-0 flex-1 flex-col gap-0.5'>
+                    <span className='truncate font-mono text-xs'>
+                      {order.trade_no}
+                    </span>
+                    <span className='text-muted-foreground text-xs'>
+                      {formatInvoiceDate(
+                        order.complete_time || order.create_time
+                      )}{' '}
+                      · {order.payment_method}
+                    </span>
                   </span>
-                  <span className='text-muted-foreground text-xs'>
-                    {formatInvoiceDate(
-                      order.complete_time || order.create_time
-                    )}{' '}
-                    · {order.payment_method}
+                  <span className='tabular-nums'>
+                    {formatInvoiceMoney(
+                      order.invoice_amount_cents,
+                      order.currency,
+                      order.currency_symbol
+                    )}
                   </span>
-                </span>
-                <span className='tabular-nums'>
-                  {formatInvoiceMoney(
-                    order.invoice_amount_cents,
-                    order.currency,
-                    order.currency_symbol
-                  )}
-                </span>
-              </FieldLabel>
-            </Field>
-          )
-        })}
+                </FieldLabel>
+              </Field>
+            )
+          })}
+        </div>
       </div>
     )
   }
