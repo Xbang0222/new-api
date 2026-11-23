@@ -10,12 +10,20 @@ License, or (at your option) any later version.
 import type { TFunction } from 'i18next'
 import { z } from 'zod'
 
+// Keep in step with maxInvoiceOrdersPerApplication in service/invoice.go.
+export const MAX_INVOICE_ORDERS_PER_APPLICATION = 300
+
 export function createInvoiceApplicationSchema(t: TFunction) {
   return z.object({
     top_up_ids: z
       .array(z.number().int().positive())
       .min(1, t('Select at least one paid order.'))
-      .max(100, t('You can select up to 100 paid orders.')),
+      .max(
+        MAX_INVOICE_ORDERS_PER_APPLICATION,
+        t('You can select up to {{max}} paid orders.', {
+          max: MAX_INVOICE_ORDERS_PER_APPLICATION,
+        })
+      ),
     invoice_title: z
       .string()
       .trim()

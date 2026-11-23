@@ -46,6 +46,7 @@ import {
 import {
   createInvoiceApplicationSchema,
   invoiceApplicationFormDefaults,
+  MAX_INVOICE_ORDERS_PER_APPLICATION,
   type InvoiceApplicationFormValues,
 } from '../lib/invoice-application-form'
 import type { EligibleInvoiceOrder, InvoiceConfig } from '../types'
@@ -93,9 +94,20 @@ export function InvoiceApplicationDialog(props: InvoiceApplicationDialogProps) {
       ? total + order.invoice_amount_cents
       : total
   }, 0)
+  const selectableCount = Math.min(
+    invoiceOrders.length,
+    MAX_INVOICE_ORDERS_PER_APPLICATION
+  )
+  const selectedCount = invoiceOrders.filter((order) =>
+    selectedIds.includes(order.id)
+  ).length
   const hasUnavailableSelection = selectedIds.some(
     (id) => !invoiceOrders.some((order) => order.id === id)
   )
+  // A selected order that is no longer listed blocks submission, so the header
+  // stays in the mixed state and one click replaces the selection.
+  const allSelected =
+    selectedCount === selectableCount && !hasUnavailableSelection
   const feeCents = Math.round(
     (selectedTotal * (props.config?.fee_rate_basis_points ?? 0)) / 10_000
   )
@@ -120,6 +132,16 @@ export function InvoiceApplicationDialog(props: InvoiceApplicationDialogProps) {
     const next = checked
       ? [...current, orderId]
       : current.filter((id) => id !== orderId)
+    form.setValue('top_up_ids', next, {
+      shouldDirty: true,
+      shouldValidate: true,
+    })
+  }
+
+  const toggleAllOrders = (checked: boolean) => {
+    const next = checked
+      ? invoiceOrders.slice(0, selectableCount).map((order) => order.id)
+      : []
     form.setValue('top_up_ids', next, {
       shouldDirty: true,
       shouldValidate: true,
@@ -225,45 +247,64 @@ export function InvoiceApplicationDialog(props: InvoiceApplicationDialogProps) {
     )
   } else {
     orderSelectionContent = (
-      <div className='max-h-[22rem] overflow-y-auto rounded-lg border'>
-        {invoiceOrders.map((order) => {
-          const checked = selectedIds.includes(order.id)
-          return (
-            <Field
-              key={order.id}
-              orientation='horizontal'
-              className='border-b p-3 last:border-b-0'
-            >
-              <Checkbox
-                id={`invoice-order-${order.id}`}
-                checked={checked}
-                onCheckedChange={(value) =>
-                  toggleOrder(order.id, value === true)
-                }
-              />
-              <FieldLabel htmlFor={`invoice-order-${order.id}`}>
-                <span className='flex min-w-0 flex-1 flex-col gap-0.5'>
-                  <span className='truncate font-mono text-xs'>
-                    {order.trade_no}
+      <div className='rounded-lg border'>
+        <Field orientation='horizontal' className='border-b p-3'>
+          <Checkbox
+            id='invoice-order-select-all'
+            checked={allSelected}
+            indeterminate={selectedCount > 0 && !allSelected}
+            onCheckedChange={(value) => toggleAllOrders(value === true)}
+          />
+          <FieldLabel htmlFor='invoice-order-select-all'>
+            {t('Select all')}
+          </FieldLabel>
+          <span className='text-muted-foreground ml-auto text-xs tabular-nums'>
+            {t('Selected {{selected}} / {{total}}', {
+              selected: selectedCount,
+              total: invoiceOrders.length,
+            })}
+          </span>
+        </Field>
+        <div className='max-h-[22rem] overflow-y-auto'>
+          {invoiceOrders.map((order) => {
+            const checked = selectedIds.includes(order.id)
+            return (
+              <Field
+                key={order.id}
+                orientation='horizontal'
+                className='border-b p-3 last:border-b-0'
+              >
+                <Checkbox
+                  id={`invoice-order-${order.id}`}
+                  checked={checked}
+                  onCheckedChange={(value) =>
+                    toggleOrder(order.id, value === true)
+                  }
+                />
+                <FieldLabel htmlFor={`invoice-order-${order.id}`}>
+                  <span className='flex min-w-0 flex-1 flex-col gap-0.5'>
+                    <span className='truncate font-mono text-xs'>
+                      {order.trade_no}
+                    </span>
+                    <span className='text-muted-foreground text-xs'>
+                      {formatInvoiceDate(
+                        order.complete_time || order.create_time
+                      )}{' '}
+                      · {order.payment_method}
+                    </span>
                   </span>
-                  <span className='text-muted-foreground text-xs'>
-                    {formatInvoiceDate(
-                      order.complete_time || order.create_time
-                    )}{' '}
-                    · {order.payment_method}
+                  <span className='tabular-nums'>
+                    {formatInvoiceMoney(
+                      order.invoice_amount_cents,
+                      order.currency,
+                      order.currency_symbol
+                    )}
                   </span>
-                </span>
-                <span className='tabular-nums'>
-                  {formatInvoiceMoney(
-                    order.invoice_amount_cents,
-                    order.currency,
-                    order.currency_symbol
-                  )}
-                </span>
-              </FieldLabel>
-            </Field>
-          )
-        })}
+                </FieldLabel>
+              </Field>
+            )
+          })}
+        </div>
       </div>
     )
   }
@@ -295,6 +336,13 @@ export function InvoiceApplicationDialog(props: InvoiceApplicationDialogProps) {
                   {formatInvoiceMoney(selectedTotal, currency, currencySymbol)}
                 </span>
               </FieldDescription>
+              {invoiceOrders.length > MAX_INVOICE_ORDERS_PER_APPLICATION ? (
+                <FieldDescription>
+                  {t('You can select up to {{max}} paid orders.', {
+                    max: MAX_INVOICE_ORDERS_PER_APPLICATION,
+                  })}
+                </FieldDescription>
+              ) : null}
               {orderSelectionContent}
               <FieldError errors={[form.formState.errors.top_up_ids]} />
             </FieldSet>
