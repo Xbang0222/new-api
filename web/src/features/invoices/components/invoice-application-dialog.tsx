@@ -101,10 +101,13 @@ export function InvoiceApplicationDialog(props: InvoiceApplicationDialogProps) {
   const selectedCount = invoiceOrders.filter((order) =>
     selectedIds.includes(order.id)
   ).length
-  const allSelected = selectedCount === selectableCount
   const hasUnavailableSelection = selectedIds.some(
     (id) => !invoiceOrders.some((order) => order.id === id)
   )
+  // A selected order that is no longer listed blocks submission, so the header
+  // stays in the mixed state and one click replaces the selection.
+  const allSelected =
+    selectedCount === selectableCount && !hasUnavailableSelection
   const feeCents = Math.round(
     (selectedTotal * (props.config?.fee_rate_basis_points ?? 0)) / 10_000
   )

@@ -20,9 +20,11 @@ import { describe, expect, it, vi } from 'vitest'
 import { InvoiceApplicationDialog } from '../components/invoice-application-dialog'
 import { config } from './fixtures'
 
-function renderApplicationDialog(orderCount: number) {
-  const onSubmit = vi.fn().mockResolvedValue(undefined)
-  render(
+function applicationDialog(
+  orderCount: number,
+  onSubmit = vi.fn().mockResolvedValue(undefined)
+) {
+  return (
     <InvoiceApplicationDialog
       open
       onOpenChange={vi.fn()}
@@ -49,6 +51,11 @@ function renderApplicationDialog(orderCount: number) {
       userQuota={10_000_000}
     />
   )
+}
+
+function renderApplicationDialog(orderCount: number) {
+  const onSubmit = vi.fn().mockResolvedValue(undefined)
+  render(applicationDialog(orderCount, onSubmit))
   return onSubmit
 }
 
@@ -129,6 +136,24 @@ describe('invoice paid order selection', () => {
     expect(
       screen.getByRole('button', { name: 'Submit application' })
     ).toBeDisabled()
+  })
+
+  it('replaces a selection holding an order that is no longer listed when Select all is clicked', () => {
+    const view = render(applicationDialog(3))
+    const selectAll = screen.getByRole('checkbox', { name: 'Select all' })
+    const submit = screen.getByRole('button', { name: 'Submit application' })
+    fireEvent.click(selectAll)
+
+    view.rerender(applicationDialog(2))
+
+    expect(screen.getByText('Selected 2 / 2')).toBeInTheDocument()
+    expect(selectAll).toHaveAttribute('aria-checked', 'mixed')
+    expect(submit).toBeDisabled()
+
+    fireEvent.click(selectAll)
+
+    expect(selectAll).toHaveAttribute('aria-checked', 'true')
+    expect(submit).toBeEnabled()
   })
 
   it('selects only the first 300 orders and states the limit when 301 orders are listed', () => {
