@@ -56,7 +56,7 @@ function renderApplicationDialog(
 describe('invoice fees charged on application', () => {
   it('shows a 1.50 balance fee for a 50.00 invoice at 3 percent without increasing the invoice amount', () => {
     renderApplicationDialog()
-    fireEvent.click(screen.getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('checkbox', { name: /paid-order-1/ }))
 
     expect(screen.getByText('Invoice fee')).toBeInTheDocument()
     expect(screen.getByText(/1\.50/)).toBeInTheDocument()
@@ -68,7 +68,7 @@ describe('invoice fees charged on application', () => {
 
   it('shows insufficient quota and prevents an application when balance cannot cover the fee', () => {
     renderApplicationDialog(149)
-    fireEvent.click(screen.getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('checkbox', { name: /paid-order-1/ }))
 
     expect(screen.getByText('Insufficient quota')).toBeInTheDocument()
     expect(
@@ -103,7 +103,7 @@ describe('invoice fees charged on application', () => {
 
   it('allows submission when the balance exactly covers the fee', () => {
     renderApplicationDialog(150)
-    fireEvent.click(screen.getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('checkbox', { name: /paid-order-1/ }))
     expect(
       screen.getByRole('button', { name: 'Submit application' })
     ).toBeEnabled()
@@ -121,7 +121,7 @@ describe('invoice fees charged on application', () => {
         fee_rate_basis_points: feeRate,
         quota_per_currency_unit: 500_000 / 7.5,
       })
-      fireEvent.click(screen.getByRole('checkbox'))
+      fireEvent.click(screen.getByRole('checkbox', { name: /paid-order-1/ }))
 
       expect(
         screen.getByRole('button', { name: 'Submit application' })
@@ -142,7 +142,7 @@ describe('invoice fees charged on application', () => {
         fee_rate_basis_points: feeRate,
         quota_per_currency_unit: 500_000 / 7.5,
       })
-      fireEvent.click(screen.getByRole('checkbox'))
+      fireEvent.click(screen.getByRole('checkbox', { name: /paid-order-1/ }))
 
       expect(
         screen.getByRole('button', { name: 'Submit application' })
@@ -153,7 +153,7 @@ describe('invoice fees charged on application', () => {
 
   it('allows a zero-fee application with a zero balance', () => {
     renderApplicationDialog(0, { ...config, fee_rate_basis_points: 0 })
-    fireEvent.click(screen.getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('checkbox', { name: /paid-order-1/ }))
     expect(
       screen.getByRole('button', { name: 'Submit application' })
     ).toBeEnabled()
@@ -162,7 +162,7 @@ describe('invoice fees charged on application', () => {
 
   it('blocks submission below the configured minimum invoice amount', () => {
     renderApplicationDialog(1000, { ...config, minimum_amount: 51 })
-    fireEvent.click(screen.getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('checkbox', { name: /paid-order-1/ }))
     expect(
       screen.getByRole('button', { name: 'Submit application' })
     ).toBeDisabled()
@@ -174,7 +174,7 @@ describe('invoice fees charged on application', () => {
       currency: 'CUSTOM',
       currency_symbol: '€',
     })
-    fireEvent.click(screen.getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('checkbox', { name: /paid-order-1/ }))
     expect(screen.getByText('€1.50')).toBeInTheDocument()
     expect(screen.getAllByText('€50.00')).toHaveLength(3)
     expect(screen.queryByText(/CN¥/)).not.toBeInTheDocument()

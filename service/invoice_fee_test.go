@@ -244,6 +244,38 @@ func runInvoiceFeeDatabaseContracts(t *testing.T) {
 		assert.Equal(t, int64(37500), snapshot.Orders[0].InvoiceAmountCents)
 	})
 
+	t.Run("one application accepts 300 paid orders and rejects 301", func(t *testing.T) {
+		setupInvoiceFeeSettings(t)
+		user, first, input := createInvoiceFeeFixture(t, 40_000_000, 50)
+		others := make([]model.TopUp, 300)
+		for i := range others {
+			others[i] = first
+			others[i].Id = 0
+			others[i].TradeNo = fmt.Sprintf("%s-%d", first.TradeNo, i)
+		}
+		require.NoError(t, model.DB.Create(&others).Error)
+		ids := []int{first.Id}
+		for _, order := range others {
+			ids = append(ids, order.Id)
+		}
+
+		input.TopUpIds = ids
+		_, err := CreateInvoiceApplication(user.Id, input)
+		require.ErrorContains(t, err, "between 1 and 300")
+
+		input.TopUpIds = ids[:300]
+		application, err := CreateInvoiceApplication(user.Id, input)
+		require.NoError(t, err)
+		assert.Len(t, application.Orders, 300)
+		assert.Equal(t, int64(1_500_000), application.InvoiceAmountCents)
+		assert.Equal(t, 30_000_000, application.ChargedQuota)
+		// The per-order quotes must fit a MySQL TEXT column without truncation.
+		var stored model.InvoiceApplication
+		require.NoError(t, model.DB.First(&stored, application.Id).Error)
+		assert.Equal(t, application.RuleSnapshot, stored.RuleSnapshot)
+		assert.LessOrEqual(t, len(stored.RuleSnapshot), 65_535)
+	})
+
 	t.Run("unknown historical cash is excluded and cannot charge", func(t *testing.T) {
 		setupInvoiceFeeSettings(t)
 		user, order, input := createInvoiceFeeFixture(t, 100_000, 50)

@@ -122,7 +122,9 @@ async function renderInvoices(
 async function submitApplication() {
   fireEvent.click(screen.getByRole('button', { name: 'Apply for an invoice' }))
   const dialog = await screen.findByRole('dialog')
-  fireEvent.click(within(dialog).getByRole('checkbox'))
+  fireEvent.click(
+    within(dialog).getByRole('checkbox', { name: /paid-order-1/ })
+  )
   fireEvent.change(
     within(dialog).getByRole('textbox', { name: 'Invoice title' }),
     { target: { value: 'Example Company' } }
@@ -179,7 +181,9 @@ describe('invoice application actions', () => {
     expect(
       within(dialog).getByRole('textbox', { name: 'Invoice title' })
     ).toHaveValue('Example Company')
-    expect(within(dialog).getByRole('checkbox')).toBeChecked()
+    expect(
+      within(dialog).getByRole('checkbox', { name: /paid-order-1/ })
+    ).toBeChecked()
   })
 
   it('removes a cancelled application and reloads the refunded balance and eligible orders', async () => {
@@ -207,7 +211,9 @@ describe('invoice application actions', () => {
     fireEvent.click(
       screen.getByRole('button', { name: 'Apply for an invoice' })
     )
-    expect(await screen.findByRole('checkbox')).toBeEnabled()
+    expect(
+      await screen.findByRole('checkbox', { name: /paid-order-1/ })
+    ).toBeEnabled()
   })
 
   it('keeps the application and balance unchanged when cancellation fails', async () => {

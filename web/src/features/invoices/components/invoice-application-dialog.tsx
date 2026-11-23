@@ -46,6 +46,7 @@ import {
 import {
   createInvoiceApplicationSchema,
   invoiceApplicationFormDefaults,
+  MAX_INVOICE_ORDERS_PER_APPLICATION,
   type InvoiceApplicationFormValues,
 } from '../lib/invoice-application-form'
 import type { EligibleInvoiceOrder, InvoiceConfig } from '../types'
@@ -93,6 +94,11 @@ export function InvoiceApplicationDialog(props: InvoiceApplicationDialogProps) {
       ? total + order.invoice_amount_cents
       : total
   }, 0)
+  const selectableCount = Math.min(
+    invoiceOrders.length,
+    MAX_INVOICE_ORDERS_PER_APPLICATION
+  )
+  const allSelected = selectedIds.length === selectableCount
   const hasUnavailableSelection = selectedIds.some(
     (id) => !invoiceOrders.some((order) => order.id === id)
   )
@@ -120,6 +126,16 @@ export function InvoiceApplicationDialog(props: InvoiceApplicationDialogProps) {
     const next = checked
       ? [...current, orderId]
       : current.filter((id) => id !== orderId)
+    form.setValue('top_up_ids', next, {
+      shouldDirty: true,
+      shouldValidate: true,
+    })
+  }
+
+  const toggleAllOrders = (checked: boolean) => {
+    const next = checked
+      ? invoiceOrders.slice(0, selectableCount).map((order) => order.id)
+      : []
     form.setValue('top_up_ids', next, {
       shouldDirty: true,
       shouldValidate: true,
@@ -226,6 +242,26 @@ export function InvoiceApplicationDialog(props: InvoiceApplicationDialogProps) {
   } else {
     orderSelectionContent = (
       <div className='max-h-[22rem] overflow-y-auto rounded-lg border'>
+        <Field
+          orientation='horizontal'
+          className='bg-popover sticky top-0 z-10 border-b p-3'
+        >
+          <Checkbox
+            id='invoice-order-select-all'
+            checked={allSelected}
+            indeterminate={selectedIds.length > 0 && !allSelected}
+            onCheckedChange={(value) => toggleAllOrders(value === true)}
+          />
+          <FieldLabel htmlFor='invoice-order-select-all'>
+            {t('Select all')}
+          </FieldLabel>
+          <span className='text-muted-foreground ml-auto text-xs tabular-nums'>
+            {t('Selected {{selected}} / {{total}}', {
+              selected: selectedIds.length,
+              total: invoiceOrders.length,
+            })}
+          </span>
+        </Field>
         {invoiceOrders.map((order) => {
           const checked = selectedIds.includes(order.id)
           return (
@@ -295,6 +331,13 @@ export function InvoiceApplicationDialog(props: InvoiceApplicationDialogProps) {
                   {formatInvoiceMoney(selectedTotal, currency, currencySymbol)}
                 </span>
               </FieldDescription>
+              {invoiceOrders.length > MAX_INVOICE_ORDERS_PER_APPLICATION ? (
+                <FieldDescription>
+                  {t('You can select up to {{max}} paid orders.', {
+                    max: MAX_INVOICE_ORDERS_PER_APPLICATION,
+                  })}
+                </FieldDescription>
+              ) : null}
               {orderSelectionContent}
               <FieldError errors={[form.formState.errors.top_up_ids]} />
             </FieldSet>

@@ -9259,7 +9259,7 @@
     "You can manually add them in \"Custom Model Names\", click \"Fill\" and then submit, or use the operations below to handle automatically.": "你可以在\"自定义模型名称\"处手动添加它们，然后点击\"填入\"后再提交，或者直接使用下方操作自动处理。",
     "You can only check in once per day": "每日仅可签到一次，请勿重复签到",
     "You can purchase again after a subscription expires.": "已有订阅到期后可再次购买。",
-    "You can select up to 100 paid orders.": "最多可选择 100 个已支付订单。",
+    "You can select up to {{max}} paid orders.": "最多可选择 {{max}} 个已支付订单。",
     "You can still edit non-sensitive operations fields such as models, groups, priority, and weight.": "你仍可编辑模型、分组、优先级和权重等非敏感运维字段。",
     "You cannot grant one or more of these permissions.": "你无法授予其中一项或多项权限。",
     "You commit not to use this system to implement, assist with, or indirectly implement acts that violate applicable laws and regulations, regulatory requirements, platform rules, public interests, or the lawful rights and interests of third parties.": "你承诺不会使用本系统实施、协助实施或间接实施违反适用法律法规、监管要求、平台规则、公共利益或第三方合法权益的行为。",

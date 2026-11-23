@@ -9259,7 +9259,7 @@
     "You can manually add them in \"Custom Model Names\", click \"Fill\" and then submit, or use the operations below to handle automatically.": "\"カスタムモデル名\"で手動で追加し、\"入力\"をクリックしてから送信するか、以下の操作を使用して自動的に処理できます。",
     "You can only check in once per day": "チェックインできるのは1日1回のみです",
     "You can purchase again after a subscription expires.": "サブスクリプションの有効期限が切れると、再度購入できます。",
-    "You can select up to 100 paid orders.": "支払い済み注文は最大 100 件まで選択できます。",
+    "You can select up to {{max}} paid orders.": "支払い済み注文は最大 {{max}} 件まで選択できます。",
     "You can still edit non-sensitive operations fields such as models, groups, priority, and weight.": "モデル、グループ、優先度、重みなどの非機密の運用項目は引き続き編集できます。",
     "You cannot grant one or more of these permissions.": "これらの権限の一部を付与することはできません。",
     "You commit not to use this system to implement, assist with, or indirectly implement acts that violate applicable laws and regulations, regulatory requirements, platform rules, public interests, or the lawful rights and interests of third parties.": "適用される法令、規制要件、プラットフォーム規則、公共の利益、または第三者の正当な権利利益に違反する行為を、このシステムを用いて実施、支援、または間接的に実施しないことを約束します。",

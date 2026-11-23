@@ -41,6 +41,30 @@ describe('invoice application validation', () => {
     assert.equal(result.success, false)
   })
 
+  test('accepts an application with 300 paid orders', () => {
+    const result = createInvoiceApplicationSchema(t).safeParse({
+      top_up_ids: Array.from({ length: 300 }, (_, index) => index + 1),
+      invoice_title: 'Example Technology Co., Ltd.',
+      tax_number: '91310000EXAMPLE',
+      recipient_email: 'finance@example.com',
+      applicant_note: '',
+    })
+
+    assert.equal(result.success, true)
+  })
+
+  test('rejects an application with 301 paid orders', () => {
+    const result = createInvoiceApplicationSchema(t).safeParse({
+      top_up_ids: Array.from({ length: 301 }, (_, index) => index + 1),
+      invoice_title: 'Example Technology Co., Ltd.',
+      tax_number: '91310000EXAMPLE',
+      recipient_email: 'finance@example.com',
+      applicant_note: '',
+    })
+
+    assert.equal(result.success, false)
+  })
+
   test('rejects an invalid invoice recipient email', () => {
     const result = createInvoiceApplicationSchema(t).safeParse({
       top_up_ids: [11],
